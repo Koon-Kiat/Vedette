@@ -12,9 +12,11 @@ alerts.
 
 ## Status
 
-Only the scaffold exists so far: configuration loading, redacted JSON logging,
-the queue interface, hardened containers and CI. `docker compose up` starts a
-pipeline whose stages are idle placeholders. Nothing contacts NextDNS yet. See
+The collector works: `docker compose up` backfills the last 7 days of each
+enabled profile's NextDNS logs into a local SQLite database, then follows the
+live stream and resumes where it left off after a restart. Enrichment, rules,
+the LLM analyst, notifications and the dashboard are not built yet, so nothing
+is flagged or sent. See
 [CHANGELOG.md](CHANGELOG.md) for progress and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and decisions.
 
@@ -85,7 +87,25 @@ git config core.hooksPath .githooks
 If you already use [pre-commit](https://pre-commit.com), `.pre-commit-config.yaml`
 provides the same gitleaks check.
 
+## How to add a profile
+
+Add an entry under `profiles:` in `config.yaml` with the profile's ID (shown on
+its Setup page in the NextDNS dashboard), a unique `label`, and `enabled: true`,
+then run `docker compose up -d` again. Each enabled profile gets its own
+collector and its own 7-day backfill.
+
 ## Troubleshooting
+
+- **`collector_idle` in the logs:** the message gives the reason, either
+  `NEXTDNS_API_KEY is not set` (edit `.env`) or `no profile is enabled`
+  (edit `config.yaml`). Recreate the container afterwards with
+  `docker compose up -d`.
+- **`collector_auth_failed`:** NextDNS rejected the API key. Fix it in `.env`;
+  the collector retries every 5 minutes.
+- **`collector_source_error` with HTTP 404:** the profile ID in `config.yaml`
+  is wrong.
+- **`collector_source_unavailable` with HTTP 429:** NextDNS is rate-limiting.
+  The collector backs off and recovers on its own; nothing is lost.
 
 - **`env file .env not found` or a bind-mount error for `config.yaml`:** run the
   two `Copy-Item` commands above.

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### NextDNS collector
+
+- `DnsEvent` model and `LogSource` interface; `NextDnsSource` reads paginated
+  history and the resumable live stream, read-only, with TLS verification on.
+- Deterministic event ids (NextDNS log entries carry none), so storing an
+  event twice keeps one row.
+- Exponential backoff with jitter; `429` and `Retry-After` are honoured.
+- SQLite storage in WAL mode with Alembic migrations applied at start-up.
+- Per-profile collector: backfill, then stream; each stream event is committed
+  together with its cursor, and a rejected cursor falls back to re-reading
+  history from the last fully synced moment.
+- New settings: `ingest.page_size` and `storage.database_url`.
+- Integration tests replay a synthetic NextDNS API and kill the collector
+  mid-backfill and mid-stream: no gaps, no duplicates.
+
 ### Scaffold
 
 - Repository layout from the spec, packaged as `nextdns-sentinel` with the

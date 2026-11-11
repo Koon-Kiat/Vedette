@@ -1,0 +1,37 @@
+# Copy to config.yaml and edit. config.yaml is git-ignored.
+# Every value can be overridden by an environment variable: prefix SENTINEL_,
+# with "__" between nesting levels, e.g. SENTINEL_LLM__MODEL=qwen3:8b.
+# Secrets (NEXTDNS_API_KEY) never go in this file: see .env.example.
+
+profiles:              # IDs are on each profile's Setup page in the NextDNS dashboard
+  - id: "ROUTER_PROFILE_ID"
+    label: "router"
+    enabled: true
+  - id: "PC_PROFILE_ID"
+    label: "pc"
+    enabled: false       # enable once the router profile is collecting cleanly
+  - id: "PHONE_PROFILE_ID"
+    label: "phone"
+    enabled: false
+timezone: "Asia/Singapore"
+ingest:
+  backfill_days: 7
+  raw: false
+llm:
+  base_url: "http://ollama:11434"
+  model: "qwen3:8b"
+  think: false
+  temperature: 0.1
+  num_ctx: 8192
+  keep_alive: "5m"
+  max_findings_per_batch: 20
+  cache_ttl_hours: 168
+notify:
+  channel: "NOTIFY_CHANNEL"   # not chosen yet: ntfy, discord or email
+  digest_time: "08:00"
+  quiet_hours: "23:00-07:00"
+  alert_cooldown_minutes: 60
+retention:
+  events_days: 30
+  findings_days: 180
+nextdns_write_enabled: false

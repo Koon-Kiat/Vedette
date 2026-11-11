@@ -1,0 +1,36 @@
+# Secrets and local configuration: never commit these
+.env
+.env.*
+!.env.example
+config.yaml
+secrets/
+
+# Local data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Editors and OS
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+.DS_Store

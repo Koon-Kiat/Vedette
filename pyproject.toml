@@ -1,0 +1,70 @@
+[project]
+name = "nextdns-sentinel"
+version = "0.1.0"
+description = "Self-hosted pipeline that flags suspicious DNS activity in NextDNS logs and explains it with a local LLM."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.14",
+    "pydantic-settings>=2.16",
+    "pyyaml>=6.0.3",
+    "structlog>=26.1",
+    "typer>=0.29",
+    # IANA time zone data for zoneinfo: python:3.14-slim ships none.
+    "tzdata>=2026.6",
+]
+
+[project.scripts]
+sentinel = "sentinel.cli:app"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4",
+    "pip-audit>=2.10",
+    "pytest>=9.2",
+    "pytest-asyncio>=1.4",
+    "pytest-cov>=7.1",
+    "ruff>=0.17",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.33"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sentinel"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error"]
+markers = [
+    "live: needs real external services (NextDNS, Ollama); skipped unless selected",
+]
+
+[tool.coverage.run]
+source = ["sentinel"]
+branch = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "BLE", "D", "RUF"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]

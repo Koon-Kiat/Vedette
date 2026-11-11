@@ -1,0 +1,100 @@
+name: nextdns-sentinel
+
+services:
+  sentinel:
+    build:
+      context: .
+      target: runtime
+    image: nextdns-sentinel:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      SENTINEL_CONFIG_FILE: /config/config.yaml
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /config/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - sentinel-data:/data
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - egress   # outbound to api.nextdns.io
+      - llm      # internal only: reaches http://ollama:11434
+    stop_grace_period: 30s
+
+  ollama:
+    image: ollama/ollama:0.40.16
+    restart: unless-stopped
+    environment:
+      OLLAMA_NO_CLOUD: "1"   # this server has no internet route; do not call ollama.com
+    volumes:
+      - ollama-models:/root/.ollama
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - llm      # no host port and no route to the internet
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # One-shot model download. The long-running ollama service has no internet
+  # access, so this helper pulls into the shared volume and exits:
+  #   docker compose --profile setup run --rm ollama-pull
+  ollama-pull:
+    image: ollama/ollama:0.40.16
+    profiles: [setup]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama serve >/dev/null 2>&1 &
+        until ollama list >/dev/null 2>&1; do sleep 1; done;
+        ollama pull "$$MODEL"
+    environment:
+      MODEL: ${SENTINEL_LLM__MODEL:-qwen3:8b}
+    volumes:
+      - ollama-models:/root/.ollama
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - egress
+
+  # Lint, type-check and test tooling, so nothing is installed on the host:
+  #   docker compose --profile dev run --rm dev pytest
+  dev:
+    build:
+      context: .
+      target: dev
+    image: nextdns-sentinel-dev:local
+    profiles: [dev]
+    volumes:
+      - .:/app
+    networks:
+      - egress
+
+networks:
+  egress: {}
+  llm:
+    internal: true
+
+volumes:
+  sentinel-data: {}
+  ollama-models: {}

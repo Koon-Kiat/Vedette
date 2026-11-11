@@ -1,0 +1,7 @@
+# Optional: for contributors who already use https://pre-commit.com.
+# The Docker-based hook in .githooks/ does the same job with no host install.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

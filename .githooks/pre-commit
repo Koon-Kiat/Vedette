@@ -1,0 +1,13 @@
+#!/bin/sh
+# Secret scan of staged changes, run through Docker so nothing is installed on
+# the host. Enable once per clone:  git config core.hooksPath .githooks
+set -eu
+
+# Git for Windows runs hooks under MSYS: use a Windows-style path for the
+# bind mount and stop MSYS from rewriting the container-side paths.
+repo=$(pwd -W 2>/dev/null || pwd)
+
+MSYS_NO_PATHCONV=1 exec docker run --rm \
+    -v "${repo}:/repo:ro" \
+    ghcr.io/gitleaks/gitleaks:v8.30.1 \
+    git --pre-commit --staged --redact --no-banner /repo

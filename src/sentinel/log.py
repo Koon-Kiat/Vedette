@@ -101,3 +101,7 @@ def configure_logging(level: str = "INFO", secrets: Sequence[str] = ()) -> None:
         root.removeHandler(existing)
     root.addHandler(handler)
     root.setLevel(level)
+    # The HTTP client logs one line per request (and far more at DEBUG);
+    # the collector already logs what matters.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)

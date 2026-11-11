@@ -61,6 +61,13 @@ class IngestConfig(_Section):
 
     backfill_days: int = Field(default=7, ge=1)
     raw: bool = False
+    page_size: int = Field(default=1000, ge=10, le=1000)
+
+
+class StorageConfig(_Section):
+    """Where events and findings are stored."""
+
+    database_url: NonEmptyStr = "sqlite+aiosqlite:////data/sentinel.db"
 
 
 class LlmConfig(_Section):
@@ -105,6 +112,7 @@ class Settings(BaseSettings):
     profiles: list[ProfileConfig] = Field(default_factory=list)
     timezone: str = "Asia/Singapore"
     ingest: IngestConfig = Field(default_factory=IngestConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
     llm: LlmConfig = Field(default_factory=LlmConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)

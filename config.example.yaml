@@ -17,6 +17,9 @@ timezone: "Asia/Singapore"
 ingest:
   backfill_days: 7
   raw: false
+  page_size: 1000        # entries per history request (NextDNS allows 10 to 1000)
+storage:
+  database_url: "sqlite+aiosqlite:////data/sentinel.db"   # /data is the sentinel-data volume
 llm:
   base_url: "http://ollama:11434"
   model: "qwen3:8b"

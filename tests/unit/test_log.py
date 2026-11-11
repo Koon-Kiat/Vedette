@@ -126,3 +126,16 @@ def test_exceptions_are_rendered_and_redacted(capsys: pytest.CaptureFixture[str]
     record = json.loads(out.strip())
     assert "RuntimeError" in record["exception"]
     assert SECRET not in out
+
+
+def test_http_client_request_logs_are_silenced_below_warning(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging("DEBUG")
+
+    logging.getLogger("httpx").info("HTTP Request: GET https://x.test/profiles/abc123/logs")
+    logging.getLogger("httpcore.connection").debug("connect_tcp.started")
+    logging.getLogger("httpx").warning("something worth seeing")
+
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert [json.loads(line)["event"] for line in lines] == ["something worth seeing"]

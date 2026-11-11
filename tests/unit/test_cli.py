@@ -42,6 +42,7 @@ def test_run_starts_the_pipeline_and_exits_0_on_sigterm(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("NEXTDNS_API_KEY", "k-cli-test-secret")
+    monkeypatch.setenv("SENTINEL_PROFILES", "[]")  # keep the collector idle: no network
     timer = threading.Timer(0.5, os.kill, args=(os.getpid(), signal.SIGTERM))
     timer.start()
     try:

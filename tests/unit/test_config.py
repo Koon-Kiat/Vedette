@@ -18,6 +18,8 @@ def test_defaults_match_the_spec_when_no_file_is_given() -> None:
     assert settings.timezone == "Asia/Singapore"
     assert settings.ingest.backfill_days == 7
     assert settings.ingest.raw is False
+    assert settings.ingest.page_size == 1000
+    assert settings.storage.database_url == "sqlite+aiosqlite:////data/sentinel.db"
     assert settings.llm.base_url == "http://ollama:11434"
     assert settings.llm.model == "qwen3:8b"
     assert settings.llm.think is False
@@ -160,6 +162,9 @@ def test_malformed_yaml_is_rejected(tmp_path: Path) -> None:
         ("llm:\n  temperature: 0.5\n", "llm.temperature"),
         ("llm:\n  num_ctx: 0\n", "llm.num_ctx"),
         ("ingest:\n  backfill_days: 0\n", "ingest.backfill_days"),
+        ("ingest:\n  page_size: 5\n", "ingest.page_size"),
+        ("ingest:\n  page_size: 1001\n", "ingest.page_size"),
+        ("storage:\n  database_url: ''\n", "storage.database_url"),
         ("timezone: Mars/Olympus\n", "timezone"),
         ("notify:\n  digest_time: '25:00'\n", "notify.digest_time"),
         ("notify:\n  quiet_hours: 'evening'\n", "notify.quiet_hours"),

@@ -5,9 +5,15 @@ description = "Self-hosted pipeline that flags suspicious DNS activity in NextDN
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    # Versioned schema migrations: SQLite now, Postgres later.
+    "alembic>=1.20",
+    "aiosqlite>=0.22",
+    "httpx>=0.28.1",
+    "httpx-sse>=0.4.3",
     "pydantic>=2.14",
     "pydantic-settings>=2.16",
     "pyyaml>=6.0.3",
+    "sqlalchemy[asyncio]>=2.1",
     "structlog>=26.1",
     "typer>=0.29",
     # IANA time zone data for zoneinfo: python:3.14-slim ships none.
@@ -24,6 +30,7 @@ dev = [
     "pytest>=9.2",
     "pytest-asyncio>=1.4",
     "pytest-cov>=7.1",
+    "respx>=0.23.1",
     "ruff>=0.17",
     "types-pyyaml>=6.0",
 ]

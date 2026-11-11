@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "timestamp": "2026-03-15T04:34:05.203Z",
+      "domain": "telemetry.vendor.example",
+      "root": "vendor.example",
+      "tracker": "vendor",
+      "encrypted": true,
+      "protocol": "DNS-over-HTTPS",
+      "clientIp": "198.51.100.7",
+      "client": "nextdns-cli",
+      "device": {
+        "id": "8TD1G",
+        "name": "Living Room TV",
+        "model": "Sample TV"
+      },
+      "status": "blocked",
+      "reasons": [
+        {
+          "id": "blocklist:sample-list",
+          "name": "Sample List"
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-03-15T04:33:59.001Z",
+      "domain": "www.example.org",
+      "encrypted": true,
+      "protocol": "DNS-over-HTTPS",
+      "clientIp": "198.51.100.7",
+      "status": "default",
+      "reasons": []
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "cursor": null
+    },
+    "stream": {
+      "id": "64c1f3a2e0d5b7a900000001"
+    }
+  }
+}

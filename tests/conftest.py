@@ -31,3 +31,21 @@ def reset_logging() -> Iterator[None]:
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--live",
+        action="store_true",
+        default=False,
+        help="also run tests that need real services (the local Ollama model)",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if config.getoption("--live"):
+        return
+    skip = pytest.mark.skip(reason="needs real services; run with --live")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip)

@@ -91,6 +91,7 @@ services:
       - .:/app
     networks:
       - egress
+      - llm      # lets `pytest --live` reach the local model
 
 networks:
   egress: {}

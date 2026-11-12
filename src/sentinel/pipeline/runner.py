@@ -1,7 +1,7 @@
 """Starts the pipeline stages and stops them cleanly.
 
-The collector, enricher and rule engine are real. The remaining stages are idle
-placeholders: each one starts, waits for the stop signal and exits. Real stages
+The collector, enricher, rule engine and LLM analyst are real. The remaining
+stages are idle placeholders: each one starts, waits for the stop signal and exits. Real stages
 replace them one at a time.
 """
 
@@ -19,6 +19,9 @@ from sentinel.enrich.first_seen import FirstSeenTracker
 from sentinel.enrich.popularity import PopularityList
 from sentinel.enrich.rdap import DomainAges, RdapClient
 from sentinel.enrich.threat_intel import ThreatIntel
+from sentinel.llm.analyst import Analyst
+from sentinel.llm.ollama import OllamaClient
+from sentinel.pipeline.analyst import AnalystWorker
 from sentinel.pipeline.collector import ProfileCollector
 from sentinel.pipeline.processor import Batch, EnricherWorker, RuleWorker
 from sentinel.pipeline.queue import MemoryQueue
@@ -26,6 +29,7 @@ from sentinel.rules.allowlist import Allowlist
 from sentinel.rules.engine import RuleEngine
 from sentinel.rules.loader import load_rules
 from sentinel.sources.nextdns import NextDnsSource
+from sentinel.storage.analysis import AnalysisStore
 from sentinel.storage.migrate import run_migrations
 from sentinel.storage.reference import ReferenceStore
 from sentinel.storage.store import Store
@@ -40,8 +44,8 @@ STAGE_NAMES: tuple[str, ...] = (
     "notifier",
     "health_monitor",
 )
-_ACTIVE_STAGES = STAGE_NAMES[:3]
-_PLACEHOLDER_STAGES = STAGE_NAMES[3:]
+_ACTIVE_STAGES = STAGE_NAMES[:4]
+_PLACEHOLDER_STAGES = STAGE_NAMES[4:]
 
 
 class Pipeline:
@@ -90,7 +94,7 @@ class Pipeline:
             log.info("stage_stopped", stage=name)
 
     async def _work_until(self, stop: asyncio.Event) -> None:
-        """Run the collector, enricher and rule engine until ``stop`` is set."""
+        """Run collector, enricher, rule engine and analyst until ``stop`` is set."""
         settings = self._settings
         if settings.nextdns_api_key is None:  # pragma: no cover - guarded by the caller
             raise RuntimeError("pipeline started without an API key")
@@ -112,6 +116,16 @@ class Pipeline:
             follow_redirects=True,
             timeout=httpx.Timeout(60.0),
             headers={"User-Agent": f"nextdns-sentinel/{__version__}"},
+        )
+        llm = settings.llm
+        # The model gets no tools; this client only ever posts chat requests to Ollama.
+        ollama = OllamaClient(
+            llm.base_url,
+            model=llm.model,
+            think=llm.think,
+            temperature=llm.temperature,
+            num_ctx=llm.num_ctx,
+            keep_alive=llm.keep_alive,
         )
         try:
             reference = ReferenceStore(store.engine)
@@ -152,6 +166,14 @@ class Pipeline:
             baseline_hours = max(
                 (int(spec.params.get("baseline_hours", 0)) for spec in specs), default=0
             )
+            analysis_store = AnalysisStore(store.engine)
+            analyst = Analyst(
+                ollama,
+                analysis_store,
+                specs,
+                max_batch=llm.max_findings_per_batch,
+                cache_ttl=timedelta(hours=llm.cache_ttl_hours),
+            )
             queue: MemoryQueue[Batch] = MemoryQueue()
             workers = [
                 *(
@@ -170,6 +192,7 @@ class Pipeline:
                     queue,
                     warm_up=timedelta(hours=baseline_hours + 2),
                 ).run(),
+                AnalystWorker(analysis_store, analyst, batch_size=llm.max_findings_per_batch).run(),
             ]
             async with asyncio.TaskGroup() as group:
                 tasks = [group.create_task(worker) for worker in workers]
@@ -177,6 +200,7 @@ class Pipeline:
                 for task in tasks:
                     task.cancel()
         finally:
+            await ollama.aclose()
             await web.aclose()
             await source.aclose()
             await store.close()

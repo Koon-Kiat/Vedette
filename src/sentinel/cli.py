@@ -11,12 +11,14 @@ from sqlalchemy.engine import make_url
 
 from sentinel import __version__
 from sentinel.config import ConfigError, Settings, load_settings
+from sentinel.llm.schema import Analysis
 from sentinel.log import configure_logging
-from sentinel.notify.defang import clean_text, defang
+from sentinel.notify.defang import clean_text, defang, defang_text
 from sentinel.pipeline.runner import run_until_signalled
 from sentinel.rules.model import Severity
 from sentinel.sources.base import DnsEvent
 from sentinel.sources.nextdns_export import ExportFormatError, read_export
+from sentinel.storage.analysis import AnalysisStore
 from sentinel.storage.migrate import run_migrations
 from sentinel.storage.store import Store, StoredFinding
 
@@ -117,18 +119,23 @@ async def _load_findings(
     rule: str | None,
     min_severity: Severity | None,
     limit: int,
-) -> list[StoredFinding]:
+) -> list[tuple[StoredFinding, Analysis | None]]:
     store = Store.open(database_url)
     try:
-        return await store.list_findings(
+        found = await store.list_findings(
             profile_id=profile_id, rule_id=rule, min_severity=min_severity, limit=limit
         )
+        analyses = await AnalysisStore(store.engine).analyses_for([item.id for item in found])
+        return [(item, analyses.get(item.id)) for item in found]
     finally:
         await store.close()
 
 
-def _as_json(item: StoredFinding) -> dict[str, Any]:
+def _as_json(item: StoredFinding, analysis: Analysis | None) -> dict[str, Any]:
     return {
+        "analysis": analysis.model_dump(mode="json", exclude={"finding_id"})
+        if analysis is not None
+        else None,
         "id": item.id,
         "rule_id": item.rule_id,
         "severity": item.severity.value,
@@ -144,16 +151,48 @@ def _as_json(item: StoredFinding) -> dict[str, Any]:
     }
 
 
-def _as_text(item: StoredFinding, settings: Settings) -> str:
+def _explanation(item: StoredFinding, analysis: Analysis | None) -> list[str]:
+    """Lines describing the analysis of a finding. Model text is re-sanitised here."""
+    if analysis is None:
+        return ["    explanation: not analysed yet"]
+
+    def text(value: str) -> str:
+        return defang_text(clean_text(value, limit=400))
+
+    lines = []
+    if analysis.priority.rank > item.severity.rank:
+        lines.append(
+            f"    priority: {analysis.priority.value.upper()} "
+            f"(raised from {item.severity.value.upper()} by the analysis)"
+        )
+    lines += [
+        f"    summary: {text(analysis.summary)}",
+        f"    likely cause: {text(analysis.likely_cause)}",
+        f"    recommended action: {text(analysis.recommended_action)}",
+    ]
+    if analysis.source == "template" or analysis.model is None:
+        lines.append("    explained by: standard explanation (the local model was not used)")
+    else:
+        origin = "reused from an earlier identical finding" if analysis.source == "cache" else ""
+        lines.append(
+            f"    explained by: {clean_text(analysis.model, limit=64)}, "
+            f"confidence {analysis.confidence:.2f}" + (f", {origin}" if origin else "")
+        )
+    return lines
+
+
+def _as_text(item: StoredFinding, analysis: Analysis | None, settings: Settings) -> str:
     labels = {profile.id: profile.label for profile in settings.profiles}
     when = item.last_ts.astimezone(ZoneInfo(settings.timezone)).strftime("%Y-%m-%d %H:%M")
     profile = clean_text(labels.get(item.profile_id, item.profile_id), limit=64)
     who = f"device {_safe(item.subject)}" if item.device_mode else "device attribution unavailable"
     target = profile if item.target == item.profile_id else _safe(item.target)
+    priority = analysis.priority if analysis is not None else item.severity
     lines = [
-        f"{when}  {item.severity.value.upper():<8}  {item.rule_id}  {target}"
+        f"{when}  {priority.value.upper():<8}  {item.rule_id}  {target}"
         f"  [{profile}, {who}]  x{item.event_count}"
     ]
+    lines.extend(_explanation(item, analysis))
     lines.extend(
         f"    {clean_text(str(key), limit=64)}: {_safe(value)}"
         for key, value in sorted(item.evidence.items())
@@ -212,11 +251,11 @@ def findings(
     items = asyncio.run(_load_findings(database_url, profile_id, rule, severity, limit))
 
     if as_json:
-        typer.echo(json.dumps([_as_json(item) for item in items], indent=2))
+        typer.echo(json.dumps([_as_json(item, analysis) for item, analysis in items], indent=2))
     elif not items:
         typer.echo("No findings.")
     else:
-        typer.echo("\n\n".join(_as_text(item, settings) for item in items))
+        typer.echo("\n\n".join(_as_text(item, analysis, settings) for item, analysis in items))
 
 
 async def _store_events(database_url: str, events: list[DnsEvent]) -> int:

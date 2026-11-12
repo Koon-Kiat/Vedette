@@ -189,3 +189,92 @@ def test_profile_wide_findings_show_the_profile_label_not_its_id(database: str) 
 
     assert "volume-spike  router  [router, device attribution unavailable]" in out
     assert "abc123" not in out
+
+
+def seed_analysis(url: str, **overrides: Any) -> None:
+    from sentinel.llm.schema import Analysis
+    from sentinel.storage.analysis import AnalysisStore
+
+    async def write() -> None:
+        store = Store.open(url)
+        try:
+            (item,) = await store.list_findings(rule_id="volume-spike")
+            values: dict[str, Any] = {
+                "finding_id": item.id,
+                "summary": "The laptop made five times its usual number of lookups.",
+                "likely_cause": "A large software update.",
+                "recommended_action": "Check what was running on evil[.]example at the time.",
+                "priority": Severity.HIGH,
+                "group_key": "volume",
+                "confidence": 0.62,
+                "source": "llm",
+                "model": "qwen3:8b",
+            }
+            values.update(overrides)
+            await AnalysisStore(store.engine).save_analyses([Analysis(**values)], now=WHEN)
+        finally:
+            await store.close()
+
+    asyncio.run(write())
+
+
+def test_the_explanation_is_shown_with_each_finding_that_has_one(database: str) -> None:
+    seed(database, SAMPLE)
+    seed_analysis(database)
+
+    out = runner.invoke(app, ["findings", "--rule", "volume-spike"]).output
+
+    assert "The laptop made five times its usual number of lookups." in out
+    assert "A large software update." in out
+    assert "Check what was running on evil[.]example at the time." in out
+    assert "qwen3:8b" in out
+
+
+def test_a_raised_priority_is_shown_next_to_the_rule_floor(database: str) -> None:
+    seed(database, SAMPLE)
+    seed_analysis(database)
+
+    out = runner.invoke(app, ["findings", "--rule", "volume-spike"]).output
+
+    assert "HIGH" in out
+    assert "raised from LOW" in out
+
+
+def test_findings_without_an_explanation_say_so(database: str) -> None:
+    seed(database, SAMPLE)
+
+    out = runner.invoke(app, ["findings", "--rule", "young-domain"]).output
+
+    assert "not analysed yet" in out
+
+
+def test_a_template_explanation_is_labelled_as_such(database: str) -> None:
+    seed(database, SAMPLE)
+    seed_analysis(database, source="template", model=None, priority=Severity.LOW, confidence=0.0)
+
+    out = runner.invoke(app, ["findings", "--rule", "volume-spike"]).output
+
+    assert "standard explanation" in out
+    assert "qwen3:8b" not in out
+
+
+def test_min_severity_uses_the_raised_priority(database: str) -> None:
+    seed(database, SAMPLE)
+    seed_analysis(database)
+
+    out = runner.invoke(app, ["findings", "--min-severity", "high"]).output
+
+    assert "volume-spike" in out, "raised to high by the analysis, so it is listed"
+
+
+def test_json_output_includes_the_analysis(database: str) -> None:
+    seed(database, SAMPLE)
+    seed_analysis(database)
+
+    result = runner.invoke(app, ["findings", "--json", "--rule", "volume-spike"])
+
+    (item,) = json.loads(result.output)
+    assert item["severity"] == "low"
+    assert item["analysis"]["priority"] == "high"
+    assert item["analysis"]["source"] == "llm"
+    assert item["analysis"]["confidence"] == 0.62

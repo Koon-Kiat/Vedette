@@ -122,6 +122,33 @@ client would turn into a link. `--json` prints them raw for scripts.
   a YAML file, mount it into the container and set `rules.file` to its path.
   The defaults are in `src/sentinel/rules/rules.yaml`.
 
+## Loading history from a log export (optional)
+
+History normally comes from the API. You can also load a log export, the CSV
+that the NextDNS dashboard's Logs page downloads, for example to bring in a
+period older than the backfill window. The live stream always comes from the
+API.
+
+1. Put the file in the `imports` folder next to `docker-compose.yml`
+   (git-ignored, mounted read-only into the container).
+2. Make sure the profile it came from is listed in `config.yaml`.
+3. Run:
+
+   ```powershell
+   docker compose exec sentinel sentinel import /imports/yourfile.csv --profile pc
+   ```
+
+Events the collector already has are recognised and not stored twice, so
+importing the same file again adds nothing. Import before enabling a profile
+if you can, so its history is evaluated in order.
+
+An export is NextDNS's raw view: it includes repeat lookups that the API's
+default view removes. The importer keeps A, AAAA and HTTPS queries and merges
+rows that differ only by query type, but an imported period still holds more
+events than a collected one (about a third more in the file this was tested
+with). If the two must match exactly, set `ingest.raw: true`, which makes the
+API deliver the raw view too.
+
 ## How to add a profile
 
 Add an entry under `profiles:` in `config.yaml` with the profile's ID (shown on

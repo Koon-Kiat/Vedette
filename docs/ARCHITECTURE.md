@@ -37,6 +37,7 @@ NextDNS API (per profile)
 | Queue interface | `src/sentinel/pipeline/queue.py` | Done: `EventQueue` with an in-memory implementation |
 | Event model and source interface | `src/sentinel/sources/base.py` | Done: `DnsEvent`, `LogSource` |
 | NextDNS source | `src/sentinel/sources/nextdns.py` | Done: history paging, live stream, backoff |
+| Log export reader | `src/sentinel/sources/nextdns_export.py` | Done: `sentinel import` loads a dashboard CSV export |
 | Storage | `src/sentinel/storage/` | Done for events, collector state, findings and reference data: SQLite (WAL), Alembic migrations |
 | Collector | `src/sentinel/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
 | Enrichment | `src/sentinel/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
@@ -44,7 +45,7 @@ NextDNS API (per profile)
 | Enricher and rule workers | `src/sentinel/pipeline/processor.py` | Done |
 | Defanging | `src/sentinel/notify/defang.py` | Done: used by the CLI now, by notifications later |
 | Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs collector, enricher and rule engine; other stages are idle placeholders |
-| CLI | `src/sentinel/cli.py` | `sentinel run`, `sentinel findings`, `sentinel --version` |
+| CLI | `src/sentinel/cli.py` | `sentinel run`, `sentinel findings`, `sentinel import`, `sentinel --version` |
 | LLM analyst, notifier, health, dashboard | `src/sentinel/*/` | Not started |
 
 ## How the collector avoids gaps and duplicates
@@ -220,6 +221,22 @@ quiet for the first `rules.learning_days` (3) after a profile's oldest event.
 28. **The instruction-token pre-filter is not built yet.** It belongs with the
     prompt-injection hardening of the LLM stage.
 
+29. **History can also come from a log export; the stream stays on the API.**
+    `sentinel import` loads the dashboard's CSV export for a profile. It is an
+    extra way in, not a replacement: real-time alerts and unattended running
+    need the stream. The file is not downloaded automatically, because the
+    export is the raw view of the whole retention period.
+30. **Query type is part of the event id in raw mode only.** In raw mode NextDNS
+    reports the A, AAAA and HTTPS lookups for one name as separate entries with
+    the same timestamp; without the type they collided (317 of 1,172 rows in
+    the tested export). In default mode entries carry no type and ids are
+    unchanged, so existing data is unaffected.
+31. **The importer does not imitate NextDNS's removal of repeats.** That rule
+    is undocumented. In default mode an imported period therefore holds more
+    events than a collected one, which can make volume baselines for that
+    period look higher. The command says so every time; `ingest.raw: true`
+    removes the difference.
+
 ## Verified facts the design relies on
 
 Checked against the official NextDNS API documentation on 2026-11-12:
@@ -258,6 +275,15 @@ Checked on 2026-11-12 for enrichment:
 - RDAP answers carry an `events` list; the entry with
   `eventAction: registration` holds the registration date. The IANA bootstrap
   file maps each TLD to its RDAP server; some TLDs (for example `.io`) have none.
+- A real log export for the laptop profile (1,172 rows) against the API for
+  the same period: the raw API view returned exactly 1,172 entries; the
+  default view returned 628, every one of them present in the file with an
+  identical event id. Export columns: `timestamp`, `domain`, `query_type`,
+  `dnssec`, `protocol`, `client_ip`, `status` (empty means default), `reasons`
+  (comma-separated ids, no names), `destination_country`, `root_domain`,
+  `device_id`, `device_name`, `device_model`, `device_local_ip`,
+  `matched_name`, `client_name`. There is no `encrypted` or `tracker` column.
+- The laptop profile does report a device id and name, unlike the router.
 - First run over the router profile's week (161,117 events): processed in about
   90 seconds. Before decision 23, `dga-like` produced 287 findings, nearly all
   customer hostnames on cloud platforms, and 92 of 103 RDAP lookups were for

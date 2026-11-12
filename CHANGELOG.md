@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Log export import
+
+- `sentinel import FILE --profile NAME` loads a NextDNS dashboard log export.
+  Events get the same ids as their API twins, so nothing is stored twice.
+- The `imports/` folder is mounted read-only into the container for this.
+- Raw mode now includes the query type in event ids, fixing collisions between
+  the A, AAAA and HTTPS lookups of one name.
+
 ### Enrichment, rules and findings
 
 - Enrichment from local, cached data: first-seen per profile and device,

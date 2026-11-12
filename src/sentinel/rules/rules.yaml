@@ -1,0 +1,104 @@
+# Detection rules. Each rule has an id, a severity floor, a description of why
+# it matters, thresholds (params) and the evidence fields it records.
+#
+# The detector for each id is code; everything tunable is here. To change a
+# value without editing this file, point `rules.file` in config.yaml at a YAML
+# file with the same shape containing only the ids and fields to override.
+#
+# When NextDNS reports no device for an event (typical for a router profile),
+# per-device rules count per profile instead.
+
+rules:
+  - id: new-device
+    severity: medium
+    dedupe: once
+    description: >-
+      A device id that has never been seen on this profile appeared (or, when
+      NextDNS reports no devices, a client IP never seen before). An unknown
+      device on the network may be a guest, a new purchase, or an intruder.
+    params: {}
+    evidence: [device_id, device_name, client_ip, attribution]
+
+  - id: young-domain
+    severity: high
+    dedupe: daily
+    description: >-
+      An allowed query went to a domain registered very recently that is not
+      on the top-sites list. Freshly registered, unknown domains are heavily
+      used for phishing and malware delivery before blocklists catch up.
+    params:
+      max_age_days: 30
+    evidence: [fqdn, root, status, domain_age_days, popularity_rank]
+
+  - id: threat-intel-allowed
+    severity: critical
+    dedupe: daily
+    description: >-
+      NextDNS allowed a query for a domain that a threat-intelligence feed
+      lists as malicious. The device may have reached a phishing or malware
+      site that the resolver did not block.
+    params:
+      trusted_rank: 1000      # a feed entry for a top site this popular is distrusted
+    evidence: [fqdn, root, status, threat_feeds, threat_match, popularity_rank]
+
+  - id: dga-like
+    severity: medium
+    dedupe: daily
+    description: >-
+      An allowed query used a long, random-looking label on a domain outside
+      the top-sites list. Malware often generates such names to find its
+      command-and-control server.
+    params:
+      min_entropy: 3.5        # bits per character of the leftmost label
+      min_label_length: 12
+    evidence: [fqdn, root, status, label, label_length, entropy, digit_ratio]
+
+  - id: tunnel-like
+    severity: high
+    dedupe: hourly
+    description: >-
+      One device queried many different long subdomains of a single domain in
+      a short time. That pattern is typical of DNS tunnelling, where data is
+      smuggled out inside query names.
+    params:
+      min_unique_subdomains: 30   # fires when the count exceeds this
+      window_minutes: 10
+      min_subdomain_length: 30    # characters in front of the root
+      ignore_rank_below: 10000    # skip roots this popular (large CDNs); null disables
+    evidence: [root, unique_subdomains, window_minutes, sample_fqdn]
+
+  - id: volume-spike
+    severity: low
+    dedupe: hourly
+    description: >-
+      A device made far more queries this hour than its usual hourly rate.
+      Sudden bursts can mean malware activity, a misbehaving app, or a new
+      heavy use of the device.
+    params:
+      factor: 5.0             # this hour vs the baseline hourly mean
+      baseline_hours: 168     # look back one week
+      min_baseline_hours: 24  # hours with data needed before judging
+      min_queries: 200        # ignore spikes smaller than this
+    evidence: [queries_this_hour, baseline_per_hour, factor]
+
+  - id: blocked-burst
+    severity: medium
+    dedupe: hourly
+    description: >-
+      One device had many queries blocked in a short window. That can indicate
+      adware or malware repeatedly trying to reach blocked servers.
+    params:
+      min_blocked: 50               # per device
+      min_blocked_profile_mode: 200 # whole profile, when devices are not reported
+      window_minutes: 10
+    evidence: [blocked_in_window, window_minutes, sample_fqdn]
+
+  - id: new-destination-category
+    severity: low
+    dedupe: once
+    description: >-
+      A device triggered a NextDNS category or blocklist (the reason attached
+      to a query) that it had never triggered before, which signals a change
+      in what the device is doing.
+    params: {}
+    evidence: [category, category_name, fqdn]

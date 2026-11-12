@@ -1,0 +1,87 @@
+from pathlib import Path
+
+import pytest
+
+from sentinel.rules.loader import RuleFileError, load_rules
+from sentinel.rules.model import Severity
+
+
+def write(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "rules.yaml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def by_id(path: Path | None = None) -> dict[str, object]:
+    return {spec.id: spec for spec in load_rules(path)}
+
+
+def test_override_file_changes_only_the_named_values(tmp_path: Path) -> None:
+    path = write(
+        tmp_path,
+        "rules:\n"
+        "  - id: young-domain\n"
+        "    params:\n"
+        "      max_age_days: 14\n"
+        "  - id: tunnel-like\n"
+        "    severity: critical\n"
+        "    params:\n"
+        "      window_minutes: 5\n",
+    )
+    defaults = {spec.id: spec for spec in load_rules()}
+
+    rules = {spec.id: spec for spec in load_rules(path)}
+
+    assert rules["young-domain"].params["max_age_days"] == 14
+    assert rules["young-domain"].severity is Severity.HIGH
+    assert rules["young-domain"].description == defaults["young-domain"].description
+    assert rules["tunnel-like"].severity is Severity.CRITICAL
+    assert rules["tunnel-like"].params["window_minutes"] == 5
+    assert rules["tunnel-like"].params["min_unique_subdomains"] == 30
+    assert rules["dga-like"] == defaults["dga-like"]
+
+
+def test_a_rule_can_be_disabled_in_the_override_file(tmp_path: Path) -> None:
+    path = write(tmp_path, "rules:\n  - id: volume-spike\n    enabled: false\n")
+
+    rules = {spec.id: spec for spec in load_rules(path)}
+
+    assert rules["volume-spike"].enabled is False
+    assert rules["blocked-burst"].enabled is True
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("rules:\n  - id: no-such-rule\n    severity: low\n", "unknown rule id"),
+        ("rules: [unclosed\n", "not valid YAML"),
+        ("- just\n- a list\n", "'rules' list"),
+        ("rules:\n  - not-a-mapping\n", "'rules' list"),
+        ("rules:\n  - id: young-domain\n    severity: scary\n", "young-domain: severity"),
+        ("rules:\n  - id: young-domain\n    surprise: 1\n", "young-domain: surprise"),
+        (
+            "rules:\n  - id: young-domain\n    params:\n      max_age_days: soon\n",
+            "'max_age_days' is missing or not a number",
+        ),
+        (
+            "rules:\n  - id: dga-like\n    params:\n      min_entropy: true\n",
+            "'min_entropy' is missing or not a number",
+        ),
+    ],
+)
+def test_a_bad_override_file_is_rejected_with_a_clear_reason(
+    tmp_path: Path, text: str, message: str
+) -> None:
+    with pytest.raises(RuleFileError) as excinfo:
+        load_rules(write(tmp_path, text))
+
+    assert message in str(excinfo.value)
+
+
+def test_a_missing_override_file_is_an_error(tmp_path: Path) -> None:
+    with pytest.raises(RuleFileError, match="cannot read rule file"):
+        load_rules(tmp_path / "absent.yaml")
+
+
+def test_packaged_rules_load_without_an_override() -> None:
+    assert len(by_id()) == 8

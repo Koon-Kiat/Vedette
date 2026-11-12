@@ -6,7 +6,18 @@ a test checks that the migrations and these definitions agree.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Index, Integer, MetaData, String, Table
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+)
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 
@@ -135,4 +146,40 @@ reference_state = Table(
     Column("name", String(64), primary_key=True),
     Column("refreshed_at", UtcDateTime, nullable=False),
     Column("entries", Integer, nullable=False),
+)
+
+finding_analysis = Table(
+    "finding_analysis",
+    metadata,
+    Column("finding_id", Integer, primary_key=True),
+    Column("summary", String(400), nullable=False),
+    Column("likely_cause", String(300), nullable=False),
+    Column("recommended_action", String(300), nullable=False),
+    Column("priority", String(16), nullable=False),
+    Column("group_key", String(64), nullable=False),
+    Column("confidence", Float, nullable=False),
+    Column("source", String(16), nullable=False),
+    Column("model", String(128)),
+    Column("created_at", UtcDateTime, nullable=False),
+)
+
+llm_cache = Table(
+    "llm_cache",
+    metadata,
+    Column("cache_key", String(64), primary_key=True),
+    Column("payload", JSON, nullable=False),
+    Column("model", String(128), nullable=False),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("expires_at", UtcDateTime, nullable=False),
+)
+
+llm_calls = Table(
+    "llm_calls",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("started_at", UtcDateTime, nullable=False),
+    Column("duration_ms", Integer, nullable=False),
+    Column("findings", Integer, nullable=False),
+    Column("outcome", String(16), nullable=False),
+    Column("model", String(128), nullable=False),
 )

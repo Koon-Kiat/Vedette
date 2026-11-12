@@ -21,7 +21,7 @@ from sqlalchemy.pool import ConnectionPoolEntry
 
 from sentinel.rules.model import Finding, Severity
 from sentinel.sources.base import DnsEvent, Reason
-from sentinel.storage.models import collector_state, events, findings
+from sentinel.storage.models import collector_state, events, finding_analysis, findings
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,7 +402,11 @@ class Store:
         min_severity: Severity | None = None,
         limit: int = 50,
     ) -> list[StoredFinding]:
-        """Stored findings, most recently seen first."""
+        """Stored findings, most recently seen first.
+
+        ``min_severity`` compares against a finding's effective priority: the
+        one its analysis gave it if there is one, otherwise the rule's floor.
+        """
         statement = select(findings).order_by(findings.c.last_ts.desc(), findings.c.id.desc())
         if profile_id is not None:
             statement = statement.where(findings.c.profile_id == profile_id)
@@ -410,7 +414,10 @@ class Store:
             statement = statement.where(findings.c.rule_id == rule_id)
         if min_severity is not None:
             wanted = [level.value for level in Severity if level.rank >= min_severity.rank]
-            statement = statement.where(findings.c.severity.in_(wanted))
+            effective = func.coalesce(finding_analysis.c.priority, findings.c.severity)
+            statement = statement.outerjoin(
+                finding_analysis, finding_analysis.c.finding_id == findings.c.id
+            ).where(effective.in_(wanted))
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement.limit(limit))).all()
         return [

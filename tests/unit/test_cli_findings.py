@@ -1,0 +1,191 @@
+import asyncio
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import pytest
+from typer.testing import CliRunner
+
+from sentinel.cli import app
+from sentinel.rules.model import Finding, Severity
+from sentinel.storage.migrate import run_migrations
+from sentinel.storage.store import Store
+
+runner = CliRunner()
+WHEN = datetime(2026, 3, 15, 4, 30, 0, tzinfo=UTC)  # 12:30 in Asia/Singapore
+
+
+def finding(
+    rule: str, severity: str, target: str, evidence: dict[str, Any], *, minute: int = 0
+) -> Finding:
+    return Finding(
+        rule_id=rule,
+        severity=Severity(severity),
+        profile_id="abc123",
+        subject="D1",
+        device_mode=True,
+        target=target,
+        ts=WHEN.replace(minute=30 + minute),
+        dedupe_key=f"{rule}|{target}",
+        evidence=evidence,
+        event_id="e" * 64,
+    )
+
+
+@pytest.fixture
+def database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
+    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    return url
+
+
+def seed(url: str, items: list[Finding]) -> None:
+    async def write() -> None:
+        store = Store.open(url)
+        try:
+            await store.commit_processed([], items)
+        finally:
+            await store.close()
+
+    run_migrations(url)
+    asyncio.run(write())
+
+
+SAMPLE = [
+    finding(
+        "young-domain",
+        "high",
+        "fresh-site.example",
+        {"fqdn": "login.fresh-site.example", "root": "fresh-site.example", "domain_age_days": 5},
+        minute=2,
+    ),
+    finding(
+        "volume-spike", "low", "D1", {"queries_this_hour": 900, "baseline_per_hour": 50.0}, minute=1
+    ),
+    finding(
+        "threat-intel-allowed",
+        "critical",
+        "bad.example",
+        {"fqdn": "pay.bad.example", "threat_feeds": ["phish"]},
+        minute=3,
+    ),
+]
+
+
+def test_findings_are_listed_newest_first_with_their_evidence(database: str) -> None:
+    seed(database, SAMPLE)
+
+    result = runner.invoke(app, ["findings"])
+
+    assert result.exit_code == 0, result.output
+    out = result.output
+    assert out.index("threat-intel-allowed") < out.index("young-domain") < out.index("volume-spike")
+    assert "CRITICAL" in out
+    assert "HIGH" in out
+    assert "domain_age_days: 5" in out
+    assert "threat_feeds: phish" in out
+    assert "2026-03-15 12:32" in out, "times are shown in the configured time zone"
+    assert "router" in out
+
+
+def test_domains_are_defanged_everywhere(database: str) -> None:
+    seed(database, SAMPLE)
+
+    out = runner.invoke(app, ["findings"]).output
+
+    assert "fresh-site[.]example" in out
+    assert "login[.]fresh-site[.]example" in out
+    assert "fresh-site.example" not in out
+    assert "bad.example" not in out
+
+
+def test_hostile_text_in_evidence_cannot_control_the_terminal(database: str) -> None:
+    seed(
+        database,
+        [
+            finding(
+                "new-device",
+                "medium",
+                "D\x1b[2J9",
+                {"device_name": "TV\x1b]0;owned\x07\r\nFAKE LINE", "client_ip": "198.51.100.7"},
+            )
+        ],
+    )
+
+    out = runner.invoke(app, ["findings"]).output
+
+    assert "\x1b" not in out
+    assert "\x07" not in out
+    assert "\r" not in out
+    assert "\nFAKE LINE" not in out
+    assert "198[.]51[.]100[.]7" in out
+
+
+def test_findings_can_be_filtered(database: str) -> None:
+    seed(database, SAMPLE)
+
+    serious = runner.invoke(app, ["findings", "--min-severity", "high"]).output
+    one_rule = runner.invoke(app, ["findings", "--rule", "volume-spike"]).output
+    limited = runner.invoke(app, ["findings", "--limit", "1"]).output
+    by_label = runner.invoke(app, ["findings", "--profile", "router"]).output
+    other = runner.invoke(app, ["findings", "--profile", "phone"])
+
+    assert "volume-spike" not in serious
+    assert "young-domain" in serious
+    assert "young-domain" not in one_rule
+    assert "young-domain" not in limited
+    assert "threat-intel-allowed" in limited
+    assert "young-domain" in by_label
+    assert other.exit_code == 2
+    assert "phone" in other.output
+
+
+def test_json_output_is_machine_readable(database: str) -> None:
+    seed(database, SAMPLE)
+
+    result = runner.invoke(app, ["findings", "--json", "--rule", "young-domain"])
+
+    (item,) = json.loads(result.output)
+    assert item["rule_id"] == "young-domain"
+    assert item["severity"] == "high"
+    assert item["target"] == "fresh-site.example"
+    assert item["evidence"]["domain_age_days"] == 5
+    assert item["event_count"] == 1
+    assert item["device_mode"] is True
+
+
+def test_an_unknown_severity_is_a_usage_error(database: str) -> None:
+    seed(database, SAMPLE)
+
+    result = runner.invoke(app, ["findings", "--min-severity", "scary"])
+
+    assert result.exit_code == 2
+
+
+def test_no_findings_is_reported_plainly(database: str) -> None:
+    seed(database, [])
+
+    result = runner.invoke(app, ["findings"])
+
+    assert result.exit_code == 0
+    assert "No findings" in result.output
+
+
+def test_a_missing_database_is_explained_instead_of_crashing(database: str) -> None:
+    result = runner.invoke(app, ["findings"])
+
+    assert result.exit_code == 0
+    assert "no database yet" in result.output.lower()
+    assert "Traceback" not in result.output
+
+
+def test_profile_wide_findings_show_the_profile_label_not_its_id(database: str) -> None:
+    item = finding("volume-spike", "low", "abc123", {"queries_this_hour": 900})
+    seed(database, [item.model_copy(update={"subject": None, "device_mode": False})])
+
+    out = runner.invoke(app, ["findings"]).output
+
+    assert "volume-spike  router  [router, device attribution unavailable]" in out
+    assert "abc123" not in out

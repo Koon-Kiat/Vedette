@@ -20,6 +20,8 @@ services:
         bind:
           create_host_path: false
       - sentinel-data:/data
+      # Drop NextDNS log exports here to load them with `sentinel import`.
+      - ./imports:/imports:ro
     user: "10001:10001"
     read_only: true
     tmpfs:

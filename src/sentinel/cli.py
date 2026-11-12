@@ -15,6 +15,8 @@ from sentinel.log import configure_logging
 from sentinel.notify.defang import clean_text, defang
 from sentinel.pipeline.runner import run_until_signalled
 from sentinel.rules.model import Severity
+from sentinel.sources.base import DnsEvent
+from sentinel.sources.nextdns_export import ExportFormatError, read_export
 from sentinel.storage.migrate import run_migrations
 from sentinel.storage.store import Store, StoredFinding
 
@@ -215,3 +217,75 @@ def findings(
         typer.echo("No findings.")
     else:
         typer.echo("\n\n".join(_as_text(item, settings) for item in items))
+
+
+async def _store_events(database_url: str, events: list[DnsEvent]) -> int:
+    store = Store.open(database_url)
+    try:
+        new = 0
+        for start in range(0, len(events), 1000):
+            new += await store.save_events(events[start : start + 1000])
+        return new
+    finally:
+        await store.close()
+
+
+@app.command("import")
+def import_export(
+    file: Annotated[
+        Path, typer.Argument(help="NextDNS log export (the CSV from the dashboard's Logs page).")
+    ],
+    profile: Annotated[
+        str, typer.Option("--profile", help="Profile the file was exported from (label or id).")
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Load history from a NextDNS log export instead of the API.
+
+    Events already collected are recognised and not stored twice. The live
+    stream still comes from the API; the rules evaluate imported events the
+    next time the pipeline runs with the profile enabled.
+    """
+    settings = _load_or_exit(config)
+    profile_id = _resolve_profile(settings, profile)
+    if profile_id is None:  # pragma: no cover - --profile is required
+        raise typer.Exit(code=2)
+    raw = settings.ingest.raw
+    try:
+        result = read_export(file, profile_id, raw=raw)
+    except ExportFormatError as exc:
+        typer.echo(f"Cannot import: {exc}", err=True)
+        raise typer.Exit(code=2) from None
+    except OSError as exc:
+        typer.echo(f"Cannot read the file: {type(exc).__name__}", err=True)
+        raise typer.Exit(code=2) from None
+
+    database_url = settings.storage.database_url
+    run_migrations(database_url)
+    new = asyncio.run(_store_events(database_url, result.events))
+
+    typer.echo(f"{result.rows} rows read")
+    typer.echo(f"{new} new events stored")
+    typer.echo(f"{len(result.events) - new} already stored")
+    typer.echo(f"{result.skipped_other_types} skipped (other query types)")
+    typer.echo(f"{result.merged_same_instant} merged (same name at the same instant)")
+    typer.echo(f"{result.skipped_malformed} skipped (unreadable)")
+    if not raw:
+        typer.echo(
+            "Note: an export is NextDNS's raw view. It includes repeat lookups that the "
+            "API's default view leaves out, so imported periods hold more events than "
+            "collected ones. Set ingest.raw: true if the two must match exactly."
+        )
+    enabled = {item.id for item in settings.enabled_profiles}
+    if profile_id not in enabled:
+        typer.echo(
+            "This profile is not enabled, so the rules will not evaluate these events yet. "
+            "Set 'enabled: true' for it in config.yaml and restart the pipeline."
+        )

@@ -1,0 +1,8 @@
+timestamp,domain,query_type,dnssec,protocol,client_ip,status,reasons,destination_country,root_domain,device_id,device_name,device_model,device_local_ip,matched_name,client_name
+2026-03-15T04:34:05.203Z,telemetry.vendor.example,A,false,DNS-over-HTTPS,198.51.100.7,blocked,"blocklist:sample-list,native:sample",,vendor.example,8TD1G,Living Room TV,,,,nextdns-cli
+2026-03-15T04:34:05.203Z,telemetry.vendor.example,HTTPS,false,DNS-over-HTTPS,198.51.100.7,blocked,"blocklist:sample-list,native:sample",,vendor.example,8TD1G,Living Room TV,,,,nextdns-cli
+2026-03-15T04:33:59.001Z,www.example.org,A,false,DNS-over-HTTPS,198.51.100.7,,,US,example.org,8TD1G,Living Room TV,,,,nextdns-cli
+2026-03-15T04:33:58.000Z,_ldap._tcp.corp.example,SRV,false,DNS-over-HTTPS,198.51.100.7,,,,corp.example,8TD1G,Living Room TV,,,,nextdns-cli
+2026-03-15T04:33:57.500Z,WWW.Mixed.Example.,AAAA,true,DNS-over-HTTPS,198.51.100.7,,,DE,mixed.example,,,,,,nextdns-cli
+not-a-timestamp,broken.example,A,false,DNS-over-HTTPS,198.51.100.7,,,,broken.example,8TD1G,Living Room TV,,,,nextdns-cli
+2026-03-15T04:33:56.000Z,,A,false,DNS-over-HTTPS,198.51.100.7,,,,,8TD1G,Living Room TV,,,,nextdns-cli

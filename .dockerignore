@@ -7,6 +7,7 @@
 config.yaml
 secrets/
 data/
+imports/
 *.db
 *.db-wal
 *.db-shm

@@ -72,34 +72,44 @@ def compute_event_id(
     protocol: str | None,
     device_id: str | None,
     client_ip: str | None,
+    query_type: str | None = None,
 ) -> str:
     """Deterministic id for a log entry, identical for history and stream copies.
 
     NextDNS gives log entries no id, so the fields that identify a query are
     hashed instead. Storing the same entry twice then collapses to one row.
+
+    ``query_type`` is part of the id only in raw mode, where NextDNS reports the
+    A, AAAA and HTTPS lookups for one name as separate entries with the same
+    timestamp. In the default (deduplicated) view entries carry no type.
     """
-    key = json.dumps(
-        [
-            profile_id,
-            ts.astimezone(UTC).isoformat(timespec="microseconds"),
-            fqdn,
-            status,
-            protocol or "",
-            device_id or "",
-            client_ip or "",
-        ],
-        ensure_ascii=True,
-        separators=(",", ":"),
-    )
+    parts = [
+        profile_id,
+        ts.astimezone(UTC).isoformat(timespec="microseconds"),
+        fqdn,
+        status,
+        protocol or "",
+        device_id or "",
+        client_ip or "",
+    ]
+    if query_type is not None:
+        parts.append(query_type)
+    key = json.dumps(parts, ensure_ascii=True, separators=(",", ":"))
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
-def parse_log_entry(profile_id: str, entry: Mapping[str, Any]) -> DnsEvent:
+def parse_log_entry(profile_id: str, entry: Mapping[str, Any], *, raw: bool = False) -> DnsEvent:
     """Convert one NextDNS log entry into a :class:`DnsEvent`.
 
     Optional fields (``root``, ``tracker``, ``client``, ``device``) may be
     absent. Over-long strings are truncated rather than rejected, so an
     attacker cannot make an event disappear by inflating a field.
+
+    Args:
+        profile_id: Profile the entry belongs to.
+        entry: The log entry as returned by the API.
+        raw: Whether the profile is collected in raw mode; if so the entry's
+            query ``type`` is part of the event id.
 
     Raises:
         ValueError: ``timestamp``, ``domain`` or ``status`` is missing or unusable.
@@ -133,7 +143,16 @@ def parse_log_entry(profile_id: str, entry: Mapping[str, Any]) -> DnsEvent:
     client_ip = _text(entry.get("clientIp"), _MAX_SHORT)
 
     return DnsEvent(
-        event_id=compute_event_id(profile_id, ts, fqdn, status, protocol, device_id, client_ip),
+        event_id=compute_event_id(
+            profile_id,
+            ts,
+            fqdn,
+            status,
+            protocol,
+            device_id,
+            client_ip,
+            _text(entry.get("type"), 16) if raw else None,
+        ),
         profile_id=profile_id,
         ts=ts,
         fqdn=fqdn,
@@ -275,7 +294,7 @@ class NextDnsSource(LogSource):
             try:
                 if not isinstance(entry, Mapping):
                     raise ValueError("log entry is not an object")
-                events.append(parse_log_entry(profile_id, entry))
+                events.append(parse_log_entry(profile_id, entry, raw=self._raw))
             except ValueError:
                 skipped += 1
         if skipped:
@@ -338,7 +357,7 @@ class NextDnsSource(LogSource):
                         entry = json.loads(message.data)
                         if not isinstance(entry, Mapping):
                             raise ValueError("stream event is not an object")
-                        event = parse_log_entry(profile_id, entry)
+                        event = parse_log_entry(profile_id, entry, raw=self._raw)
                     except ValueError:
                         log.warning("nextdns_stream_event_skipped", profile_id=profile_id)
                         continue

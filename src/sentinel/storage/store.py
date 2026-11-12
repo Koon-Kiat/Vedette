@@ -7,20 +7,21 @@ after a restart the collector resumes from a cursor that matches exactly what
 is on disk.
 """
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, tuple_, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import make_url
 from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import ConnectionPoolEntry
 
+from sentinel.rules.model import Finding, Severity
 from sentinel.sources.base import DnsEvent, Reason
-from sentinel.storage.models import collector_state, events
+from sentinel.storage.models import collector_state, events, findings
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,58 @@ class CollectorState:
     stream_cursor: str | None
     synced_through: datetime | None
     backfill_completed_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredFinding:
+    """A finding as stored: repeated sightings are merged into one row.
+
+    Attributes:
+        id: Database id.
+        rule_id: The rule that fired.
+        severity: The rule's severity floor.
+        profile_id: Profile the finding belongs to.
+        subject: Device id, or ``None`` when the rule keyed on the profile.
+        device_mode: Whether ``subject`` is a real device.
+        target: What the finding is about.
+        first_ts: Time of the first triggering event.
+        last_ts: Time of the latest triggering event.
+        event_count: Number of triggering events merged into this row.
+        evidence: Evidence recorded at the first sighting. Untrusted strings.
+        status: ``open`` until acted on.
+    """
+
+    id: int
+    rule_id: str
+    severity: Severity
+    profile_id: str
+    subject: str | None
+    device_mode: bool
+    target: str
+    first_ts: datetime
+    last_ts: datetime
+    event_count: int
+    evidence: dict[str, Any]
+    status: str
+
+
+def _to_event(row: Any) -> DnsEvent:
+    return DnsEvent(
+        event_id=row.event_id,
+        profile_id=row.profile_id,
+        ts=row.ts,
+        fqdn=row.fqdn,
+        root=row.root,
+        status=row.status,
+        reasons=tuple(Reason(**reason) for reason in row.reasons),
+        device_id=row.device_id,
+        device_name=row.device_name,
+        client_ip=row.client_ip,
+        protocol=row.protocol,
+        encrypted=row.encrypted,
+        tracker=row.tracker,
+        source=row.source,
+    )
 
 
 def _sqlite_pragmas(connection: DBAPIConnection, record: ConnectionPoolEntry) -> None:
@@ -86,6 +139,11 @@ class Store:
         if make_url(database_url).get_backend_name() == "sqlite":
             event.listen(engine.sync_engine, "connect", _sqlite_pragmas)
         return cls(engine)
+
+    @property
+    def engine(self) -> AsyncEngine:
+        """The underlying engine, shared with the reference-data store."""
+        return self._engine
 
     async def close(self) -> None:
         """Release all database connections."""
@@ -208,22 +266,167 @@ class Store:
             statement = statement.limit(limit)
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement)).all()
+        return [_to_event(row) for row in rows]
+
+    # --- processing ---------------------------------------------------------------
+
+    async def fetch_unprocessed(self, profile_id: str, *, limit: int) -> list[DnsEvent]:
+        """Oldest events of a profile that have not been through the rules yet."""
+        statement = (
+            select(events)
+            .where(events.c.profile_id == profile_id, events.c.processed_at.is_(None))
+            .order_by(events.c.ts, events.c.event_id)
+            .limit(limit)
+        )
+        async with self._engine.connect() as connection:
+            rows = (await connection.execute(statement)).all()
+        return [_to_event(row) for row in rows]
+
+    async def count_unprocessed(self, profile_id: str) -> int:
+        """Number of a profile's events still waiting for the rules."""
+        async with self._engine.connect() as connection:
+            result = await connection.execute(
+                select(func.count())
+                .select_from(events)
+                .where(events.c.profile_id == profile_id, events.c.processed_at.is_(None))
+            )
+            return int(result.scalar_one())
+
+    async def earliest_event_ts(self, profile_id: str) -> datetime | None:
+        """Time of the oldest stored event of a profile."""
+        async with self._engine.connect() as connection:
+            result = await connection.execute(
+                select(func.min(events.c.ts)).where(events.c.profile_id == profile_id)
+            )
+            earliest: datetime | None = result.scalar_one_or_none()
+            return earliest
+
+    async def iter_processed_fields(
+        self, profile_id: str, *, since: datetime, chunk: int = 5000
+    ) -> AsyncIterator[tuple[str, str | None, datetime, str, str | None, str]]:
+        """Yield ``(profile_id, device_id, ts, fqdn, root, status)`` of processed events.
+
+        Oldest first, from ``since`` on. Used to rebuild the rule engine's
+        windows and baselines after a restart without loading whole events.
+        """
+        position: tuple[datetime, str] | None = None
+        while True:
+            statement = (
+                select(
+                    events.c.profile_id,
+                    events.c.device_id,
+                    events.c.ts,
+                    events.c.fqdn,
+                    events.c.root,
+                    events.c.status,
+                    events.c.event_id,
+                )
+                .where(
+                    events.c.profile_id == profile_id,
+                    events.c.processed_at.is_not(None),
+                    events.c.ts >= since,
+                )
+                .order_by(events.c.ts, events.c.event_id)
+                .limit(chunk)
+            )
+            if position is not None:
+                statement = statement.where(tuple_(events.c.ts, events.c.event_id) > position)
+            async with self._engine.connect() as connection:
+                rows = (await connection.execute(statement)).all()
+            for row in rows:
+                yield (row.profile_id, row.device_id, row.ts, row.fqdn, row.root, row.status)
+            if len(rows) < chunk:
+                return
+            position = (rows[-1].ts, rows[-1].event_id)
+
+    async def commit_processed(self, event_ids: Sequence[str], found: Sequence[Finding]) -> None:
+        """Mark events as processed and store their findings, atomically.
+
+        Findings sharing a ``dedupe_key`` (in this call or already stored) are
+        merged: the count grows, the time range widens, and the evidence of
+        the first sighting is kept.
+        """
+        now = datetime.now(UTC)
+        merged: dict[str, dict[str, Any]] = {}
+        for item in found:
+            row = merged.get(item.dedupe_key)
+            if row is None:
+                merged[item.dedupe_key] = {
+                    "dedupe_key": item.dedupe_key,
+                    "rule_id": item.rule_id,
+                    "severity": item.severity.value,
+                    "profile_id": item.profile_id,
+                    "subject": item.subject,
+                    "device_mode": item.device_mode,
+                    "target": item.target[:256],
+                    "first_ts": item.ts,
+                    "last_ts": item.ts,
+                    "event_count": 1,
+                    "evidence": item.evidence,
+                    "event_id": item.event_id,
+                    "status": "open",
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            else:
+                row["event_count"] += 1
+                row["first_ts"] = min(row["first_ts"], item.ts)
+                row["last_ts"] = max(row["last_ts"], item.ts)
+        async with self._engine.begin() as connection:
+            if merged:
+                statement = sqlite_insert(findings)
+                await connection.execute(
+                    statement.on_conflict_do_update(
+                        index_elements=["dedupe_key"],
+                        set_={
+                            "event_count": findings.c.event_count + statement.excluded.event_count,
+                            "first_ts": func.min(findings.c.first_ts, statement.excluded.first_ts),
+                            "last_ts": func.max(findings.c.last_ts, statement.excluded.last_ts),
+                            "updated_at": now,
+                        },
+                    ),
+                    list(merged.values()),
+                )
+            for start in range(0, len(event_ids), 500):
+                await connection.execute(
+                    update(events)
+                    .where(events.c.event_id.in_(event_ids[start : start + 500]))
+                    .values(processed_at=now)
+                )
+
+    async def list_findings(
+        self,
+        *,
+        profile_id: str | None = None,
+        rule_id: str | None = None,
+        min_severity: Severity | None = None,
+        limit: int = 50,
+    ) -> list[StoredFinding]:
+        """Stored findings, most recently seen first."""
+        statement = select(findings).order_by(findings.c.last_ts.desc(), findings.c.id.desc())
+        if profile_id is not None:
+            statement = statement.where(findings.c.profile_id == profile_id)
+        if rule_id is not None:
+            statement = statement.where(findings.c.rule_id == rule_id)
+        if min_severity is not None:
+            wanted = [level.value for level in Severity if level.rank >= min_severity.rank]
+            statement = statement.where(findings.c.severity.in_(wanted))
+        async with self._engine.connect() as connection:
+            rows = (await connection.execute(statement.limit(limit))).all()
         return [
-            DnsEvent(
-                event_id=row.event_id,
+            StoredFinding(
+                id=row.id,
+                rule_id=row.rule_id,
+                severity=Severity(row.severity),
                 profile_id=row.profile_id,
-                ts=row.ts,
-                fqdn=row.fqdn,
-                root=row.root,
+                subject=row.subject,
+                device_mode=row.device_mode,
+                target=row.target,
+                first_ts=row.first_ts,
+                last_ts=row.last_ts,
+                event_count=row.event_count,
+                evidence=row.evidence,
                 status=row.status,
-                reasons=tuple(Reason(**reason) for reason in row.reasons),
-                device_id=row.device_id,
-                device_name=row.device_name,
-                client_ip=row.client_ip,
-                protocol=row.protocol,
-                encrypted=row.encrypted,
-                tracker=row.tracker,
-                source=row.source,
             )
             for row in rows
         ]

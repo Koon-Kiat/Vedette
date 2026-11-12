@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, inspect
 
+from sentinel.rules.model import Finding, Severity
 from sentinel.sources.base import DnsEvent
 from sentinel.sources.nextdns import parse_log_entry
 from sentinel.storage.migrate import run_migrations
@@ -193,3 +194,129 @@ async def test_data_survives_closing_and_reopening(database_url: str) -> None:
         assert state.stream_cursor == "s1"
     finally:
         await second.close()
+
+
+# --- processing and findings -----------------------------------------------------
+
+
+def make_finding(
+    n: int, *, rule: str = "young-domain", severity: str = "high", key: str | None = None
+) -> Finding:
+    item = make_event(n)
+    return Finding(
+        rule_id=rule,
+        severity=Severity(severity),
+        profile_id=item.profile_id,
+        subject=item.device_id,
+        device_mode=True,
+        target="host.example",
+        ts=item.ts,
+        dedupe_key=key or f"{rule}|{n}",
+        evidence={"fqdn": item.fqdn, "n": n},
+        event_id=item.event_id,
+    )
+
+
+async def test_unprocessed_events_come_back_oldest_first_up_to_the_limit(store: Store) -> None:
+    await store.save_events(
+        [make_event(3), make_event(1), make_event(2), make_event(9, profile="other")]
+    )
+
+    batch = await store.fetch_unprocessed("abc123", limit=2)
+
+    assert [item.fqdn for item in batch] == ["host1.example", "host2.example"]
+    assert await store.count_unprocessed("abc123") == 3
+
+
+async def test_committing_a_batch_marks_events_processed_and_stores_findings(store: Store) -> None:
+    await store.save_events([make_event(1), make_event(2), make_event(3)])
+    batch = await store.fetch_unprocessed("abc123", limit=2)
+
+    await store.commit_processed([item.event_id for item in batch], [make_finding(1)])
+
+    assert [item.fqdn for item in await store.fetch_unprocessed("abc123", limit=10)] == [
+        "host3.example"
+    ]
+    (stored,) = await store.list_findings()
+    assert (stored.rule_id, stored.severity.value, stored.event_count) == (
+        "young-domain",
+        "high",
+        1,
+    )
+    assert stored.evidence == {"fqdn": "host1.example", "n": 1}
+    assert stored.subject == "D1"
+    assert stored.status == "open"
+
+
+async def test_findings_with_the_same_key_merge_into_one_row(store: Store) -> None:
+    await store.commit_processed([], [make_finding(5, key="k"), make_finding(1, key="k")])
+    await store.commit_processed([], [make_finding(9, key="k")])
+
+    (stored,) = await store.list_findings()
+    assert stored.event_count == 3
+    assert stored.first_ts == T0 + timedelta(seconds=1)
+    assert stored.last_ts == T0 + timedelta(seconds=9)
+    assert stored.evidence["n"] == 5, "the evidence of the first sighting is kept"
+
+
+async def test_findings_can_be_filtered_and_are_newest_first(store: Store) -> None:
+    await store.commit_processed(
+        [],
+        [
+            make_finding(1, rule="volume-spike", severity="low"),
+            make_finding(2, rule="young-domain", severity="high"),
+            make_finding(3, rule="threat-intel-allowed", severity="critical"),
+        ],
+    )
+
+    everything = await store.list_findings()
+    serious = await store.list_findings(min_severity=Severity.HIGH)
+    one_rule = await store.list_findings(rule_id="volume-spike")
+    limited = await store.list_findings(limit=1)
+    elsewhere = await store.list_findings(profile_id="other")
+
+    assert [f.rule_id for f in everything] == [
+        "threat-intel-allowed",
+        "young-domain",
+        "volume-spike",
+    ]
+    assert [f.rule_id for f in serious] == ["threat-intel-allowed", "young-domain"]
+    assert [f.rule_id for f in one_rule] == ["volume-spike"]
+    assert [f.rule_id for f in limited] == ["threat-intel-allowed"]
+    assert elsewhere == []
+
+
+async def test_processed_events_can_be_replayed_in_order_for_warm_up(store: Store) -> None:
+    items = [make_event(n) for n in range(1, 8)]
+    await store.save_events(items)
+    await store.commit_processed([item.event_id for item in items[:5]], [])
+
+    replayed = [
+        row
+        async for row in store.iter_processed_fields(
+            "abc123", since=T0 + timedelta(seconds=2), chunk=2
+        )
+    ]
+
+    assert [row[3] for row in replayed] == [
+        "host2.example",
+        "host3.example",
+        "host4.example",
+        "host5.example",
+    ]
+    assert replayed[0] == (
+        "abc123",
+        "D1",
+        T0 + timedelta(seconds=2),
+        "host2.example",
+        "host.example",
+        "default",
+    )
+
+
+async def test_earliest_event_time_is_reported_per_profile(store: Store) -> None:
+    assert await store.earliest_event_ts("abc123") is None
+
+    await store.save_events([make_event(5), make_event(2)])
+
+    assert await store.earliest_event_ts("abc123") == T0 + timedelta(seconds=2)

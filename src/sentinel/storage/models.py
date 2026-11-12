@@ -6,7 +6,7 @@ a test checks that the migrations and these definitions agree.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Index, MetaData, String, Table
+from sqlalchemy import JSON, Boolean, Column, DateTime, Index, Integer, MetaData, String, Table
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 
@@ -67,4 +67,72 @@ collector_state = Table(
     Column("synced_through", UtcDateTime),
     Column("backfill_completed_at", UtcDateTime),
     Column("updated_at", UtcDateTime, nullable=False),
+)
+
+# Set once an event has been through enrichment and the rule engine.
+events.append_column(Column("processed_at", UtcDateTime))
+Index("ix_events_unprocessed", events.c.profile_id, events.c.processed_at, events.c.ts)
+
+findings = Table(
+    "findings",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("dedupe_key", String(600), nullable=False, unique=True),
+    Column("rule_id", String(64), nullable=False),
+    Column("severity", String(16), nullable=False),
+    Column("profile_id", String(64), nullable=False),
+    Column("subject", String(256)),
+    Column("device_mode", Boolean, nullable=False),
+    Column("target", String(256), nullable=False),
+    Column("first_ts", UtcDateTime, nullable=False),
+    Column("last_ts", UtcDateTime, nullable=False),
+    Column("event_count", Integer, nullable=False),
+    Column("evidence", JSON, nullable=False),
+    Column("event_id", String(64), nullable=False),
+    Column("status", String(16), nullable=False),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
+    Index("ix_findings_profile_last", "profile_id", "last_ts"),
+)
+
+first_seen = Table(
+    "first_seen",
+    metadata,
+    Column("profile_id", String(64), primary_key=True),
+    Column("kind", String(16), primary_key=True),
+    Column("subject", String(256), primary_key=True),
+    Column("value", String(256), primary_key=True),
+    Column("first_ts", UtcDateTime, nullable=False),
+    Column("first_event_id", String(64), nullable=False),
+)
+
+popularity = Table(
+    "popularity",
+    metadata,
+    Column("domain", String(255), primary_key=True),
+    Column("rank", Integer, nullable=False),
+)
+
+threat_intel = Table(
+    "threat_intel",
+    metadata,
+    Column("domain", String(255), primary_key=True),
+    Column("feed", String(64), primary_key=True),
+)
+
+domain_age = Table(
+    "domain_age",
+    metadata,
+    Column("root", String(255), primary_key=True),
+    Column("status", String(16), nullable=False),
+    Column("registered_at", UtcDateTime),
+    Column("fetched_at", UtcDateTime, nullable=False),
+)
+
+reference_state = Table(
+    "reference_state",
+    metadata,
+    Column("name", String(64), primary_key=True),
+    Column("refreshed_at", UtcDateTime, nullable=False),
+    Column("entries", Integer, nullable=False),
 )

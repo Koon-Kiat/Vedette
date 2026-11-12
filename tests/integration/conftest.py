@@ -23,11 +23,16 @@ class SleepRecorder:
 
 
 @pytest.fixture
-def server() -> Iterator[FakeNextDns]:
+def router() -> Iterator[respx.MockRouter]:
+    with respx.mock(assert_all_called=False, assert_all_mocked=True) as mock_router:
+        yield mock_router
+
+
+@pytest.fixture
+def server(router: respx.MockRouter) -> FakeNextDns:
     fake = FakeNextDns()
-    with respx.mock(assert_all_called=False, assert_all_mocked=True) as router:
-        fake.mount(router)
-        yield fake
+    fake.mount(router)
+    return fake
 
 
 @pytest.fixture

@@ -11,6 +11,7 @@ import unicodedata
 
 _SCHEME = re.compile(r"h(?:tt|xx)p(s?)://", re.IGNORECASE)
 _WHITESPACE = re.compile(r"\s+")
+_INNER_DOT = re.compile(r"(?<=[^\s.])\.(?=[^\s.])")
 
 
 def _strip_control(text: str, *, keep_whitespace: bool) -> str:
@@ -32,6 +33,16 @@ def defang(value: str) -> str:
     text = _strip_control(value, keep_whitespace=False)
     text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", text)
     return text.replace("[.]", ".").replace(".", "[.]")
+
+
+def defang_text(value: str) -> str:
+    """Defang the names inside a sentence while keeping its punctuation.
+
+    Only a dot with text on both sides is bracketed, so ``evil.example`` becomes
+    ``evil[.]example`` but the full stop ending a sentence is left alone.
+    """
+    text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", value)
+    return _INNER_DOT.sub("[.]", text.replace("[.]", "."))
 
 
 def clean_text(value: str, *, limit: int) -> str:

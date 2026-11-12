@@ -50,3 +50,34 @@ def test_clean_text_removes_control_characters_and_caps_length() -> None:
 
 def test_clean_text_collapses_whitespace() -> None:
     assert clean_text("a \t\n  b", limit=100) == "a b"
+
+
+def test_prose_keeps_its_sentence_punctuation() -> None:
+    from sentinel.notify.defang import defang_text
+
+    text = (
+        "A device reached evil.example twice. See https://evil.example/a now. Version 1.2 is old."
+    )
+
+    assert defang_text(text) == (
+        "A device reached evil[.]example twice. See hxxps://evil[.]example/a now. "
+        "Version 1[.]2 is old."
+    )
+
+
+def test_defanging_prose_twice_changes_nothing() -> None:
+    from sentinel.notify.defang import defang_text
+
+    once = defang_text("Reached a.b.example. Done.")
+
+    assert defang_text(once) == once
+    assert once == "Reached a[.]b[.]example. Done."
+
+
+def test_prose_defanging_leaves_no_clickable_name() -> None:
+    from sentinel.notify.defang import defang_text
+
+    result = defang_text("go to www.evil.example/login, or evil.example:8443.")
+
+    assert "evil.example" not in result
+    assert "www.evil" not in result

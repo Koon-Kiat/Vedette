@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### LLM analyst
+
+- Findings are explained by the local model through Ollama's chat API with a
+  JSON schema: summary, likely cause, recommended action, priority, group key
+  and confidence.
+- Guards enforced in code: priority can never drop below the rule's floor,
+  answers that do not fit the schema are discarded, model text is stripped of
+  HTML, markdown and links and defanged, and the model is given no tools.
+- One retry on an invalid or incomplete answer, then a template explanation.
+  While Ollama is unreachable nothing is stored and the worker retries.
+- Verdict cache keyed by rule, target and a feature hash, with a TTL.
+- `sentinel findings` shows the explanation and any raised priority.
+- `pytest --live` runs a smoke test against the real model.
+
 ### Log export import
 
 - `sentinel import FILE --profile NAME` loads a NextDNS dashboard log export.

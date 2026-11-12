@@ -15,9 +15,10 @@ alerts.
 Collection and detection work: `docker compose up` backfills the last 7 days
 of each enabled profile's NextDNS logs into a local SQLite database, follows
 the live stream, enriches every event with local context and runs eight
-deterministic rules. Findings are listed with `sentinel findings`. The LLM
-analyst, notifications and the dashboard are not built yet, so nothing is
-explained or sent. See
+deterministic rules. A local model (Ollama) then explains each finding and
+may raise its priority, never lower it. Findings are listed with
+`sentinel findings`. Notifications and the dashboard are not built yet, so
+nothing is sent. See
 [CHANGELOG.md](CHANGELOG.md) for progress and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and decisions.
 
@@ -76,6 +77,7 @@ docker compose --profile dev run --rm dev ruff check .
 docker compose --profile dev run --rm dev ruff format --check .
 docker compose --profile dev run --rm dev mypy
 docker compose --profile dev run --rm dev pytest
+docker compose --profile dev run --rm dev pytest --live tests/live   # real model
 ```
 
 Enable the secret-scanning commit hook once per clone (it runs gitleaks through
@@ -97,8 +99,11 @@ docker compose exec sentinel sentinel findings --rule young-domain --limit 20
 docker compose exec sentinel sentinel findings --json
 ```
 
-Each finding shows when it was last seen, its severity, the rule, what it is
-about, the profile and device, how many events triggered it, and the evidence.
+Each finding shows when it was last seen, its priority, the rule, what it is
+about, the profile and device, how many events triggered it, the local model's
+summary, likely cause and recommended action, and the evidence. A finding the
+model has not reached yet says "not analysed yet"; one the model could not
+explain gets a standard explanation and says so.
 Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs
 are attacker-controlled, so they are never shown in a form a terminal or chat
 client would turn into a link. `--json` prints them raw for scripts.
@@ -166,6 +171,10 @@ collector and its own 7-day backfill.
   the collector retries every 5 minutes.
 - **`collector_source_error` with HTTP 404:** the profile ID in `config.yaml`
   is wrong.
+- **`analyst_ollama_unavailable`:** the local model could not be reached, or
+  the model is not downloaded (run the `ollama-pull` step in the quickstart).
+  Findings are still detected and listed; explanations catch up when Ollama is
+  back.
 - **`popularity_refresh_failed` or `threat_feed_refresh_failed`:** a download
   failed. The previous copy stays in use and the download is retried hourly.
   With no top-sites list at all, the `young-domain` and `dga-like` rules stay

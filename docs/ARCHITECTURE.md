@@ -44,9 +44,10 @@ NextDNS API (per profile)
 | Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine |
 | Enricher and rule workers | `src/sentinel/pipeline/processor.py` | Done |
 | Defanging | `src/sentinel/notify/defang.py` | Done: used by the CLI now, by notifications later |
-| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs collector, enricher and rule engine; other stages are idle placeholders |
+| LLM analyst | `src/sentinel/llm/`, `src/sentinel/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
+| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs collector, enricher, rule engine and analyst; other stages are idle placeholders |
 | CLI | `src/sentinel/cli.py` | `sentinel run`, `sentinel findings`, `sentinel import`, `sentinel --version` |
-| LLM analyst, notifier, health, dashboard | `src/sentinel/*/` | Not started |
+| Notifier, health, dashboard | `src/sentinel/*/` | Not started |
 
 ## How the collector avoids gaps and duplicates
 
@@ -111,6 +112,41 @@ When an event has no device id, per-device rules count per profile, and the
 finding records that device attribution is unavailable. Rules that compare
 against history (`new-device`, `volume-spike`, `new-destination-category`) stay
 quiet for the first `rules.learning_days` (3) after a profile's oldest event.
+
+## How findings get explained
+
+The analyst worker polls for findings without an analysis, most severe first,
+and handles up to `llm.max_findings_per_batch` (20) at a time. Each finding
+always ends with a valid analysis, from the first of these that applies:
+
+1. **Cache.** A fresh verdict for an equivalent earlier finding. The key is the
+   prompt version, model, rule, target, attribution mode and a hash of coarse
+   evidence features (exact subdomains left out, numbers bucketed by powers of
+   two), so a finding that recurs the next day is not sent to the model again.
+2. **Model.** One call to Ollama's chat API with the JSON schema in `format`,
+   `think` off, temperature 0.1, `num_ctx` 8192 and `keep_alive` 5m. The answer
+   must parse into the schema or it is discarded whole. An invalid or
+   incomplete answer is retried once.
+3. **Template.** Text built from the rule's own description and the defanged
+   target, at the rule's floor, marked as not written by the model.
+
+If Ollama cannot be reached, nothing is stored and the worker retries with
+backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
+
+### Prompt-injection defences in this stage
+
+| Defence | Where it is enforced |
+| --- | --- |
+| Rules own severity: the model may raise priority, never lower it | `enforce_floor` in `llm/guards.py`, applied in code after validation, to cached verdicts too |
+| The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
+| Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
+| Structured output only | `parse_verdicts` in `llm/schema.py`: extra fields, wrong types and free text are rejected |
+| No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
+| Safe output | `sanitize_model_text`: HTML, markdown and links removed, names defanged, length capped; applied again on display |
+
+Not done yet: the deterministic pre-filter that flags instruction-like words in
+labels, and measuring the injection success rate. Both belong to the hardening
+and evaluation work.
 
 ## Containers
 
@@ -237,6 +273,23 @@ quiet for the first `rules.learning_days` (3) after a profile's oldest event.
     period look higher. The command says so every time; `ingest.raw: true`
     removes the difference.
 
+32. **One verdict per finding, many findings per call.** The response is
+    `{"verdicts": [...]}` keyed by `finding_id`; a missing verdict is treated
+    like an invalid answer for that finding only.
+33. **Invalid twice means a template; unreachable means wait.** A poison
+    finding cannot loop forever, and an outage cannot fill the database with
+    templates that would hide the model's absence.
+34. **Template fallbacks are never cached.** Only model verdicts are.
+35. **Model text is stored already sanitised and defanged.** Prose is defanged
+    with `defang_text`, which brackets only dots inside names so that sentence
+    punctuation survives.
+36. **`sentinel findings --min-severity` uses the effective priority**: the
+    analysis's if there is one, otherwise the rule's floor.
+37. **Every model call is recorded** (time, duration, findings, outcome) for
+    the health page and the evaluation report to come.
+38. **The dev container joins the internal `llm` network** so `pytest --live`
+    can reach the model. It is never deployed.
+
 ## Verified facts the design relies on
 
 Checked against the official NextDNS API documentation on 2026-11-12:
@@ -275,6 +328,13 @@ Checked on 2026-11-12 for enrichment:
 - RDAP answers carry an `events` list; the entry with
   `eventAction: registration` holds the registration date. The IANA bootstrap
   file maps each TLD to its RDAP server; some TLDs (for example `.io`) have none.
+- Ollama 0.40.16 with `qwen3:8b` (capabilities: completion, tools, thinking;
+  thinking defaults to on): the JSON-schema `format` constraint held with
+  `think: false` and with `think: true`. With thinking on, the same three
+  findings took about four times as many output tokens. The docs do not state
+  a minimum version for schema output, so every answer is validated regardless.
+- First live analysis of the router profile's two findings: one call, 3.6
+  seconds with the model already loaded, both verdicts valid.
 - A real log export for the laptop profile (1,172 rows) against the API for
   the same period: the raw API view returned exactly 1,172 entries; the
   default view returned 628, every one of them present in the file with an

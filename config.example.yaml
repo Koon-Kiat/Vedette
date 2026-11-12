@@ -20,6 +20,28 @@ ingest:
   page_size: 1000        # entries per history request (NextDNS allows 10 to 1000)
 storage:
   database_url: "sqlite+aiosqlite:////data/sentinel.db"   # /data is the sentinel-data volume
+enrich:
+  popularity:
+    url: "https://tranco-list.eu/top-1m.csv.zip"
+    refresh_days: 7
+  rdap:
+    enabled: true          # false = never ask registries; young-domain goes silent
+    bootstrap_url: "https://data.iana.org/rdap/dns.json"
+    max_event_age_hours: 24    # no lookups for events older than this
+    max_lookups_per_batch: 20
+  threat_intel:
+    refresh_hours: 24
+    feeds:                 # format: domains | hosts | urls
+      - name: "phishing_army"
+        url: "https://phishing.army/download/phishing_army_blocklist.txt"
+        format: "domains"
+      - name: "cert_pl"
+        url: "https://hole.cert.pl/domains/v2/domains.txt"
+        format: "domains"
+rules:
+  file: null               # optional YAML file overriding values in the packaged rules
+  learning_days: 3         # history-based rules stay quiet this long after the first event
+allowlist: []              # e.g. - root: "example.com"   (optional: profile, device)
 llm:
   base_url: "http://ollama:11434"
   model: "qwen3:8b"

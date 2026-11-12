@@ -202,3 +202,82 @@ def test_duplicate_profile_labels_are_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigError, match="duplicate profile label"):
         load_settings(path)
+
+
+def test_enrichment_and_rule_defaults_match_the_documented_ones() -> None:
+    settings = load_settings()
+
+    assert settings.enrich.popularity.url == "https://tranco-list.eu/top-1m.csv.zip"
+    assert settings.enrich.popularity.refresh_days == 7
+    assert settings.enrich.rdap.enabled is True
+    assert settings.enrich.rdap.bootstrap_url == "https://data.iana.org/rdap/dns.json"
+    assert settings.enrich.rdap.max_event_age_hours == 24
+    assert settings.enrich.rdap.max_lookups_per_batch == 20
+    assert settings.enrich.threat_intel.refresh_hours == 24
+    assert [(feed.name, feed.format) for feed in settings.enrich.threat_intel.feeds] == [
+        ("phishing_army", "domains"),
+        ("cert_pl", "domains"),
+    ]
+    assert settings.rules.file is None
+    assert settings.rules.learning_days == 3
+    assert settings.allowlist == []
+
+
+def test_allowlist_and_feeds_load_from_yaml(tmp_path: Path) -> None:
+    path = write_yaml(
+        tmp_path,
+        "allowlist:\n"
+        "  - root: Example.ORG.\n"
+        "  - root: intranet.example\n"
+        "    profile: router\n"
+        "    device: D1\n"
+        "enrich:\n"
+        "  threat_intel:\n"
+        "    feeds:\n"
+        "      - name: mine\n"
+        "        url: https://feeds.test/x.txt\n"
+        "        format: hosts\n",
+    )
+
+    settings = load_settings(path)
+
+    assert [(e.root, e.profile, e.device) for e in settings.allowlist] == [
+        ("example.org", None, None),
+        ("intranet.example", "router", "D1"),
+    ]
+    assert [(feed.name, feed.format) for feed in settings.enrich.threat_intel.feeds] == [
+        ("mine", "hosts")
+    ]
+
+
+FEED = "enrich:\n  threat_intel:\n    feeds:\n      - name: {name}\n        url: https://x.test/\n"
+
+
+@pytest.mark.parametrize(
+    ("text", "field"),
+    [
+        ("enrich:\n  popularity:\n    refresh_days: 0\n", "enrich.popularity.refresh_days"),
+        (
+            "enrich:\n  rdap:\n    max_lookups_per_batch: -1\n",
+            "enrich.rdap.max_lookups_per_batch",
+        ),
+        (FEED.format(name="Bad Name"), "enrich.threat_intel.feeds.0.name"),
+        (FEED.format(name="a") + "        format: csv\n", "enrich.threat_intel.feeds.0.format"),
+        ("rules:\n  learning_days: -1\n", "rules.learning_days"),
+        ("allowlist:\n  - profile: router\n", "allowlist.0.root"),
+    ],
+)
+def test_invalid_enrichment_and_rule_settings_are_rejected(
+    tmp_path: Path, text: str, field: str
+) -> None:
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(write_yaml(tmp_path, text))
+
+    assert field in str(excinfo.value)
+
+
+def test_duplicate_feed_names_are_rejected(tmp_path: Path) -> None:
+    path = write_yaml(tmp_path, FEED.format(name="a") + FEED.format(name="a").split("feeds:\n")[1])
+
+    with pytest.raises(ConfigError, match="duplicate feed name"):
+        load_settings(path)

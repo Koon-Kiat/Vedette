@@ -1,19 +1,33 @@
 """Starts the pipeline stages and stops them cleanly.
 
-The collector is real. The remaining stages are idle placeholders: each one
-starts, waits for the stop signal and exits. Real stages replace them one at a
-time.
+The collector, enricher and rule engine are real. The remaining stages are idle
+placeholders: each one starts, waits for the stop signal and exits. Real stages
+replace them one at a time.
 """
 
 import asyncio
 import signal
+from datetime import timedelta
 
+import httpx
 import structlog
 
+from sentinel import __version__
 from sentinel.config import Settings
+from sentinel.enrich.enricher import Enricher
+from sentinel.enrich.first_seen import FirstSeenTracker
+from sentinel.enrich.popularity import PopularityList
+from sentinel.enrich.rdap import DomainAges, RdapClient
+from sentinel.enrich.threat_intel import ThreatIntel
 from sentinel.pipeline.collector import ProfileCollector
+from sentinel.pipeline.processor import Batch, EnricherWorker, RuleWorker
+from sentinel.pipeline.queue import MemoryQueue
+from sentinel.rules.allowlist import Allowlist
+from sentinel.rules.engine import RuleEngine
+from sentinel.rules.loader import load_rules
 from sentinel.sources.nextdns import NextDnsSource
 from sentinel.storage.migrate import run_migrations
+from sentinel.storage.reference import ReferenceStore
 from sentinel.storage.store import Store
 
 log = structlog.get_logger(__name__)
@@ -26,7 +40,8 @@ STAGE_NAMES: tuple[str, ...] = (
     "notifier",
     "health_monitor",
 )
-_PLACEHOLDER_STAGES = STAGE_NAMES[1:]
+_ACTIVE_STAGES = STAGE_NAMES[:3]
+_PLACEHOLDER_STAGES = STAGE_NAMES[3:]
 
 
 class Pipeline:
@@ -44,7 +59,7 @@ class Pipeline:
             stages=list(STAGE_NAMES),
         )
         async with asyncio.TaskGroup() as group:
-            group.create_task(self._collector_stage(stop), name="collector")
+            group.create_task(self._active_stages(stop), name="active-stages")
             for name in _PLACEHOLDER_STAGES:
                 group.create_task(self._idle_stage(name, stop), name=name)
         log.info("pipeline_stopped")
@@ -54,7 +69,7 @@ class Pipeline:
         await stop.wait()
         log.info("stage_stopped", stage=name)
 
-    def _collector_blocker(self) -> str | None:
+    def _blocker(self) -> str | None:
         """Why the collector cannot run, or ``None`` if it can."""
         if self._settings.nextdns_api_key is None:
             return "NEXTDNS_API_KEY is not set"
@@ -62,21 +77,27 @@ class Pipeline:
             return "no profile is enabled"
         return None
 
-    async def _collector_stage(self, stop: asyncio.Event) -> None:
-        log.info("stage_started", stage="collector", placeholder=False)
-        blocker = self._collector_blocker()
+    async def _active_stages(self, stop: asyncio.Event) -> None:
+        for name in _ACTIVE_STAGES:
+            log.info("stage_started", stage=name, placeholder=False)
+        blocker = self._blocker()
         if blocker is not None:
             log.warning("collector_idle", reason=blocker)
             await stop.wait()
         else:
-            await self._collect_until(stop)
-        log.info("stage_stopped", stage="collector")
+            await self._work_until(stop)
+        for name in _ACTIVE_STAGES:
+            log.info("stage_stopped", stage=name)
 
-    async def _collect_until(self, stop: asyncio.Event) -> None:
-        """Run one collector per enabled profile until ``stop`` is set."""
+    async def _work_until(self, stop: asyncio.Event) -> None:
+        """Run the collector, enricher and rule engine until ``stop`` is set."""
         settings = self._settings
         if settings.nextdns_api_key is None:  # pragma: no cover - guarded by the caller
-            raise RuntimeError("collector started without an API key")
+            raise RuntimeError("pipeline started without an API key")
+        profiles = settings.enabled_profiles
+        profile_ids = [profile.id for profile in profiles]
+        specs = load_rules(settings.rules.file)
+
         database_url = settings.storage.database_url
         await asyncio.to_thread(run_migrations, database_url)
         store = Store.open(database_url)
@@ -85,24 +106,78 @@ class Pipeline:
             raw=settings.ingest.raw,
             page_size=settings.ingest.page_size,
         )
+        # Used only for reference data (top-sites list, threat feeds, RDAP).
+        # It never carries the NextDNS API key.
+        web = httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=httpx.Timeout(60.0),
+            headers={"User-Agent": f"nextdns-sentinel/{__version__}"},
+        )
         try:
+            reference = ReferenceStore(store.engine)
+            enrich = settings.enrich
+            popularity = PopularityList(
+                reference,
+                web,
+                url=enrich.popularity.url,
+                refresh_days=enrich.popularity.refresh_days,
+            )
+            await popularity.load()
+            threat_intel = ThreatIntel(
+                reference,
+                web,
+                feeds=enrich.threat_intel.feeds,
+                refresh_hours=enrich.threat_intel.refresh_hours,
+            )
+            rdap = (
+                RdapClient(web, bootstrap_url=enrich.rdap.bootstrap_url)
+                if enrich.rdap.enabled
+                else None
+            )
+            enricher = Enricher(
+                popularity=popularity,
+                threat_intel=threat_intel,
+                ages=DomainAges(reference, rdap),
+                first_seen=await FirstSeenTracker.load(reference),
+                rdap_max_event_age=timedelta(hours=enrich.rdap.max_event_age_hours),
+                rdap_max_lookups_per_batch=enrich.rdap.max_lookups_per_batch,
+            )
+            engine = RuleEngine(
+                specs,
+                allowlist=Allowlist(
+                    settings.allowlist, labels={profile.id: profile.label for profile in profiles}
+                ),
+                learning=timedelta(days=settings.rules.learning_days),
+            )
+            baseline_hours = max(
+                (int(spec.params.get("baseline_hours", 0)) for spec in specs), default=0
+            )
+            queue: MemoryQueue[Batch] = MemoryQueue()
+            workers = [
+                *(
+                    ProfileCollector(
+                        profile.id, source, store, backfill_days=settings.ingest.backfill_days
+                    ).run()
+                    for profile in profiles
+                ),
+                EnricherWorker(
+                    profile_ids, store, enricher, [popularity, threat_intel], queue
+                ).run(),
+                RuleWorker(
+                    profile_ids,
+                    store,
+                    engine,
+                    queue,
+                    warm_up=timedelta(hours=baseline_hours + 2),
+                ).run(),
+            ]
             async with asyncio.TaskGroup() as group:
-                tasks = [
-                    group.create_task(
-                        ProfileCollector(
-                            profile.id,
-                            source,
-                            store,
-                            backfill_days=settings.ingest.backfill_days,
-                        ).run(),
-                        name=f"collector:{profile.label}",
-                    )
-                    for profile in settings.enabled_profiles
-                ]
+                tasks = [group.create_task(worker) for worker in workers]
                 await stop.wait()
                 for task in tasks:
                     task.cancel()
         finally:
+            await web.aclose()
             await source.aclose()
             await store.close()
 

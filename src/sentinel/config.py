@@ -29,6 +29,9 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from sentinel.enrich.threat_intel import Feed
+from sentinel.rules.allowlist import AllowlistEntry
+
 CONFIG_FILE_ENV = "SENTINEL_CONFIG_FILE"
 DEFAULT_SECRETS_DIR = Path("/run/secrets")
 
@@ -68,6 +71,67 @@ class StorageConfig(_Section):
     """Where events and findings are stored."""
 
     database_url: NonEmptyStr = "sqlite+aiosqlite:////data/sentinel.db"
+
+
+class PopularityConfig(_Section):
+    """The downloadable top-sites list used as the popularity rank."""
+
+    url: NonEmptyStr = "https://tranco-list.eu/top-1m.csv.zip"
+    refresh_days: int = Field(default=7, ge=1)
+
+
+class RdapConfig(_Section):
+    """Domain registration age lookups.
+
+    RDAP tells the registry which domain is being looked at, so lookups are
+    limited to recent, allowed, unpopular roots and can be disabled entirely.
+    """
+
+    enabled: bool = True
+    bootstrap_url: NonEmptyStr = "https://data.iana.org/rdap/dns.json"
+    max_event_age_hours: int = Field(default=24, ge=0)
+    max_lookups_per_batch: int = Field(default=20, ge=0)
+
+
+def _default_feeds() -> list[Feed]:
+    return [
+        Feed(
+            name="phishing_army",
+            url="https://phishing.army/download/phishing_army_blocklist.txt",
+            format="domains",
+        ),
+        Feed(name="cert_pl", url="https://hole.cert.pl/domains/v2/domains.txt", format="domains"),
+    ]
+
+
+class ThreatIntelConfig(_Section):
+    """Free threat-intelligence feeds, downloaded on a schedule."""
+
+    refresh_hours: int = Field(default=24, ge=1)
+    feeds: list[Feed] = Field(default_factory=_default_feeds)
+
+    @model_validator(mode="after")
+    def _feed_names_are_unique(self) -> Self:
+        names = [feed.name for feed in self.feeds]
+        for name in names:
+            if names.count(name) > 1:
+                raise ValueError(f"duplicate feed name: {name!r}")
+        return self
+
+
+class EnrichConfig(_Section):
+    """Sources of local context added to each event."""
+
+    popularity: PopularityConfig = Field(default_factory=PopularityConfig)
+    rdap: RdapConfig = Field(default_factory=RdapConfig)
+    threat_intel: ThreatIntelConfig = Field(default_factory=ThreatIntelConfig)
+
+
+class RulesConfig(_Section):
+    """Detection rule settings."""
+
+    file: Path | None = None
+    learning_days: int = Field(default=3, ge=0)
 
 
 class LlmConfig(_Section):
@@ -113,6 +177,9 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Singapore"
     ingest: IngestConfig = Field(default_factory=IngestConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    enrich: EnrichConfig = Field(default_factory=EnrichConfig)
+    rules: RulesConfig = Field(default_factory=RulesConfig)
+    allowlist: list[AllowlistEntry] = Field(default_factory=list)
     llm: LlmConfig = Field(default_factory=LlmConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)

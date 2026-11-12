@@ -136,7 +136,8 @@ async def test_ollama_being_down_does_not_stop_findings_and_is_caught_up_later(
             tmp_path,
             until_analysed=False,
             at_least_findings=3,
-            and_also=lambda: route.call_count >= 1,
+            # Wait for the worker to have reported the outage, not merely attempted a call.
+            and_also=lambda: "analyst_ollama_unavailable" in [entry["event"] for entry in logs],
         )
     assert "analyst_ollama_unavailable" in [entry["event"] for entry in logs]
 

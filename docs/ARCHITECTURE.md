@@ -37,11 +37,15 @@ NextDNS API (per profile)
 | Queue interface | `src/sentinel/pipeline/queue.py` | Done: `EventQueue` with an in-memory implementation |
 | Event model and source interface | `src/sentinel/sources/base.py` | Done: `DnsEvent`, `LogSource` |
 | NextDNS source | `src/sentinel/sources/nextdns.py` | Done: history paging, live stream, backoff |
-| Storage | `src/sentinel/storage/` | Done for events and collector state: SQLite (WAL), Alembic migrations |
+| Storage | `src/sentinel/storage/` | Done for events, collector state, findings and reference data: SQLite (WAL), Alembic migrations |
 | Collector | `src/sentinel/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
-| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs the collector; other stages are idle placeholders |
-| CLI | `src/sentinel/cli.py` | `sentinel run`, `sentinel --version` |
-| Enricher, rules, LLM analyst, notifier, health, dashboard | `src/sentinel/*/` | Not started |
+| Enrichment | `src/sentinel/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
+| Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine |
+| Enricher and rule workers | `src/sentinel/pipeline/processor.py` | Done |
+| Defanging | `src/sentinel/notify/defang.py` | Done: used by the CLI now, by notifications later |
+| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs collector, enricher and rule engine; other stages are idle placeholders |
+| CLI | `src/sentinel/cli.py` | `sentinel run`, `sentinel findings`, `sentinel --version` |
+| LLM analyst, notifier, health, dashboard | `src/sentinel/*/` | Not started |
 
 ## How the collector avoids gaps and duplicates
 
@@ -67,6 +71,45 @@ Failures are handled without stopping: transient errors and `429` back off
 exponentially with jitter (or wait for `Retry-After`), a rejected API key is
 retried every 5 minutes, and any unexpected error is logged with its traceback
 and retried after 30 seconds.
+
+## How events become findings
+
+1. **Enricher worker.** Reads stored events that have not been through the
+   rules, oldest first, 500 at a time, for each profile whose collector holds a
+   stream cursor (so never while a backfill is in flight). It adds:
+   - first-seen flags for device, client IP, root and category;
+   - the root's rank in the top-sites list, and the best rank among the root's
+     parent domains (`platform_rank`);
+   - the root's registration age from the RDAP cache, with a live lookup only
+     when the root is allowed, unranked, not on a ranked platform, and the
+     event is less than 24 hours old;
+   - matches against the threat feeds, for the name and each parent down to
+     its root;
+   - lexical features of the leftmost label.
+2. **Queue.** The enriched batch is published and the enricher waits until it
+   has been acknowledged, so at most one batch is in flight.
+3. **Rule worker.** Evaluates every rule, then in one transaction stores the
+   findings and marks the batch's events processed. A crash before that commit
+   leaves the events unprocessed, so they are enriched and evaluated again:
+   nothing is lost and nothing is counted twice.
+4. **Findings.** Each has a de-duplication key (rule, profile, device, target
+   and a time bucket). Repeats merge into one row with a count and a first and
+   last time; the evidence of the first sighting is kept.
+
+The rule engine keeps sliding windows and hourly baselines in memory. After a
+restart it rebuilds them by replaying the fields of already-processed events
+from the last week, without producing findings.
+
+### Rules
+
+Rules live in `src/sentinel/rules/rules.yaml`: id, severity floor, description,
+thresholds and evidence fields. The detector behind each id is code. A file
+named by `rules.file` in the config can override any value per rule id.
+
+When an event has no device id, per-device rules count per profile, and the
+finding records that device attribution is unavailable. Rules that compare
+against history (`new-device`, `volume-spike`, `new-destination-category`) stay
+quiet for the first `rules.learning_days` (3) after a profile's oldest event.
 
 ## Containers
 
@@ -121,11 +164,11 @@ and retried after 30 seconds.
     `ghcr.io/gitleaks/gitleaks:v8.30.1`). Digest pinning is listed under future
     work.
 
-14. **The events table is the hand-off to the next stage, for now.** The
-    collector stores events but does not yet publish them to the queue: nothing
-    consumes it, so an in-memory queue would only grow (the first backfill of
-    the router profile was about 160,000 events). The enricher will read stored
-    events in timestamp order, which also solves history arriving newest first.
+14. **The events table is the hand-off from the collector.** The collector
+    stores events; the enricher reads unprocessed ones from storage in
+    timestamp order. That keeps a 160,000-event backfill out of memory, puts
+    newest-first history back in order, and makes the hand-off durable. The
+    queue sits between the enricher and the rule engine.
 15. **Alembic manages the schema.** Migrations live in
     `src/sentinel/storage/migrations` and run at start-up over a synchronous
     connection. A test checks they match the table definitions.
@@ -141,6 +184,41 @@ and retried after 30 seconds.
     heartbeat, so a quiet stream cannot be told apart from a dead connection.
 20. **No `sentinel backfill` command yet.** `sentinel run` backfills
     automatically; a manual command is left for the CLI work.
+
+21. **External lookups are kept to what the spec's enrichment requires, and
+    each can be changed or turned off.** The spec asks both that "only the
+    NextDNS API is called" and for a top-sites list, threat feeds and RDAP.
+    The top-sites list and threat feeds are bulk downloads matched locally, so
+    they reveal nothing about individual queries. RDAP does reveal the root
+    being looked up to its registry, so it is limited to allowed, unranked,
+    recent roots (10 lookups for a week of router traffic) and has an
+    `enrich.rdap.enabled` switch.
+22. **Threat feeds are Phishing Army and CERT Polska by default.** Both
+    download without an account. The abuse.ch feeds (URLhaus, ThreatFox) now
+    answer HTTP 410 on their public URLs and need a free account key, so they
+    are not included. Check each feed's terms before adding or keeping it.
+23. **A root's parent domain counts for popularity.** NextDNS reports customer
+    hostnames on cloud and CDN platforms as roots of their own (three or more
+    labels). They are absent from the top-sites list and are not registered
+    domains. `platform_rank` records the best rank among a root's parents;
+    `young-domain` and `dga-like` need both ranks to be absent, and RDAP is
+    skipped. `threat-intel-allowed` deliberately ignores `platform_rank`,
+    because phishing hosted on a popular platform is exactly what it should
+    catch. Trade-off: a random-looking name on a popular platform is not
+    flagged by `dga-like`.
+24. **A feed entry never taints its parent or siblings**, and a feed match on a
+    root ranked in the top 1,000 is distrusted, which limits the damage a
+    wrong or compromised feed can do. A failed or empty download keeps the
+    previous data.
+25. **Rule state is in memory, rebuilt from storage.** No separate state table
+    to keep consistent; a restart replays about a week of event fields.
+26. **An unexpected error in the rule worker stops the process.** Engine state
+    would no longer match storage, so the container restarts clean rather than
+    carrying on. The collector and enricher log and retry instead.
+27. **The allowlist is configuration only for now.** "Mark benign" from the CLI
+    or dashboard, which adds to it, comes with those features.
+28. **The instruction-token pre-filter is not built yet.** It belongs with the
+    prompt-injection hardening of the LLM stage.
 
 ## Verified facts the design relies on
 
@@ -173,10 +251,26 @@ Observed on a live run against the owner's router profile on 2026-11-12:
   the server after about a minute. Both cases reconnect from the stored cursor.
 - Behaviour of an expired stream id is still unobserved.
 
+Checked on 2026-11-12 for enrichment:
+
+- Tranco's `top-1m.csv.zip` redirects to a daily file: one CSV of
+  `rank,domain` rows, one million of them.
+- RDAP answers carry an `events` list; the entry with
+  `eventAction: registration` holds the registration date. The IANA bootstrap
+  file maps each TLD to its RDAP server; some TLDs (for example `.io`) have none.
+- First run over the router profile's week (161,117 events): processed in about
+  90 seconds. Before decision 23, `dga-like` produced 287 findings, nearly all
+  customer hostnames on cloud platforms, and 92 of 103 RDAP lookups were for
+  such names. After it: 2 findings in total (one `young-domain`, one
+  `volume-spike`) and 10 RDAP lookups.
+
 ## Open points raised with the owner
 
 - "Only the NextDNS API is called" conflicts with RDAP lookups, list downloads
-  and any notification channel. Needs a decision before enrichment is built.
+  and any notification channel. Enrichment follows decision 21; say if RDAP
+  should be off by default.
+- Rule thresholds are first guesses. They are to be judged by the evaluation
+  suite, not tuned on the same week of data they were first run on.
 - The notification channel (ntfy, Discord webhook or email) is not chosen.
 - No Git remote exists yet, so the CI workflow has not run on GitHub.
 - Whether to pace history requests to stay under the undocumented rate limit,
@@ -186,3 +280,6 @@ Observed on a live run against the owner's router profile on 2026-11-12:
 
 - Pin base images by digest and automate updates.
 - Run Ollama as a non-root user with a read-only root filesystem.
+- Optional abuse.ch feeds for users who register for a free key.
+- Use the Public Suffix List to tell registrable domains from platform
+  customer names exactly, instead of the parent-rank heuristic.

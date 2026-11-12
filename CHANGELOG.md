@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Enrichment, rules and findings
+
+- Enrichment from local, cached data: first-seen per profile and device,
+  Tranco popularity rank, domain registration age via RDAP, threat-feed matches
+  (Phishing Army and CERT Polska) and lexical features.
+- Eight declarative rules in `rules.yaml` with severity floors, descriptions,
+  thresholds and evidence fields; every rule works with and without device
+  attribution. Allowlist per root, optionally per profile or device.
+- Findings are stored with de-duplication and listed by `sentinel findings`
+  (filters, JSON output, defanged domains, control characters removed).
+- Enricher and rule-engine stages run in the pipeline; events are marked
+  processed in the same transaction that stores their findings.
+- A root hosted on a ranked platform is treated as infrastructure, which
+  removed nearly all `dga-like` noise on real traffic.
+- New settings: `enrich.*`, `rules.*` and `allowlist`.
+
 ### NextDNS collector
 
 - `DnsEvent` model and `LogSource` interface; `NextDnsSource` reads paginated

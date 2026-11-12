@@ -12,11 +12,12 @@ alerts.
 
 ## Status
 
-The collector works: `docker compose up` backfills the last 7 days of each
-enabled profile's NextDNS logs into a local SQLite database, then follows the
-live stream and resumes where it left off after a restart. Enrichment, rules,
-the LLM analyst, notifications and the dashboard are not built yet, so nothing
-is flagged or sent. See
+Collection and detection work: `docker compose up` backfills the last 7 days
+of each enabled profile's NextDNS logs into a local SQLite database, follows
+the live stream, enriches every event with local context and runs eight
+deterministic rules. Findings are listed with `sentinel findings`. The LLM
+analyst, notifications and the dashboard are not built yet, so nothing is
+explained or sent. See
 [CHANGELOG.md](CHANGELOG.md) for progress and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and decisions.
 
@@ -87,6 +88,40 @@ git config core.hooksPath .githooks
 If you already use [pre-commit](https://pre-commit.com), `.pre-commit-config.yaml`
 provides the same gitleaks check.
 
+## Seeing findings
+
+```powershell
+docker compose exec sentinel sentinel findings
+docker compose exec sentinel sentinel findings --min-severity high
+docker compose exec sentinel sentinel findings --rule young-domain --limit 20
+docker compose exec sentinel sentinel findings --json
+```
+
+Each finding shows when it was last seen, its severity, the rule, what it is
+about, the profile and device, how many events triggered it, and the evidence.
+Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs
+are attacker-controlled, so they are never shown in a form a terminal or chat
+client would turn into a link. `--json` prints them raw for scripts.
+
+## What leaves your machine
+
+- **NextDNS API:** your API key and profile ID, to read your logs.
+- **Top-sites list (Tranco) and threat feeds (Phishing Army, CERT Polska):**
+  plain downloads, weekly and daily. Matching happens locally, so these sites
+  learn nothing about your queries.
+- **RDAP:** to learn when a domain was registered, the registry is asked about
+  that one root. This is limited to allowed, unranked domains seen in the last
+  24 hours. Set `enrich.rdap.enabled: false` in `config.yaml` to stop it; the
+  `young-domain` rule then stays silent.
+
+## Tuning and allowlisting
+
+- Add known-good domains under `allowlist:` in `config.yaml`. An entry covers
+  the root and its subdomains and may be limited to a `profile` or `device`.
+- To change a threshold, copy the rule's `id` and the `params` to change into
+  a YAML file, mount it into the container and set `rules.file` to its path.
+  The defaults are in `src/sentinel/rules/rules.yaml`.
+
 ## How to add a profile
 
 Add an entry under `profiles:` in `config.yaml` with the profile's ID (shown on
@@ -104,6 +139,10 @@ collector and its own 7-day backfill.
   the collector retries every 5 minutes.
 - **`collector_source_error` with HTTP 404:** the profile ID in `config.yaml`
   is wrong.
+- **`popularity_refresh_failed` or `threat_feed_refresh_failed`:** a download
+  failed. The previous copy stays in use and the download is retried hourly.
+  With no top-sites list at all, the `young-domain` and `dga-like` rules stay
+  silent rather than guess.
 - **`collector_source_unavailable` with HTTP 429:** NextDNS is rate-limiting.
   The collector backs off and recovers on its own; nothing is lost.
 

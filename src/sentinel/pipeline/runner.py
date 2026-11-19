@@ -1,17 +1,22 @@
 """Starts the pipeline stages and stops them cleanly.
 
 All six stages run: collector, enricher, rule engine, LLM analyst, notifier
-and health monitor, plus the ``/healthz`` endpoint on the loopback interface.
+and health monitor, plus the ``/healthz`` endpoint on the loopback interface
+and, when a token is set, the dashboard.
 """
 
 import asyncio
+import contextlib
 import signal
+import socket
+from collections.abc import Iterator, Sequence
 from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
 import structlog
+import uvicorn
 from sqlalchemy.engine import make_url
 
 from sentinel import __version__
@@ -37,6 +42,7 @@ from sentinel.pipeline.queue import MemoryQueue
 from sentinel.rules.allowlist import Allowlist
 from sentinel.rules.engine import RuleEngine
 from sentinel.rules.loader import load_rules
+from sentinel.rules.model import RuleSpec
 from sentinel.sources.nextdns import NextDnsSource
 from sentinel.storage.analysis import AnalysisStore
 from sentinel.storage.health import HealthStore
@@ -44,6 +50,8 @@ from sentinel.storage.migrate import run_migrations
 from sentinel.storage.notifications import NotificationStore
 from sentinel.storage.reference import ReferenceStore
 from sentinel.storage.store import Store
+from sentinel.storage.triage import TriageStore
+from sentinel.web.app import DashboardContext, create_app
 
 log = structlog.get_logger(__name__)
 
@@ -170,11 +178,17 @@ class Pipeline:
                 rdap_max_event_age=timedelta(hours=enrich.rdap.max_event_age_hours),
                 rdap_max_lookups_per_batch=enrich.rdap.max_lookups_per_batch,
             )
+            allowlist = Allowlist(
+                settings.allowlist, labels={profile.id: profile.label for profile in profiles}
+            )
+            triage = TriageStore(store.engine)
+
+            async def refresh_allowlist() -> None:
+                allowlist.replace([*settings.allowlist, *await triage.allowlist_entries()])
+
             engine = RuleEngine(
                 specs,
-                allowlist=Allowlist(
-                    settings.allowlist, labels={profile.id: profile.label for profile in profiles}
-                ),
+                allowlist=allowlist,
                 learning=timedelta(days=settings.rules.learning_days),
             )
             baseline_hours = max(
@@ -231,6 +245,7 @@ class Pipeline:
                     engine,
                     queue,
                     warm_up=timedelta(hours=baseline_hours + 2),
+                    allowlist_refresh=refresh_allowlist,
                 ).run(),
                 AnalystWorker(analysis_store, analyst, batch_size=llm.max_findings_per_batch).run(),
                 AlertWorker(
@@ -256,9 +271,15 @@ class Pipeline:
                 ).run(),
                 monitor.run(),
             ]
+            dashboard = _dashboard(settings, store, specs, tz)
             async with asyncio.TaskGroup() as group:
                 tasks = [group.create_task(worker) for worker in workers]
+                if dashboard is not None:
+                    server, sock = dashboard
+                    group.create_task(server.serve(sockets=[sock]), name="dashboard")
                 await stop.wait()
+                if dashboard is not None:
+                    dashboard[0].should_exit = True
                 for task in tasks:
                     task.cancel()
         finally:
@@ -272,6 +293,62 @@ class Pipeline:
             await web.aclose()
             await source.aclose()
             await store.close()
+
+
+class _DashboardServer(uvicorn.Server):
+    """uvicorn without its own signal handling: the pipeline owns SIGINT and SIGTERM."""
+
+    @contextlib.contextmanager
+    def capture_signals(self) -> Iterator[None]:
+        """Leave the process's signal handlers alone."""
+        yield
+
+
+def _dashboard(
+    settings: Settings, store: Store, specs: Sequence[RuleSpec], tz: ZoneInfo
+) -> tuple[uvicorn.Server, socket.socket] | None:
+    """Build the dashboard server and bind its port, or say why it stays off."""
+    config = settings.dashboard
+    if not config.enabled:
+        log.info("dashboard_disabled", reason="dashboard.enabled is false")
+        return None
+    if settings.dashboard_token is None:
+        log.warning("dashboard_disabled", reason="DASHBOARD_TOKEN is not set")
+        return None
+    app = create_app(
+        DashboardContext(
+            engine=store.engine,
+            profiles=settings.enabled_profiles,
+            tz=tz,
+            token=settings.dashboard_token.get_secret_value(),
+            specs=specs,
+            session_lifetime=timedelta(hours=config.session_hours),
+            allowed_hosts=config.allowed_hosts,
+        )
+    )
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((config.host, config.port))
+        sock.listen(64)
+    except OSError as exc:
+        sock.close()
+        log.error("dashboard_unavailable", port=config.port, reason=type(exc).__name__)
+        return None
+    server = _DashboardServer(
+        uvicorn.Config(
+            app,
+            log_config=None,
+            access_log=False,
+            server_header=False,
+            date_header=False,
+            lifespan="off",
+            proxy_headers=False,
+            timeout_graceful_shutdown=5,
+        )
+    )
+    log.info("dashboard_listening", host=config.host, port=config.port)
+    return server, sock
 
 
 def _data_dir(database_url: str) -> Path | None:

@@ -12,6 +12,12 @@ services:
         required: true
     environment:
       SENTINEL_CONFIG_FILE: /config/config.yaml
+      # Listen on all interfaces inside the container; the port below is
+      # published on this machine's loopback address only.
+      SENTINEL_DASHBOARD__HOST: 0.0.0.0
+    ports:
+      # Dashboard. Never write "8080:8080": that would expose it to your network.
+      - "127.0.0.1:8080:8080"
     volumes:
       - type: bind
         source: ./config.yaml

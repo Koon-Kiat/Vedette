@@ -80,6 +80,11 @@ health:
   backlog_minutes: 15
   max_disk_percent: 90
   healthz_port: 8081         # /healthz on 127.0.0.1 inside the container
+dashboard:                   # http://127.0.0.1:8080, login token in DASHBOARD_TOKEN
+  enabled: true
+  port: 8080                 # keep in step with the port in docker-compose.yml
+  session_hours: 12
+  allowed_hosts: ["127.0.0.1", "localhost"]   # host names the dashboard answers to
 retention:
   events_days: 30
   findings_days: 180

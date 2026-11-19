@@ -54,13 +54,40 @@ services:
       start_period: 120s
       retries: 3
 
+  # One-shot: hands the model volume to the unprivileged Ollama user (uid 10002)
+  # before Ollama starts. It may only change file owners and has no network.
+  ollama-volume-owner:
+    image: ollama/ollama:0.40.16
+    user: "0:0"
+    entrypoint: ["chown", "-R", "10002:10002", "/home/ollama/.ollama"]
+    restart: "no"
+    network_mode: none
+    read_only: true
+    volumes:
+      - ollama-models:/home/ollama/.ollama
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_READ_SEARCH
+
   ollama:
     image: ollama/ollama:0.40.16
     restart: unless-stopped
+    user: "10002:10002"
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
+      HOME: /home/ollama     # models and keys live in the volume below
       OLLAMA_NO_CLOUD: "1"   # this server has no internet route; do not call ollama.com
     volumes:
-      - ollama-models:/root/.ollama
+      - ollama-models:/home/ollama/.ollama
+    depends_on:
+      ollama-volume-owner:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -81,6 +108,10 @@ services:
   ollama-pull:
     image: ollama/ollama:0.40.16
     profiles: [setup]
+    user: "10002:10002"
+    read_only: true
+    tmpfs:
+      - /tmp
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
@@ -88,9 +119,13 @@ services:
         until ollama list >/dev/null 2>&1; do sleep 1; done;
         ollama pull "$$MODEL"
     environment:
+      HOME: /home/ollama
       MODEL: ${SENTINEL_LLM__MODEL:-qwen3:8b}
     volumes:
-      - ollama-models:/root/.ollama
+      - ollama-models:/home/ollama/.ollama
+    depends_on:
+      ollama-volume-owner:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     cap_drop:

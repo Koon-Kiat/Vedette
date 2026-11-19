@@ -38,7 +38,7 @@ NextDNS API (per profile)
 | Event model and source interface | `src/sentinel/sources/base.py` | Done: `DnsEvent`, `LogSource` |
 | NextDNS source | `src/sentinel/sources/nextdns.py` | Done: history paging, live stream, backoff |
 | Log export reader | `src/sentinel/sources/nextdns_export.py` | Done: `sentinel import` loads a dashboard CSV export |
-| Storage | `src/sentinel/storage/` | Done for events, collector state, findings and reference data: SQLite (WAL), Alembic migrations |
+| Storage | `src/sentinel/storage/` | Done for events, collector state, findings, reference data, the stored allowlist and the audit log: SQLite (WAL), Alembic migrations |
 | Collector | `src/sentinel/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
 | Enrichment | `src/sentinel/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
 | Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine |
@@ -47,9 +47,9 @@ NextDNS API (per profile)
 | LLM analyst | `src/sentinel/llm/`, `src/sentinel/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
 | Notifier | `src/sentinel/notify/`, `src/sentinel/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
 | Health monitor | `src/sentinel/health/` | Done: six kinds of check, alerts on change, `/healthz` |
-| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs all six stages and `/healthz` |
-| CLI | `src/sentinel/cli.py` | `sentinel run`, `findings`, `import`, `notify --test`, `digest`, `--version` |
-| Dashboard | `src/sentinel/web/` | Not started |
+| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs all six stages, `/healthz` and the dashboard |
+| CLI | `src/sentinel/cli.py` | `sentinel run`, `findings`, `benign`, `import`, `notify --test`, `digest`, `--version` |
+| Dashboard | `src/sentinel/web/`, `src/sentinel/storage/dashboard.py`, `src/sentinel/storage/triage.py` | Done: seven pages, triage with an audit log, token login |
 
 ## How the collector avoids gaps and duplicates
 
@@ -204,11 +204,52 @@ calls it, so container health means "the service is running its checks".
 
 Error messages never contain the topic, token, webhook URL or password.
 
+## The dashboard
+
+FastAPI renders every page on the server with Jinja2; htmx (vendored, no CDN)
+swaps the findings table when a filter changes and a single row after a
+triage action. Pages work without JavaScript too: the forms post normally and
+redirect back. The server runs inside the pipeline process, on the same
+database engine, and stops with it.
+
+Everything shown can come from an attacker: domain names, device names,
+blocklist reasons and the model's text. So:
+
+- **Escaping.** Autoescaping is on for every template, undefined variables are
+  errors, and a test fails any template that uses `|safe` or turns
+  autoescaping off. Domains are always defanged (`example[.]com`) and never
+  links; every link is a fixed path of the dashboard's own, at most with a
+  finding or digest number in it.
+- **Browser policy.** Every response carries `Content-Security-Policy` with
+  `default-src 'self'` and nothing inline allowed (no `unsafe-inline`, no
+  `unsafe-eval`), `frame-ancestors 'none'`, `X-Frame-Options: DENY`,
+  `nosniff`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy` and
+  `Cache-Control: no-store` (static files excepted).
+- **Login.** One token from `DASHBOARD_TOKEN`, compared in constant time. The
+  login form carries a one-time nonce that must match a cookie scoped to
+  `/login`, so another site cannot log the browser in. Five failures within a
+  minute refuse logins for a minute.
+- **Session.** A random id in an `HttpOnly`, `SameSite=Strict` cookie; the
+  token itself is never stored in a cookie. Sessions are held in memory and
+  expire after `dashboard.session_hours`.
+- **Writes.** Every POST needs the session's CSRF token, as a form field or
+  the `X-CSRF-Token` header that htmx sends. Each triage action and its audit
+  log entry are written in one transaction.
+- **Reach.** The container publishes the port on `127.0.0.1` only, and the
+  app answers only to the host names in `dashboard.allowed_hosts`, which stops
+  DNS rebinding from a web page.
+
+The XSS test suite plants payloads in every field that can reach a page, then
+parses every page and the row returned after an action: the only scripts are
+our own static files, no element has an event-handler attribute, no URL uses
+`javascript:` or `data:`, every link stays inside the dashboard, and the
+payload text appears escaped rather than dropped.
+
 ## Containers
 
 | Service | Purpose | Network | Hardening |
 | --- | --- | --- | --- |
-| `sentinel` | The pipeline | `egress` (to api.nextdns.io) and `llm` | uid 10001, read-only root filesystem, all capabilities dropped, `no-new-privileges`, no published ports |
+| `sentinel` | The pipeline and the dashboard | `egress` (to api.nextdns.io) and `llm` | uid 10001, read-only root filesystem, all capabilities dropped, `no-new-privileges`; one published port, the dashboard on `127.0.0.1:8080` |
 | `ollama` | Local model server with GPU | `llm` only (internal: no internet, no host port) | all capabilities dropped, `no-new-privileges`; still runs as root (see Decisions) |
 | `ollama-pull` | One-shot model download (`setup` profile) | `egress` | all capabilities dropped, `no-new-privileges` |
 | `dev` | Lint, type-check, tests (`dev` profile) | `egress` | Development only, never deployed |
@@ -308,8 +349,8 @@ Error messages never contain the topic, token, webhook URL or password.
 26. **An unexpected error in the rule worker stops the process.** Engine state
     would no longer match storage, so the container restarts clean rather than
     carrying on. The collector and enricher log and retry instead.
-27. **The allowlist is configuration only for now.** "Mark benign" from the CLI
-    or dashboard, which adds to it, comes with those features.
+27. **The allowlist started as configuration only.** "Mark benign" from the CLI
+    or dashboard now adds to it (decision 56).
 28. **The instruction-token pre-filter is not built yet.** It belongs with the
     prompt-injection hardening of the LLM stage.
 
@@ -375,9 +416,9 @@ Error messages never contain the topic, token, webhook URL or password.
     a channel without its secret stops the service with a clear message.
 46. **Plain `http` for ntfy only on the local Docker network** (a host name
     without dots, or localhost). E-mail has no unencrypted option.
-47. **`/healthz` is a minimal standard-library server**, not a web framework,
-    until the dashboard brings FastAPI. It reads one short request with a
-    timeout and answers only `GET /healthz`.
+47. **`/healthz` is a minimal standard-library server**, not a web framework.
+    It reads one short request with a timeout and answers only `GET /healthz`.
+    It stayed separate from the dashboard (decision 59).
 48. **Docker health means liveness.** `/healthz` stays 200 when a check fails
     (it reports `degraded`), so an offline laptop profile does not make the
     container look broken; the problem is reported by alert and digest.
@@ -387,6 +428,53 @@ Error messages never contain the topic, token, webhook URL or password.
 50. **The digest is built from stored data only** (events, findings, analyses,
     health results), so `sentinel digest` can preview it from the command line,
     and the archive keeps both the text as sent and the numbers as JSON.
+
+51. **The chart is server-drawn SVG, not a chart library.** This departs from
+    the spec, which asks for one small vendored chart library. The dashboard
+    has a single chart, queries per hour as stacked bars, and under 100 lines
+    of Python draw it as SVG with the bars in the markup. That adds no
+    third-party JavaScript to review, pin and keep updated; the data never
+    passes through JavaScript or inline JSON; it works under the strict CSP
+    without exceptions; and it renders with JavaScript off. A library is worth
+    adding if the dashboard needs interactive charts.
+52. **htmx 2.0.11 is vendored and locked down.** A test checks the file's
+    SHA-256 against the reviewed release. Its configuration turns off `eval`
+    and script tags in swapped content, allows requests to this origin only,
+    and keeps no history cache, so pages are never copied into the browser's
+    session storage.
+53. **One shared token and in-memory sessions.** The dashboard has one user.
+    A restart logs the browser out, which is acceptable for a page on this
+    machine and means no session data on disk.
+54. **The host name is checked, not just the address.** Listening on loopback
+    does not stop a web page from pointing its own name at 127.0.0.1 (DNS
+    rebinding); refusing unknown `Host` headers does.
+55. **The server listens on all interfaces inside the container.** Docker's
+    port publishing needs that; exposure is decided by publishing on
+    `127.0.0.1` only. Checked live (see "Verified facts").
+56. **Mark benign on a domain rule allowlists the root for that profile.** The
+    rules `young-domain`, `threat-intel-allowed`, `dga-like` and `tunnel-like`
+    are about a domain; the entry covers the root and its subdomains on the
+    finding's profile, not other profiles. For the other rules, Benign only
+    changes the status. Reopen removes the entry. Other findings already
+    recorded keep their status. The rule worker reloads the allowlist
+    (configuration plus stored entries) at most every 30 seconds, before a
+    batch.
+57. **Web-facing dependencies are pinned exactly** (`fastapi`, `jinja2`,
+    `python-multipart`, `uvicorn`), to releases at least two weeks old, as
+    well as being locked with hashes.
+58. **Less on the wire and in the logs.** FastAPI's `/docs`, `/redoc` and
+    `/openapi.json` are off, uvicorn sends no `Server` or `Date` header, and
+    there is no access log, so filter values such as device names do not end
+    up in the container log.
+59. **`/healthz` stays separate.** Docker's health check must reach it without
+    a login, and it is not published outside the container.
+60. **More pooled database connections.** The dashboard shares the pipeline's
+    engine, so the pool grew to 15 connections plus 10 overflow: enough for
+    every worker and the dashboard, so new connections are opened mostly at
+    start-up. aiosqlite 0.22.1 cannot cancel a connection that is still
+    opening; one interrupted by a shutdown is closed later by the garbage
+    collector (Python warns about it) and SQLite itself is unaffected. The
+    tests wait for start-up to finish before stopping the pipeline.
 
 ## Verified facts the design relies on
 
@@ -464,6 +552,20 @@ Checked on 2026-11-12 for enrichment:
   such names. After it: 2 findings in total (one `young-domain`, one
   `volume-spike`) and 10 RDAP lookups.
 
+Live check of the dashboard on 2026-11-19, on the real stack with a throwaway
+token:
+
+- `docker port` showed `8080/tcp -> 127.0.0.1:8080`, and the only listener on
+  the host's port 8080 was on 127.0.0.1. Connecting to port 8080 on the
+  machine's LAN address was refused (`ConnectionRefused`), as it was on every
+  virtual adapter's address; 127.0.0.1 answered.
+- `GET /login` returned 200 with every header listed under "The dashboard".
+- The XSS audit from the test suite, run over the 12 pages built from the real
+  data (GET requests only, nothing changed), found no problems.
+- In a browser, on test data with the hostile payloads: filtering through htmx
+  and acknowledging a row worked, the console showed no CSP violations, and
+  at 375 pixels wide no page scrolled sideways.
+
 ## Open points raised with the owner
 
 - "Only the NextDNS API is called" conflicts with RDAP lookups, list downloads
@@ -476,6 +578,8 @@ Checked on 2026-11-12 for enrichment:
 - The laptop profile has sent nothing for 19 days and is reported as a health
   problem. Give it `stale_after_minutes` or `quiet_hours`, or disable it.
 - No Git remote exists yet, so the CI workflow has not run on GitHub.
+- `DASHBOARD_TOKEN` is not set in `.env` yet, so the dashboard is off until
+  you add one.
 - Whether to pace history requests to stay under the undocumented rate limit,
   for example when several profiles backfill at once.
 
@@ -489,3 +593,5 @@ Checked on 2026-11-12 for enrichment:
 - A health check on notification delivery itself (a broken channel is
   currently visible only in the logs and the outbox).
 - Batch stream writes if catch-up after long outages needs to be faster.
+- A dashboard page to review and remove stored allowlist entries (today an
+  entry is removed by reopening the finding that made it).

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Dashboard
+
+- A local dashboard on http://127.0.0.1:8080 (FastAPI, Jinja2, vendored
+  htmx): Overview, Findings, Domains, Devices, Digests, Health and an
+  Evaluation placeholder. Off until `DASHBOARD_TOKEN` is set.
+- Triage from the Findings list or a finding's page: Acknowledge, Benign and
+  Reopen. Benign on a domain finding allowlists its root for that profile,
+  and the rules pick it up within about 30 seconds; Reopen undoes it.
+- Every triage action is recorded in a new audit log, shown as the finding's
+  history. Migration `0005` adds the audit log and the stored allowlist.
+- New command: `sentinel benign <finding>`.
+- Security: published on 127.0.0.1 only, token login with a one-time nonce
+  and a throttle, `HttpOnly` `SameSite=Strict` session cookie, CSRF token on
+  every write, strict Content-Security-Policy, `X-Frame-Options: DENY`, host
+  name check, autoescaping everywhere, defanged domains and no links built
+  from log data. An XSS test suite covers every page.
+- Queries per hour are drawn as SVG on the server instead of with a chart
+  library.
+
 ### Notifications and health monitoring
 
 - Delivery through ntfy, a Discord webhook or e-mail, chosen by

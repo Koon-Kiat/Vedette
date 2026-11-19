@@ -19,8 +19,9 @@ deterministic rules. A local model (Ollama) then explains each finding and
 may raise its priority, never lower it. High and critical findings become
 instant alerts, a digest is produced every morning, and a health monitor
 watches the whole pipeline. Alerts go out once you choose a notification
-channel; until then they are kept and listed but not sent. The dashboard is
-not built yet. See
+channel; until then they are kept and listed but not sent. A dashboard on
+http://127.0.0.1:8080, reachable from this computer only, shows all of it and
+lets you triage findings. See
 [CHANGELOG.md](CHANGELOG.md) for progress and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and decisions.
 
@@ -164,6 +165,55 @@ Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs
 are attacker-controlled, so they are never shown in a form a terminal or chat
 client would turn into a link. `--json` prints them raw for scripts.
 
+## Dashboard
+
+The dashboard stays off until it has a login token.
+
+1. Generate a token:
+
+   ```powershell
+   docker compose run --rm --no-deps --entrypoint python sentinel -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+2. Put it in `.env` as `DASHBOARD_TOKEN=...` (at least 24 characters), then
+   restart with `docker compose up -d`.
+3. Open http://127.0.0.1:8080 and paste the token.
+
+The token works like a password: anyone who has it can triage your findings.
+A session lasts 12 hours (`dashboard.session_hours`) and ends when the
+container restarts. After five wrong tokens within a minute, logins are
+refused for a minute.
+
+| Page | What it shows |
+| --- | --- |
+| Overview | The last 24 hours per profile against the 7-day average, findings by priority, new devices, queries per hour, and open high and critical findings |
+| Findings | Every finding, filtered by profile, device, rule, minimum priority, status and day, with the triage buttons; each one opens to its explanation, evidence, cached domain facts, recent queries and history |
+| Domains | Most allowed, most blocked, newly seen and recently registered domains, for 24 hours or 7 days |
+| Devices | Devices seen in the last 7 days, or a note that the profile reports none |
+| Digests | Every digest that was produced, as it was sent |
+| Health | Each health check, the newest event per profile, queue sizes, and the local model's calls, latency and cache hit rate |
+| Evaluation | Results of the evaluation suite, once it exists |
+
+Triage:
+
+- **Acknowledge:** you have seen it.
+- **Benign:** it is not a problem. For a domain finding (`young-domain`,
+  `threat-intel-allowed`, `dga-like`, `tunnel-like`) the domain's root is also
+  allowlisted for that profile, so those rules stop flagging it within about
+  30 seconds. Findings already recorded are left as they are.
+- **Reopen:** undoes either, and removes the allowlist entry that Benign added.
+
+Every action is recorded with its time in the finding's history. Mark a
+finding benign from the command line with
+`docker compose exec sentinel sentinel benign 42` (it asks first; add `--yes`
+to skip the question).
+
+The port is published on `127.0.0.1` only, so other machines on your network
+cannot reach it. Keep it that way: never change `"127.0.0.1:8080:8080"` in
+`docker-compose.yml` to `"8080:8080"`. To use another port, change both
+`dashboard.port` in `config.yaml` and that line. The dashboard answers only
+to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
+
 ## What leaves your machine
 
 - **NextDNS API:** your API key and profile ID, to read your logs.
@@ -183,6 +233,8 @@ client would turn into a link. `--json` prints them raw for scripts.
 
 - Add known-good domains under `allowlist:` in `config.yaml`. An entry covers
   the root and its subdomains and may be limited to a `profile` or `device`.
+- Or mark a domain finding benign in the dashboard or with `sentinel benign`,
+  which allowlists its root for that profile (see "Dashboard").
 - To change a threshold, copy the rule's `id` and the `params` to change into
   a YAML file, mount it into the container and set `rules.file` to its path.
   The defaults are in `src/sentinel/rules/rules.yaml`.
@@ -260,6 +312,15 @@ It returns `ok` or `degraded` with every check's result. If you change
   silent rather than guess.
 - **`collector_source_unavailable` with HTTP 429:** NextDNS is rate-limiting.
   The collector backs off and recovers on its own; nothing is lost.
+- **`dashboard_disabled`:** the message gives the reason, either
+  `DASHBOARD_TOKEN is not set` (see "Dashboard") or
+  `dashboard.enabled is false`. The rest of the pipeline runs normally.
+- **`dashboard_unavailable`:** the dashboard's port is taken inside the
+  container. The rest of the pipeline keeps running; change `dashboard.port`
+  and the `ports` line in `docker-compose.yml` together.
+- **"Invalid host header" in the browser:** open the dashboard as
+  http://127.0.0.1:8080 or http://localhost:8080, or add the name you use to
+  `dashboard.allowed_hosts`.
 
 - **`env file .env not found` or a bind-mount error for `config.yaml`:** run the
   two `Copy-Item` commands above.

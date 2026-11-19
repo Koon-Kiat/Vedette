@@ -231,3 +231,30 @@ health_checks = Table(
     Column("since", UtcDateTime, nullable=False),
     Column("updated_at", UtcDateTime, nullable=False),
 )
+
+# Roots marked benign from the dashboard or CLI. Entries from config.yaml are not
+# stored here; the rule engine combines both.
+allowlist = Table(
+    "allowlist",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("root", String(255), nullable=False),
+    Column("profile_id", String(64)),
+    Column("device_id", String(256)),
+    Column("finding_id", Integer),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("created_by", String(32), nullable=False),
+)
+
+# Every change made from the dashboard or CLI.
+audit_log = Table(
+    "audit_log",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("at", UtcDateTime, nullable=False),
+    Column("actor", String(32), nullable=False),
+    Column("action", String(32), nullable=False),
+    Column("finding_id", Integer),
+    Column("detail", String(300), nullable=False),
+    Index("ix_audit_log_finding", "finding_id", "id"),
+)

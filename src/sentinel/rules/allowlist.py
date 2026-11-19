@@ -41,6 +41,10 @@ class Allowlist:
         self._entries = tuple(entries)
         self._labels = dict(labels or {})
 
+    def replace(self, entries: Sequence[AllowlistEntry]) -> None:
+        """Swap in a new set of entries (configured plus stored ones)."""
+        self._entries = tuple(entries)
+
     def allows(self, profile_id: str, device_id: str | None, fqdn: str, root: str | None) -> bool:
         """Return ``True`` if an entry covers this name for this profile and device."""
         for entry in self._entries:

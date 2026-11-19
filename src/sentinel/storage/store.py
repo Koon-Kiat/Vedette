@@ -94,7 +94,8 @@ def finding_from_row(row: Any) -> StoredFinding:
     )
 
 
-def _to_event(row: Any) -> DnsEvent:
+def to_event(row: Any) -> DnsEvent:
+    """Build a :class:`DnsEvent` from a row of the events table."""
     return DnsEvent(
         event_id=row.event_id,
         profile_id=row.profile_id,
@@ -153,9 +154,15 @@ class Store:
     @classmethod
     def open(cls, database_url: str) -> Store:
         """Connect to a database whose schema is already migrated."""
-        engine = create_async_engine(database_url)
         if make_url(database_url).get_backend_name() == "sqlite":
+            # Enough pooled connections for every worker and the dashboard, so new
+            # connections are opened mostly at start-up. (aiosqlite cannot cancel a
+            # connect cleanly: one interrupted by shutdown is left to the garbage
+            # collector, which closes it; SQLite itself is unaffected.)
+            engine = create_async_engine(database_url, pool_size=15, max_overflow=10)
             event.listen(engine.sync_engine, "connect", _sqlite_pragmas)
+        else:
+            engine = create_async_engine(database_url)
         return cls(engine)
 
     @property
@@ -284,7 +291,7 @@ class Store:
             statement = statement.limit(limit)
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement)).all()
-        return [_to_event(row) for row in rows]
+        return [to_event(row) for row in rows]
 
     # --- processing ---------------------------------------------------------------
 
@@ -298,7 +305,7 @@ class Store:
         )
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement)).all()
-        return [_to_event(row) for row in rows]
+        return [to_event(row) for row in rows]
 
     async def count_unprocessed(self, profile_id: str) -> int:
         """Number of a profile's events still waiting for the rules."""
@@ -420,6 +427,14 @@ class Store:
                     .where(events.c.event_id.in_(event_ids[start : start + 500]))
                     .values(processed_at=now)
                 )
+
+    async def finding(self, finding_id: int) -> StoredFinding | None:
+        """One finding by its number."""
+        async with self._engine.connect() as connection:
+            row = (
+                await connection.execute(select(findings).where(findings.c.id == finding_id))
+            ).one_or_none()
+        return None if row is None else finding_from_row(row)
 
     async def list_findings(
         self,

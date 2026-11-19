@@ -139,6 +139,8 @@ class RuleWorker:
         *,
         warm_up: timedelta,
         clock: Callable[[], datetime] = _utc_now,
+        allowlist_refresh: Callable[[], Awaitable[None]] | None = None,
+        refresh_seconds: float = 30.0,
     ) -> None:
         """Create the worker.
 
@@ -150,6 +152,9 @@ class RuleWorker:
             warm_up: How much processed history to replay into the engine at
                 start, so its windows and baselines survive a restart.
             clock: Returns the current time (UTC).
+            allowlist_refresh: Reloads the engine's allowlist (configured plus
+                stored entries), so "mark benign" takes effect without a restart.
+            refresh_seconds: Reload at most this often, checked before each batch.
         """
         self._profile_ids = tuple(profile_ids)
         self._store = store
@@ -157,6 +162,9 @@ class RuleWorker:
         self._queue = queue
         self._warm_up = warm_up
         self._clock = clock
+        self._allowlist_refresh = allowlist_refresh
+        self._refresh_seconds = refresh_seconds
+        self._refreshed_at: float | None = None
 
     async def _restore_engine_state(self) -> None:
         since = self._clock() - self._warm_up
@@ -170,6 +178,15 @@ class RuleWorker:
                 replayed += 1
         log.info("rule_engine_warmed_up", events_replayed=replayed)
 
+    async def _refresh_allowlist(self) -> None:
+        if self._allowlist_refresh is None:
+            return
+        now = time.monotonic()
+        if self._refreshed_at is not None and now - self._refreshed_at < self._refresh_seconds:
+            return
+        await self._allowlist_refresh()
+        self._refreshed_at = now
+
     async def run(self) -> None:
         """Process forever. Cancel the task to stop.
 
@@ -179,6 +196,7 @@ class RuleWorker:
         await self._restore_engine_state()
         while True:
             for message in await self._queue.consume(max_items=1, wait_seconds=1.0):
+                await self._refresh_allowlist()
                 found: list[Finding] = []
                 for item in message.payload:
                     found.extend(self._engine.evaluate(item))

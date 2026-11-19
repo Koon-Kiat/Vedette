@@ -1,0 +1,51 @@
+Subject: Sentinel digest 2026-03-15: 1 critical, 2 high
+
+NextDNS Sentinel daily digest
+Covers 2026-03-14 08:00 to 2026-03-15 08:00 (Asia/Singapore)
+
+FINDINGS
+1 critical, 2 high, 2 medium, 0 low, 0 info
+7-day average: 0 critical, 0.1 high, 0 medium, 0 low, 0 info
+
+1. CRITICAL threat-intel-allowed: bad[.]example (router, device attribution unavailable)
+   1 finding, 3 events, last 2026-03-14 10:02 (Asia/Singapore)
+   A device on the router profile reached bad[.]example, which a phishing feed lists.
+   Do: Find the device that made the query and scan it for malware.
+   Explained by qwen3:8b.
+
+2. HIGH volume-spike: router (router, device attribution unavailable)
+   1 finding, 1 event, last 2026-03-14 18:00 (Asia/Singapore)
+   The router made five times its usual number of lookups in one hour.
+   Do: Check which device was busy at that time.
+   Explained by qwen3:8b.
+
+3. HIGH young-domain: fresh-site[.]example (pc, device D1)
+   1 finding, 1 event, last 2026-03-14 13:00 (Asia/Singapore)
+   The laptop visited fresh-site[.]example, registered five days ago.
+   Do: Check whether the laptop's user meant to visit this site.
+   Explained by qwen3:8b.
+
+4. MEDIUM new-device: D2 (pc, device D2)
+   1 finding, 1 event, last 2026-03-15 04:00 (Asia/Singapore)
+   A device id that has never been seen on this profile appeared (or, when NextDNS reports no devices, a client IP never seen before). An unknown device on the network may be a guest, a new purchase, or an intruder.
+   Not explained by the local model.
+
+5. MEDIUM dga-like: c2-site[.]example (pc, device D1)
+   1 finding, 1 event, last 2026-03-14 16:00 (Asia/Singapore)
+   An allowed query used a long, random-looking label on a domain outside the top-sites list. Malware often generates such names to find its command-and-control server.
+   Not explained by the local model.
+
+NEW DEVICES
+- pc: D2 (Kitchen tablet), first seen 2026-03-15 04:00 (Asia/Singapore)
+
+QUERIES AND BLOCKING
+- router: 150 queries, 30 blocked (20.0%); 7-day average 100 queries, 10.0% blocked; device attribution unavailable
+- pc: 65 queries, 0 blocked (0.0%); 7-day average 40 queries, 5.0% blocked
+Most blocked: ads[.]example (20), tracker[.]example (10)
+Top blocklists: HaGeZi Multi (20), Native Tracking (Windows) (10)
+
+HEALTH
+- PROBLEM since 2026-03-15 05:00: No events from pc for 3 h 0 min
+All other checks OK (2).
+
+Details: sentinel findings

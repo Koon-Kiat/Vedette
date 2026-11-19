@@ -17,6 +17,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    Text,
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
@@ -182,4 +183,51 @@ llm_calls = Table(
     Column("findings", Integer, nullable=False),
     Column("outcome", String(16), nullable=False),
     Column("model", String(128), nullable=False),
+)
+
+# Outbox: every alert, health message and digest, whether sent or not.
+notifications = Table(
+    "notifications",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("kind", String(16), nullable=False),
+    Column("dedupe_key", String(600), nullable=False),
+    Column("finding_id", Integer, unique=True),
+    Column("title", String(300), nullable=False),
+    Column("body", Text, nullable=False),
+    Column("priority", String(16), nullable=False),
+    Column("tags", JSON, nullable=False),
+    Column("status", String(16), nullable=False),
+    Column("reason", String(200)),
+    Column("attempts", Integer, nullable=False),
+    Column("next_attempt_at", UtcDateTime, nullable=False),
+    Column("created_at", UtcDateTime, nullable=False),
+    Column("sent_at", UtcDateTime),
+    Index("ix_notifications_due", "status", "next_attempt_at"),
+    Index("ix_notifications_key", "dedupe_key", "created_at"),
+)
+
+digests = Table(
+    "digests",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("period_start", UtcDateTime, nullable=False),
+    Column("period_end", UtcDateTime, nullable=False, unique=True),
+    Column("generated_at", UtcDateTime, nullable=False),
+    Column("title", String(300), nullable=False),
+    Column("body", Text, nullable=False),
+    Column("data", JSON, nullable=False),
+    Column("notification_id", Integer),
+)
+
+health_checks = Table(
+    "health_checks",
+    metadata,
+    Column("check_key", String(128), primary_key=True),
+    Column("position", Integer, nullable=False),
+    Column("label", String(128), nullable=False),
+    Column("ok", Boolean, nullable=False),
+    Column("detail", String(300), nullable=False),
+    Column("since", UtcDateTime, nullable=False),
+    Column("updated_at", UtcDateTime, nullable=False),
 )

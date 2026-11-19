@@ -76,6 +76,24 @@ class StoredFinding:
     status: str
 
 
+def finding_from_row(row: Any) -> StoredFinding:
+    """Build a :class:`StoredFinding` from a row of the findings table."""
+    return StoredFinding(
+        id=row.id,
+        rule_id=row.rule_id,
+        severity=Severity(row.severity),
+        profile_id=row.profile_id,
+        subject=row.subject,
+        device_mode=row.device_mode,
+        target=row.target,
+        first_ts=row.first_ts,
+        last_ts=row.last_ts,
+        event_count=row.event_count,
+        evidence=row.evidence,
+        status=row.status,
+    )
+
+
 def _to_event(row: Any) -> DnsEvent:
     return DnsEvent(
         event_id=row.event_id,
@@ -292,6 +310,15 @@ class Store:
             )
             return int(result.scalar_one())
 
+    async def latest_event_ts(self, profile_id: str) -> datetime | None:
+        """Time of the newest stored event of a profile."""
+        async with self._engine.connect() as connection:
+            result = await connection.execute(
+                select(func.max(events.c.ts)).where(events.c.profile_id == profile_id)
+            )
+            latest: datetime | None = result.scalar_one_or_none()
+            return latest
+
     async def earliest_event_ts(self, profile_id: str) -> datetime | None:
         """Time of the oldest stored event of a profile."""
         async with self._engine.connect() as connection:
@@ -420,20 +447,4 @@ class Store:
             ).where(effective.in_(wanted))
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement.limit(limit))).all()
-        return [
-            StoredFinding(
-                id=row.id,
-                rule_id=row.rule_id,
-                severity=Severity(row.severity),
-                profile_id=row.profile_id,
-                subject=row.subject,
-                device_mode=row.device_mode,
-                target=row.target,
-                first_ts=row.first_ts,
-                last_ts=row.last_ts,
-                event_count=row.event_count,
-                evidence=row.evidence,
-                status=row.status,
-            )
-            for row in rows
-        ]
+        return [finding_from_row(row) for row in rows]

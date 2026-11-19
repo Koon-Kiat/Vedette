@@ -3,7 +3,6 @@
 from collections.abc import Collection, Sequence
 from datetime import datetime
 from itertools import batched
-from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy import case, delete, select
@@ -13,26 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sentinel.llm.schema import Analysis, Verdict
 from sentinel.rules.model import Severity
 from sentinel.storage.models import finding_analysis, findings, llm_cache, llm_calls
-from sentinel.storage.store import StoredFinding
+from sentinel.storage.store import StoredFinding, finding_from_row
 
 _IN_CHUNK = 500
-
-
-def _stored_finding(row: Any) -> StoredFinding:
-    return StoredFinding(
-        id=row.id,
-        rule_id=row.rule_id,
-        severity=Severity(row.severity),
-        profile_id=row.profile_id,
-        subject=row.subject,
-        device_mode=row.device_mode,
-        target=row.target,
-        first_ts=row.first_ts,
-        last_ts=row.last_ts,
-        event_count=row.event_count,
-        evidence=row.evidence,
-        status=row.status,
-    )
 
 
 class AnalysisStore:
@@ -58,7 +40,7 @@ class AnalysisStore:
         )
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement)).all()
-        return [_stored_finding(row) for row in rows]
+        return [finding_from_row(row) for row in rows]
 
     async def save_analyses(self, analyses: Sequence[Analysis], *, now: datetime) -> None:
         """Store analyses, replacing any earlier one for the same finding."""

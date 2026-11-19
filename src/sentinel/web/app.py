@@ -41,7 +41,7 @@ from sentinel.storage.dashboard import DashboardQueries, FindingFilter
 from sentinel.storage.store import StoredFinding
 from sentinel.storage.triage import DOMAIN_RULES, STATUSES, TriageStore
 from sentinel.web.auth import LOGIN_COOKIE, SESSION_COOKIE, LoginLimiter, Session, SessionStore
-from sentinel.web.charts import hourly_chart
+from sentinel.web.charts import hourly_chart, span
 
 log = structlog.get_logger(__name__)
 
@@ -58,6 +58,19 @@ def _local(moment: datetime | None, tz: ZoneInfo) -> str:
     return "never" if moment is None else f"{moment.astimezone(tz):%Y-%m-%d %H:%M}"
 
 
+def _clock(moment: datetime | None, tz: ZoneInfo) -> str:
+    return "" if moment is None else f"{moment.astimezone(tz):%H:%M}"
+
+
+def _since(moment: datetime | None, now: datetime) -> str:
+    if moment is None:
+        return "no events yet"
+    elapsed = now - moment
+    if elapsed < timedelta(minutes=1):
+        return "under a minute ago"
+    return f"{duration(elapsed)} ago"
+
+
 TEMPLATE_ENV = jinja2.Environment(
     loader=jinja2.PackageLoader("sentinel.web", "templates"),
     autoescape=True,
@@ -71,6 +84,9 @@ TEMPLATE_ENV.filters.update(
         "text": lambda value: safe(value, limit=300),
         "prose": lambda value: prose(value, limit=600),
         "local": _local,
+        "clock": _clock,
+        "since": _since,
+        "span": lambda finding, tz: span(finding.first_ts, finding.last_ts, tz),
         "ago": duration,
         "num": lambda value: f"{value:,}",
         "pct": lambda value: f"{value:.0%}",
@@ -158,6 +174,10 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         context = {"tz": ctx.tz, "labels": labels, "nav": "", "domain_rules": DOMAIN_RULES}
         context.update(values)
         return HTMLResponse(TEMPLATE_ENV.get_template(name).render(**context), status_code=status)
+
+    async def page(name: str, **values: Any) -> HTMLResponse:
+        """A full page with the navigation rail's live status."""
+        return render(name, shell=await queries.shell(), now=ctx.clock(), **values)
 
     def session_of(request: Request) -> Session:
         session = sessions.get(request.cookies.get(SESSION_COOKIE))
@@ -259,15 +279,24 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         digest = await DigestBuilder(
             ctx.engine, profiles=ctx.profiles, tz=ctx.tz, specs=ctx.specs
         ).build(now)
-        return render(
+        alerts = await queries.open_alerts()
+        averages = [v.avg_queries for v in digest.volumes if v.avg_queries is not None]
+        usual = sum(averages) / 24 if averages else None
+        chart = hourly_chart(
+            await queries.hourly_queries(now),
+            ctx.tz,
+            usual=usual,
+            markers=[(row.finding.id, row.finding.last_ts) for row in alerts],
+        )
+        return await page(
             "overview.html",
             nav="overview",
             title="Overview",
             csrf=session.csrf,
             digest=digest,
             levels=[level.value for level in sorted(Severity, key=lambda s: -s.rank)],
-            chart=hourly_chart(await queries.hourly_queries(now), ctx.tz),
-            alerts=await queries.open_alerts(),
+            chart=chart,
+            alerts=alerts,
             new_devices_avg=await queries.new_devices_per_day(now),
             next_url="/",
         )
@@ -310,7 +339,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         }
         if _is_htmx(request):
             return render("_findings_table.html", **values)
-        return render(
+        return await page(
             "findings.html",
             nav="findings",
             title="Findings",
@@ -328,7 +357,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         if row is None:
             raise HTTPException(404)
         now = ctx.clock()
-        return render(
+        return await page(
             "finding.html",
             nav="findings",
             title=f"Finding #{finding_id}",
@@ -364,7 +393,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     async def domains_page(session: SessionDep, period: str = "24h") -> HTMLResponse:
         if period not in PERIODS:
             raise HTTPException(422, "Unknown period.")
-        return render(
+        return await page(
             "domains.html",
             nav="domains",
             title="Domains",
@@ -375,7 +404,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
 
     @app.get("/devices")
     async def devices_page(session: SessionDep) -> HTMLResponse:
-        return render(
+        return await page(
             "devices.html",
             nav="devices",
             title="Devices",
@@ -385,7 +414,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
 
     @app.get("/digests")
     async def digests_page(session: SessionDep) -> HTMLResponse:
-        return render(
+        return await page(
             "digests.html",
             nav="digests",
             title="Digests",
@@ -398,24 +427,24 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         digest = await queries.digest(digest_id)
         if digest is None:
             raise HTTPException(404)
-        return render(
+        return await page(
             "digest.html", nav="digests", title=digest.title, csrf=session.csrf, digest=digest
         )
 
     @app.get("/health")
     async def health_page(session: SessionDep) -> HTMLResponse:
-        now = ctx.clock()
-        return render(
+        return await page(
             "health.html",
             nav="health",
             title="Health",
             csrf=session.csrf,
-            health=await queries.health(now),
-            now=now,
+            health=await queries.health(ctx.clock()),
         )
 
     @app.get("/evaluation")
     async def evaluation_page(session: SessionDep) -> HTMLResponse:
-        return render("evaluation.html", nav="evaluation", title="Evaluation", csrf=session.csrf)
+        return await page(
+            "evaluation.html", nav="evaluation", title="Evaluation", csrf=session.csrf
+        )
 
     return app

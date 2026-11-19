@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Digests</h1>
+<header class="page-head">
+  <h1>Digests</h1>
+  <p class="lead">Every daily digest, as it was produced.</p>
+</header>
 {% if digests %}
+<div class="table-wrap block">
 <table>
   <thead><tr><th>Period ending</th><th>Digest</th><th>Delivery</th></tr></thead>
   <tbody>
@@ -10,6 +14,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <p class="empty">No digest yet. The first one is produced at the next digest time.</p>
 {% endif %}

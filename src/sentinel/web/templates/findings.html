@@ -1,28 +1,31 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Findings</h1>
+<header class="page-head">
+  <h1>Findings</h1>
+  <p class="lead">Acknowledge what you have seen; mark benign what is not a problem. Every decision stays on the record.</p>
+</header>
 <form class="filters" method="get" action="/findings" hx-get="/findings" hx-target="#findings-table" hx-push-url="true" hx-trigger="change, submit">
   <label>Profile
     <select name="profile">
-      <option value="">any</option>
+      <option value="">Any</option>
       {% for id, label in labels.items() %}<option value="{{ id }}"{% if wanted.profile_id == id %} selected{% endif %}>{{ label }}</option>{% endfor %}
     </select>
   </label>
   <label>Device
     <select name="device">
-      <option value="">any</option>
+      <option value="">Any</option>
       {% for device in devices %}<option value="{{ device }}"{% if wanted.device == device %} selected{% endif %}>{{ device|text }}</option>{% endfor %}
     </select>
   </label>
   <label>Rule
     <select name="rule">
-      <option value="">any</option>
+      <option value="">Any</option>
       {% for rule in rules %}<option value="{{ rule }}"{% if wanted.rule_id == rule %} selected{% endif %}>{{ rule }}</option>{% endfor %}
     </select>
   </label>
   <label>At least
     <select name="severity">
-      <option value="">any</option>
+      <option value="">Any priority</option>
       {% for level in severities %}<option value="{{ level }}"{% if wanted.min_severity and wanted.min_severity.value == level %} selected{% endif %}>{{ level }}</option>{% endfor %}
     </select>
   </label>
@@ -36,7 +39,7 @@
   </label>
   <button type="submit">Filter</button>
 </form>
-<div id="findings-table">
+<div id="findings-table" class="block">
 {% include "_findings_table.html" %}
 </div>
 {% endblock %}

@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-19T07:16:11Z",
+  "title": "Design System: NextDNS Sentinel",
+  "extensions": {
+    "colorMeta": {
+      "deep": { "role": "primary", "displayName": "Deep-Water Navy", "canonical": "#0f2a44", "night": "#0c2236", "cssVar": "--deep", "tonalRamp": ["#07141f", "#0f2a44", "#17395b", "#26496b", "#4a6d8f", "#7f9cb8", "#b3c8db", "#e6eef5"] },
+      "deep-2": { "role": "primary", "displayName": "Navy Shoal", "canonical": "#17395b", "night": "#163452", "cssVar": "--deep-2" },
+      "deep-3": { "role": "primary", "displayName": "Navy Sounding Line", "canonical": "#26496b", "night": "#224466", "cssVar": "--deep-3" },
+      "on-deep": { "role": "primary", "displayName": "Rail Ink", "canonical": "#ffffff", "cssVar": "--on-deep" },
+      "on-deep-2": { "role": "primary", "displayName": "Rail Ink, Second", "canonical": "#b3c8db", "night": "#a3b8cb", "cssVar": "--on-deep-2" },
+      "chart-white": { "role": "neutral", "displayName": "Chart White", "canonical": "#fbfcfd", "night": "#0b141c", "cssVar": "--n0 (--ground)", "tonalRamp": ["#131a21", "#4b5b6b", "#b3c1cd", "#d4dde5", "#e7edf2", "#f3f6f9", "#fbfcfd", "#ffffff"] },
+      "panel": { "role": "neutral", "displayName": "Panel White", "canonical": "#ffffff", "night": "#0f1a24", "cssVar": "--panel" },
+      "n1-wash": { "role": "neutral", "displayName": "Wash", "canonical": "#f3f6f9", "night": "#111d28", "cssVar": "--n1 (--hover)" },
+      "n2-soft-rule": { "role": "neutral", "displayName": "Soft Rule", "canonical": "#e7edf2", "night": "#182633", "cssVar": "--n2 (--rule-soft)" },
+      "n3-rule": { "role": "neutral", "displayName": "Rule", "canonical": "#d4dde5", "night": "#233545", "cssVar": "--n3 (--rule)" },
+      "n4-control": { "role": "neutral", "displayName": "Control Line", "canonical": "#b3c1cd", "night": "#3f5568", "cssVar": "--n4 (--control)" },
+      "n7-ink-2": { "role": "neutral", "displayName": "Second Ink", "canonical": "#4b5b6b", "night": "#a3b4c4", "cssVar": "--n7 (--ink-2)" },
+      "n10-ink": { "role": "neutral", "displayName": "Ink", "canonical": "#131a21", "night": "#e2eaf1", "cssVar": "--n10 (--ink)" },
+      "depth-tint": { "role": "tertiary", "displayName": "Depth Tint", "canonical": "#cfe4f2", "night": "#1b3b56", "cssVar": "--tint", "tonalRamp": ["#0e2a40", "#1b3b56", "#3d6585", "#6f97b8", "#a3c6e0", "#cfe4f2", "#e6f1f9", "#f4f9fc"] },
+      "depth-tint-2": { "role": "tertiary", "displayName": "Shallow Tint", "canonical": "#e6f1f9", "night": "#142d42", "cssVar": "--tint-2" },
+      "blocked-blue": { "role": "tertiary", "displayName": "Blocked Blue", "canonical": "#7f9cb8", "night": "#4f6f8d", "cssVar": "--blocked" },
+      "correction-magenta": { "role": "secondary", "displayName": "Correction Magenta", "canonical": "#b0177a", "night": "#ea6fbd", "cssVar": "--magenta", "onColor": { "light": "#ffffff", "night": "#07111a" }, "tonalRamp": ["#3d0829", "#6b0f4a", "#b0177a", "#cf3d9b", "#ea6fbd", "#f3a5d6", "#f9d3ea", "#fdf0f7"] },
+      "buoy-red": { "role": "severity", "displayName": "Buoy Red (critical)", "canonical": "#c8102e", "nightInk": "#ff6b7d", "cssVar": "--critical (ink); fill fixed", "tonalRamp": ["#4a0612", "#8a0b20", "#c8102e", "#e03a52", "#ff6b7d", "#ff9aa6", "#ffccd2", "#fff0f2"] },
+      "buoy-orange": { "role": "severity", "displayName": "Buoy Orange (high)", "canonical": "#b84a0b", "nightInk": "#f39a5b", "cssVar": "--high (ink); fill fixed", "tonalRamp": ["#3f1903", "#7a3107", "#b84a0b", "#d96a26", "#f39a5b", "#f7bd92", "#fbdcc5", "#fef3eb"] },
+      "buoy-amber": { "role": "severity", "displayName": "Buoy Amber (medium)", "canonical": "#e3a400", "nightInk": "#e3bd4d", "cssVar": "fill fixed; ink is buoy-amber-ink", "onColor": "#131a21", "tonalRamp": ["#3a2a00", "#6b5000", "#8a6a00", "#b88a00", "#e3a400", "#e3bd4d", "#f3dc94", "#fdf6df"] },
+      "buoy-amber-ink": { "role": "severity", "displayName": "Amber Ink", "canonical": "#8a6a00", "night": "#e3bd4d", "cssVar": "--medium" },
+      "buoy-blue": { "role": "severity", "displayName": "Buoy Blue (low)", "canonical": "#2f6a9e", "nightInk": "#7db4e6", "cssVar": "--low (ink); fill fixed", "tonalRamp": ["#0c2236", "#1c4468", "#2f6a9e", "#4f8bc2", "#7db4e6", "#a9cdea", "#d3e6f6", "#eef5fb"] },
+      "buoy-grey": { "role": "severity", "displayName": "Buoy Grey (info)", "canonical": "#5d6b78", "nightInk": "#a3b4c4", "cssVar": "--info (ink); fill fixed", "tonalRamp": ["#1b2229", "#3a4651", "#5d6b78", "#7d8a96", "#a3b4c4", "#c3cfd9", "#e0e7ed", "#f4f7f9"] },
+      "ok-green": { "role": "status", "displayName": "Pass Green", "canonical": "#2c7a4b", "night": "#6fcf97", "cssVar": "--ok" },
+      "ok-on-deep": { "role": "status", "displayName": "Rail Green", "canonical": "#7fd6a4", "cssVar": "--ok-on-deep" },
+      "problem-on-deep": { "role": "status", "displayName": "Rail Coral", "canonical": "#ff9aa6", "cssVar": "--problem-on-deep" }
+    },
+    "nightChart": {
+      "trigger": "@media (prefers-color-scheme: dark)",
+      "description": "The same world under a dimmed bridge: neutral ramp inverted, rail darkened, magenta and severity inks lightened, and the primary action role becomes pale chart blue (#a9cdea) with dark ink (#07111a). Filled severity badges keep their light-mode buoy fills.",
+      "roleOverrides": { "--primary": "#a9cdea", "--primary-hover": "#c4ddf1", "--on-primary": "#07111a", "--span": "#a9cdea", "--link": "#a9cdea", "--focus": "#a9cdea", "--allowed": "#8fb8da" }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title (24)", "purpose": "Page titles and the login heading; one per page." },
+      "headline": { "displayName": "Headline (18)", "purpose": "Section headings above blocks and inside panels." },
+      "lead": { "displayName": "Lead (16)", "purpose": "The sentence under a title, a finding's summary, the current decision." },
+      "subhead": { "displayName": "Sub-heading (16)", "purpose": "Headings inside panels; side-panel headings on a finding's page." },
+      "body": { "displayName": "Body (14)", "purpose": "Tables, prose, controls, digest text." },
+      "label": { "displayName": "Label (12)", "purpose": "Table headers, filter labels, fact terms, row button text, counts; at 400, meta and chart ticks." },
+      "outside-domain": { "displayName": "Outside Domain (sloped mono)", "purpose": "Every domain, set italic, defanged, escaped and never a link.", "fontStyle": "italic" },
+      "record-mono": { "displayName": "Record Mono (upright)", "purpose": "Evidence keys and values, code, the product's own identifiers." }
+    },
+    "shadows": [
+      { "name": "login-lift", "value": "0 18px 40px rgb(3 10 18 / 0.35)", "purpose": "The single card on the bare navy ground (login, errors)." },
+      { "name": "outline-stroke", "value": "inset 0 0 0 1px currentColor", "purpose": "Outline round a decided finding's priority badge; not depth." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "The correction reveal." },
+      { "name": "correction-reveal", "value": "clip-path inset(0 100% 0 0) to inset(0 0 0 0), 520ms ease-out", "purpose": "A decision is inked left to right onto the row htmx just swapped in." },
+      { "name": "colour-change", "value": "120ms", "purpose": "Background, border and colour changes on buttons and rail links." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce) { transition: none }", "purpose": "All transitions off; the correction simply appears." }
+    ],
+    "breakpoints": [
+      { "name": "collapse-columns", "value": "1100px", "purpose": "Split and detail layouts become one column." },
+      { "name": "rail-to-topbar", "value": "860px", "purpose": "Rail becomes a top bar with a scrolling, fading nav row." },
+      { "name": "notice-cards", "value": "640px", "purpose": "Findings rows become stacked notice cards." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action in a row: Acknowledge on an open finding, and login.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Acknowledge</button>",
+      "css": ".ds-btn { padding: 7px 12px; border: 1px solid var(--control, #b3c1cd); border-radius: 4px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 600 12px/1 var(--sans, \"Segoe UI\", system-ui, sans-serif); cursor: pointer; transition: background-color 120ms, border-color 120ms, color 120ms; } .ds-btn-primary { border-color: var(--primary, #0f2a44); background: var(--primary, #0f2a44); color: var(--on-primary, #ffffff); } .ds-btn-primary:hover { border-color: var(--primary-hover, #17395b); background: var(--primary-hover, #17395b); } .ds-btn:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 2px; } .ds-btn:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Bordered secondary action, such as Mark benign.",
+      "html": "<button class=\"ds-btn-default\">Mark benign</button>",
+      "css": ".ds-btn-default { padding: 7px 12px; border: 1px solid var(--control, #b3c1cd); border-radius: 4px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 600 12px/1 var(--sans, \"Segoe UI\", system-ui, sans-serif); cursor: pointer; transition: border-color 120ms; } .ds-btn-default:hover { border-color: var(--ink-2, #4b5b6b); } .ds-btn-default:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 2px; } .ds-btn-default:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Underlined text action: Reopen, Log out.",
+      "html": "<button class=\"ds-btn-quiet\">Reopen</button>",
+      "css": ".ds-btn-quiet { padding: 7px 12px; border: 1px solid transparent; background: transparent; color: var(--ink-2, #4b5b6b); font: 600 12px/1 var(--sans, \"Segoe UI\", system-ui, sans-serif); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; } .ds-btn-quiet:hover { color: var(--ink, #131a21); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 2px; }"
+    },
+    {
+      "name": "Filter Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labelled select or input in the filters bar.",
+      "html": "<label class=\"ds-field\">Minimum priority<select class=\"ds-input\"><option>high</option></select></label>",
+      "css": ".ds-field { display: grid; gap: 4px; color: var(--ink-2, #4b5b6b); font: 600 12px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-input { min-width: 9rem; padding: 6px 8px; border: 1px solid var(--control, #b3c1cd); border-radius: 4px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 400 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-input:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 1px; }"
+    },
+    {
+      "name": "Navy Rail",
+      "kind": "nav",
+      "refersTo": "rail",
+      "description": "Navigation with the magenta open-findings count and pipeline health at its foot.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-brand\" href=\"#\">NextDNS Sentinel</a><a class=\"ds-rail-link\" href=\"#\">Overview</a><a class=\"ds-rail-link\" aria-current=\"page\" href=\"#\">Findings <span class=\"ds-count\">5</span></a><a class=\"ds-rail-link\" href=\"#\">Health</a><span class=\"ds-pipeline\">All 3 checks OK</span></nav>",
+      "css": ".ds-rail { display: flex; flex-direction: column; width: 232px; padding: 22px 0 16px; background: var(--deep, #0f2a44); font: 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-brand { padding: 0 22px 22px; color: #ffffff; font-size: 16px; font-weight: 650; text-decoration: none; } .ds-rail-link { display: flex; justify-content: space-between; align-items: center; padding: 8px 22px; color: var(--on-deep-2, #b3c8db); text-decoration: none; transition: background-color 120ms, color 120ms; } .ds-rail-link:hover, .ds-rail-link[aria-current=\"page\"] { color: #ffffff; background: var(--deep-2, #17395b); } .ds-rail-link[aria-current=\"page\"] { font-weight: 600; } .ds-rail-link:focus-visible { outline: 2px solid #ffffff; outline-offset: -2px; } .ds-count { min-width: 22px; padding: 0 7px; border-radius: 10px; background: var(--magenta, #b0177a); color: var(--on-magenta, #ffffff); font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; } .ds-pipeline { margin-top: 16px; padding: 14px 22px 0; border-top: 1px solid var(--deep-3, #26496b); color: #ffffff; font-weight: 600; } .ds-pipeline::before { content: \"\"; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--ok-on-deep, #7fd6a4); }"
+    },
+    {
+      "name": "Severity Badges",
+      "kind": "chip",
+      "refersTo": "badge-critical",
+      "description": "Buoy-coloured priority; outline form once the finding is decided.",
+      "html": "<span class=\"ds-badge ds-critical\">critical</span> <span class=\"ds-badge ds-high\">high</span> <span class=\"ds-badge ds-medium\">medium</span> <span class=\"ds-badge ds-low\">low</span> <span class=\"ds-badge ds-info\">info</span> <span class=\"ds-badge ds-decided\">high</span>",
+      "css": ".ds-badge { display: inline-block; min-width: 64px; padding: 0 8px; border-radius: 3px; color: #ffffff; font: 650 12px/20px var(--sans, \"Segoe UI\", system-ui, sans-serif); text-align: center; } .ds-critical { background: #c8102e; } .ds-high { background: #b84a0b; } .ds-medium { background: #e3a400; color: #131a21; } .ds-low { background: #2f6a9e; } .ds-info { background: #5d6b78; } .ds-decided { background: transparent; color: var(--high, #b84a0b); box-shadow: inset 0 0 0 1px currentColor; }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "White bordered container; flat.",
+      "html": "<section class=\"ds-panel\"><h2>Facts</h2><p>Profile: router</p></section>",
+      "css": ".ds-panel { padding: 18px 20px; border: 1px solid var(--rule, #d4dde5); border-radius: 6px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-panel h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; } .ds-panel p { margin: 0; }"
+    },
+    {
+      "name": "The Correction",
+      "kind": "custom",
+      "refersTo": "correction",
+      "description": "A triage decision inked onto the record in magenta: struck old status, then new status and time, revealed left to right.",
+      "html": "<span class=\"ds-corr\"><s>open</s> acknowledged 08:30</span>",
+      "css": ".ds-corr { display: inline-block; color: var(--magenta, #b0177a); font: 600 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); white-space: nowrap; clip-path: inset(0 0 0 0); transition: clip-path 520ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-corr s { display: block; width: max-content; margin: 0 0 1px; color: var(--ink-2, #4b5b6b); font-weight: 400; text-decoration-color: var(--magenta, #b0177a); text-decoration-thickness: 2px; } @media (prefers-reduced-motion: reduce) { .ds-corr { transition: none; } }"
+    },
+    {
+      "name": "Outside Names",
+      "kind": "custom",
+      "refersTo": "outside-domain",
+      "description": "Sloped type for names from outside: domains in italic mono, defanged; devices in italic sans.",
+      "html": "<p class=\"ds-about\"><span class=\"ds-name\">bad[.]example</span> on router &middot; <span class=\"ds-device\">Kitchen tablet</span></p>",
+      "css": ".ds-about { margin: 0; color: var(--ink, #131a21); font: 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-name { font-family: var(--mono, \"Cascadia Mono\", Consolas, ui-monospace, monospace); font-style: italic; overflow-wrap: anywhere; } .ds-device { font-style: italic; }"
+    },
+    {
+      "name": "Chart Marker and Span Bar",
+      "kind": "custom",
+      "refersTo": "hourly-chart",
+      "description": "SVG geometry: a magenta four-digit notice marker over a bar and the usual-level band, and the 24-hour span bar.",
+      "html": "<svg class=\"ds-chart\" viewBox=\"0 0 160 90\" width=\"240\" height=\"135\"><rect class=\"ds-band\" x=\"0\" y=\"50\" width=\"160\" height=\"30\"/><rect class=\"ds-allowed\" x=\"60\" y=\"40\" width=\"18\" height=\"40\"/><rect class=\"ds-blocked\" x=\"60\" y=\"30\" width=\"18\" height=\"10\"/><line class=\"ds-usual\" x1=\"0\" y1=\"50\" x2=\"160\" y2=\"50\"/><g class=\"ds-marker\"><rect x=\"50\" y=\"10\" width=\"38\" height=\"15\" rx=\"7.5\"/><text x=\"69\" y=\"21.5\" text-anchor=\"middle\">0004</text></g></svg><svg class=\"ds-span\" viewBox=\"0 0 120 8\" width=\"120\" height=\"8\"><rect class=\"ds-track\" width=\"120\" height=\"8\" rx=\"1\"/><rect class=\"ds-tick\" x=\"30\" width=\"1\" height=\"8\"/><rect class=\"ds-tick\" x=\"60\" width=\"1\" height=\"8\"/><rect class=\"ds-tick\" x=\"90\" width=\"1\" height=\"8\"/><rect class=\"ds-seen\" x=\"70\" y=\"1\" width=\"12\" height=\"6\" rx=\"1\"/></svg>",
+      "css": ".ds-chart, .ds-span { display: block; margin-bottom: 8px; } .ds-band { fill: var(--tint, #cfe4f2); opacity: 0.6; } .ds-allowed { fill: var(--allowed, #0f2a44); } .ds-blocked { fill: var(--blocked, #7f9cb8); } .ds-usual { stroke: var(--low, #2f6a9e); stroke-width: 2; stroke-dasharray: 6 4; } .ds-marker rect { fill: var(--magenta, #b0177a); } .ds-marker text { fill: var(--on-magenta, #ffffff); font: 700 12px var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-track { fill: var(--tint-2, #e6f1f9); } .ds-tick { fill: var(--rule, #d4dde5); } .ds-seen { fill: var(--span, #0f2a44); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Notices and Chart Corrections",
+    "overview": "The dashboard is a nautical chart kept current by its owner. Every finding is a numbered notice (printed as four digits, `0004`), and every triage decision is written onto the record in magenta, the way a correction is inked onto a chart: the old status struck through, the new status and the time beside it. Nothing is erased; the record only grows.\n\nThe world is a deep-water navy rail beside a chart-white ground. One navy-tinted neutral ramp carries all text, rules and washes. Depth-tint blues mark the usual (the usual-traffic band in the chart, the span track, selection). Magenta is scarce and means one of two things: something needs attention, or a decision was made. Severity borrows buoy colours. The density is that of an operator's instrument: 14px body, tight tables, many figures, all tabular, read in short triage visits or glanced at from across the room.\n\nUpright system sans is the product's own voice. Anything that came from outside the product (a domain, a device name) is set sloped, so attacker-controlled text is always visibly someone else's words. Drawings are SVG geometry rendered by the server; there is no charting script, no icon font, no image.",
+    "keyCharacteristics": [
+      "Navy rail (232px) holding navigation, the magenta open-findings count and pipeline health at its foot.",
+      "Chart-white ground with white panels, 1px navy-grey rules, 6px corners, no resting shadows.",
+      "Magenta reserved for attention (counts, chart markers) and decisions (corrections, history).",
+      "Buoy severity: red, orange, amber with dark ink, blue, grey.",
+      "Upright sans for the product; sloped mono for domains; sloped sans for devices.",
+      "Tabular figures on every page; a five-step type ladder (12/14/16/18/24).",
+      "A \"night chart\" dark mode: the same world under a dimmed bridge, driven by `prefers-color-scheme`."
+    ],
+    "rules": [
+      { "name": "The Two Jobs Rule", "body": "Magenta does exactly two jobs: attention (what needs a decision) and decisions written on the record. It is never decoration, never a link colour, never a chart series.", "section": "colors" },
+      { "name": "The Buoy Rule", "body": "Severity is only ever told by the five buoy colours, in order critical, high, medium, low, info. The filled buoy fills are fixed in both modes; outline and text forms use the mode's severity ink.", "section": "colors" },
+      { "name": "The One Ramp Rule", "body": "Every neutral comes from the navy-tinted ramp (n0 to n10). No pure greys.", "section": "colors" },
+      { "name": "The Outside Voice Rule", "body": "Every name that came from outside is sloped: domains in italic mono (always defanged, never a link), device names in italic sans. The product's own words are never sloped, and outside names are never upright.", "section": "typography" },
+      { "name": "The Five Steps Rule", "body": "Sizes are 12, 14, 16, 18, 24 and nothing else, one job per step. Emphasis inside a step is weight (600 to 650), not size.", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "Figures are tabular everywhere (`font-variant-numeric: tabular-nums` on the body); numeric columns align right.", "section": "typography" },
+      { "name": "The Flat Chart Rule", "body": "Surfaces in the app shell never cast shadows. A boundary is a 1px rule or a change of wash.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** print every finding number as a four-digit notice (`0004`), in the table, the page title and the chart markers alike.",
+      "**Do** write a decision as a correction: struck old status, then new status and time, in correction magenta, and keep every past correction visible in the history.",
+      "**Do** set every outside name sloped (domains in italic mono, defanged; device names in italic sans), escaped and never as a link.",
+      "**Do** keep to the 12/14/16/18/24 ladder and tabular figures, with numeric columns right-aligned.",
+      "**Do** draw every chart, bar, marker and key as server-rendered SVG geometry or CSS shapes styled from `/static/style.css`, so the strict CSP needs no inline style or script.",
+      "**Do** keep a decided finding's priority visible as an outline badge rather than removing it.",
+      "**Do** take every neutral from the navy-tinted ramp, and give the night chart its own values for each token rather than inverting with filters."
+    ],
+    "donts": [
+      "**Don't** use magenta for links, buttons, decoration or a data series; it means attention or a decision, nothing else.",
+      "**Don't** show severity by any colour outside the five buoys, and don't put white text on the amber buoy.",
+      "**Don't** set the product's own words in italics, or an outside name upright.",
+      "**Don't** load fonts, scripts, icons or images from outside `/static/`, or use inline `style` attributes or inline scripts.",
+      "**Don't** cast shadows on app surfaces; the login lift on the bare navy ground is the only one.",
+      "**Don't** animate anything but the correction reveal and 120ms colour changes, and never when reduced motion is requested."
+    ]
+  }
+}

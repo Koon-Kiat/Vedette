@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<p><a href="/digests">All digests</a></p>
-<h1>{{ digest.title }}</h1>
-<p class="muted">Period ending {{ digest.period_end|local(tz) }}. Delivery: {{ digest.delivery or "unknown" }}.</p>
+<p class="back"><a href="/digests">All digests</a></p>
+<header class="page-head">
+  <h1>{{ digest.title }}</h1>
+  <p class="lead">Period ending {{ digest.period_end|local(tz) }}. Delivery: {{ digest.delivery or "unknown" }}.</p>
+</header>
 <pre class="digest">{{ digest.body }}</pre>
 {% endblock %}

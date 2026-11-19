@@ -1,9 +1,10 @@
-<svg class="chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="chart-title">
-  <title id="chart-title">Queries per hour over the last 24 hours, allowed and blocked</title>
-  <line class="axis" x1="{{ chart.left }}" y1="{{ chart.top }}" x2="{{ chart.left }}" y2="{{ chart.plot_bottom }}"/>
+<svg class="chart hourly" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="chart-title">
+  <title id="chart-title">Queries per hour over the last 24 hours, allowed and blocked{% if chart.usual is not none %}, against the usual hourly level{% endif %}</title>
+  {% if chart.usual_y is not none %}<rect class="usual-band" x="{{ chart.left }}" y="{{ chart.usual_y }}" width="{{ chart.width - chart.left }}" height="{{ chart.plot_bottom - chart.usual_y }}"/>{% endif %}
   <line class="axis" x1="{{ chart.left }}" y1="{{ chart.plot_bottom }}" x2="{{ chart.width }}" y2="{{ chart.plot_bottom }}"/>
-  <text class="tick" x="{{ chart.left - 6 }}" y="{{ chart.top + 4 }}" text-anchor="end">{{ chart.y_max|num }}</text>
-  <text class="tick" x="{{ chart.left - 6 }}" y="{{ chart.plot_bottom }}" text-anchor="end">0</text>
+  <text class="tick" x="{{ chart.left - 8 }}" y="{{ chart.top + 4 }}" text-anchor="end">{{ chart.y_max|num }}</text>
+  <line class="grid" x1="{{ chart.left }}" y1="{{ chart.top }}" x2="{{ chart.width }}" y2="{{ chart.top }}"/>
+  <text class="tick" x="{{ chart.left - 8 }}" y="{{ chart.plot_bottom }}" text-anchor="end">0</text>
   {% for bar in chart.bars %}
   <g>
     <title>{{ bar.title }}</title>
@@ -12,5 +13,16 @@
     {% if bar.label %}<text class="tick" x="{{ bar.x + bar.width / 2 }}" y="{{ chart.height - 6 }}" text-anchor="middle">{{ bar.label }}</text>{% endif %}
   </g>
   {% endfor %}
+  {% if chart.usual_y is not none %}
+  <line class="usual-halo" x1="{{ chart.left }}" y1="{{ chart.usual_y }}" x2="{{ chart.width }}" y2="{{ chart.usual_y }}"/>
+  <line class="usual-line" x1="{{ chart.left }}" y1="{{ chart.usual_y }}" x2="{{ chart.width }}" y2="{{ chart.usual_y }}"/>
+  {% endif %}
+  {% for marker in chart.markers %}
+  <g class="marker">
+    <title>{{ marker.title }}</title>
+    <rect x="{{ marker.x }}" y="{{ marker.y }}" width="{{ marker.width }}" height="15" rx="7.5"/>
+    <text x="{{ marker.x + marker.width / 2 }}" y="{{ marker.y + 11.5 }}" text-anchor="middle">{{ marker.label }}</text>
+  </g>
+  {% endfor %}
 </svg>
-<p class="legend"><span class="key key-allowed"></span> allowed <span class="key key-blocked"></span> blocked</p>
+<p class="legend"><span class="key key-allowed"></span>allowed <span class="key key-blocked"></span>blocked{% if chart.usual is not none %} <span class="key key-usual"></span>usual hourly level, 7-day average ({{ chart.usual|avg }}){% endif %}{% if chart.markers %} <span class="key key-marker"></span>open finding, by number{% endif %}</p>

@@ -1,33 +1,48 @@
 {% set f = row.finding %}
-<tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ row.priority.value }}">
-  <td class="when">{{ f.last_ts|local(tz) }}</td>
-  <td>{% with level = row.priority.value %}{% include "_badge.html" %}{% endwith %}</td>
-  <td><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>
-  <td class="name">{% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}{{ f.target|domain }}{% endif %}</td>
-  <td>{{ labels[f.profile_id] }}</td>
-  <td>{% if f.device_mode %}{{ f.subject|text }}{% else %}<span class="muted">unavailable</span>{% endif %}</td>
-  <td class="num">{{ f.event_count|num }}</td>
-  <td class="status">{{ f.status }}</td>
+{% set level = row.priority.value %}
+{% set seen = f|span(tz) %}
+<tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ level }}">
+  <td class="no"><a href="/findings/{{ f.id }}" aria-label="Finding {{ f.id }}">{{ "%04d"|format(f.id) }}</a></td>
+  <td class="pri">{% include "_badge.html" %}</td>
+  <td class="rule"><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>
+  <td class="about">
+    {% if f.target == f.profile_id %}<span class="own">{{ labels[f.profile_id] }}</span>{% else %}<span class="name">{{ f.target|domain }}</span>{% endif %}
+    {% if level in ("critical", "high") %}<span class="why">{% if row.analysis %}{{ row.analysis.summary|prose }}{% else %}Not analysed yet.{% endif %}</span>{% endif %}
+  </td>
+  <td class="where">{{ labels[f.profile_id] }}{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %}</td>
+  <td class="seen">
+    <span class="when">{{ f.last_ts|local(tz) }}</span>
+    <svg class="chart span-bar" viewBox="0 0 {{ seen.width }} {{ seen.height }}" width="{{ seen.width }}" height="{{ seen.height }}" role="img" aria-label="{{ seen.title }}"><title>{{ seen.title }}</title><rect class="span-track" x="0" y="0" width="{{ seen.width }}" height="{{ seen.height }}" rx="1"/>{% for hour in [6, 12, 18] %}<rect class="span-tick" x="{{ hour * 5 }}" y="0" width="1" height="{{ seen.height }}"/>{% endfor %}<rect class="span-seen{% if seen.from_earlier %} span-earlier{% endif %}" x="{{ seen.x }}" y="1" width="{{ seen.length }}" height="{{ seen.height - 2 }}" rx="1"/></svg>
+  </td>
+  <td class="num events">{{ f.event_count|num }}</td>
+  <td class="decision">
+    {% if f.status == "open" %}
+    <span class="status-open">open</span>
+    {% if row.decision and row.decision.action == "reopen" %}<span class="corr">reopened {{ row.decision.at|clock(tz) }}</span>{% endif %}
+    {% else %}
+    <span class="corr"><s>open</s> {{ f.status }}{% if row.decision %} {{ row.decision.at|clock(tz) }}{% endif %}</span>
+    {% endif %}
+  </td>
   <td class="actions">
     {% if f.status != "acknowledged" %}
     <form method="post" action="/findings/{{ f.id }}/acknowledge" hx-post="/findings/{{ f.id }}/acknowledge" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <input type="hidden" name="next" value="{{ next_url }}">
-      <button type="submit">Acknowledge</button>
+      <button type="submit"{% if f.status == "open" %} class="primary"{% endif %}>Acknowledge</button>
     </form>
     {% endif %}
     {% if f.status != "benign" %}
     <form method="post" action="/findings/{{ f.id }}/benign" hx-post="/findings/{{ f.id }}/benign" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML"{% if f.rule_id in domain_rules %} hx-confirm="Mark as benign and stop flagging {{ f.target|domain }} on {{ labels[f.profile_id] }}?"{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <input type="hidden" name="next" value="{{ next_url }}">
-      <button type="submit">Benign</button>
+      <button type="submit">Mark benign</button>
     </form>
     {% endif %}
     {% if f.status != "open" %}
     <form method="post" action="/findings/{{ f.id }}/reopen" hx-post="/findings/{{ f.id }}/reopen" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML">
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <input type="hidden" name="next" value="{{ next_url }}">
-      <button type="submit">Reopen</button>
+      <button type="submit" class="quiet">Reopen</button>
     </form>
     {% endif %}
   </td>

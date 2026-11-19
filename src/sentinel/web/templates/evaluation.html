@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Evaluation</h1>
-<p class="empty">No evaluation has run yet.</p>
-<p>The evaluation suite (<code>sentinel eval</code>) comes with the hardening work. Its results will appear here: detection recall, false alerts per day, and the prompt-injection success rate with the defences on and off.</p>
+<header class="page-head">
+  <h1>Evaluation</h1>
+  <p class="lead">How well the rules and the local model hold up against known-good, known-bad and hostile names.</p>
+</header>
+<section class="block">
+  <p class="empty">No evaluation has run yet.</p>
+  <p>Run <code>sentinel eval</code> to measure detection recall, false alerts per day, and the prompt-injection success rate with the defences on and off. The results will appear here.</p>
+</section>
 {% endblock %}

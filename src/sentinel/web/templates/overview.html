@@ -1,41 +1,57 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Overview</h1>
-<p class="lead">Last 24 hours, compared with the 7-day average.</p>
-<section class="cards">
-  {% for volume in digest.volumes %}
-  <article class="card">
-    <h2>{{ volume.profile }}</h2>
-    <p class="big">{{ volume.queries|num }} <span>queries</span></p>
-    <p>{{ volume.blocked|num }} blocked ({{ "%.1f"|format(100.0 * volume.blocked / volume.queries if volume.queries else 0) }}%)</p>
-    <p class="muted">7-day average: {{ volume.avg_queries|avg }} queries{% if volume.avg_blocked_pct is not none %}, {{ "%.1f"|format(volume.avg_blocked_pct) }}% blocked{% endif %}</p>
-    {% if volume.queries and not volume.device_attribution %}<p class="muted">Device attribution unavailable</p>{% endif %}
-  </article>
-  {% endfor %}
-  <article class="card">
-    <h2>Findings</h2>
-    <ul class="counts">
-      {% for level in levels %}<li>{% include "_badge.html" %} {{ digest.counts[level] }} {{ level }}</li>{% endfor %}
-    </ul>
-    <p class="muted">7-day average per day: {% for level in levels %}{{ digest.counts_avg[level]|avg }} {{ level }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
-  </article>
-  <article class="card">
-    <h2>New devices</h2>
-    <p class="big">{{ digest.new_devices|length }}</p>
-    <ul>
-      {% for device in digest.new_devices %}
-      <li>{{ device.profile }}: {% if device.is_address %}new address {{ device.device|text }}{% else %}{{ device.device|text }}{% if device.name %} ({{ device.name|text }}){% endif %}{% endif %}</li>
-      {% endfor %}
-    </ul>
-    <p class="muted">7-day average per day: {{ new_devices_avg|avg }}</p>
-  </article>
+<header class="page-head">
+  <h1>Overview</h1>
+  <p class="lead">{% if alerts %}<span class="count">{{ alerts|length }}</span> high or critical finding{{ "" if alerts|length == 1 else "s" }} need{{ "s" if alerts|length == 1 else "" }} a decision.{% else %}Nothing high or critical is waiting for a decision.{% endif %} Last 24 hours, compared with the 7-day average.</p>
+  <p class="stamp">{{ now|local(tz) }}</p>
+</header>
+
+<section class="block" aria-labelledby="decide-title">
+  <div class="block-head">
+    <h2 id="decide-title">Needs a decision</h2>
+    <a href="/findings">All open findings{% if shell.open_findings %} ({{ shell.open_findings|num }}){% endif %}</a>
+  </div>
+  {% with rows = alerts, empty_text = "No open high or critical findings." %}{% include "_findings_table.html" %}{% endwith %}
 </section>
-<section>
-  <h2>Queries per hour</h2>
-  {% include "_chart.html" %}
-</section>
-<section>
-  <h2>Open high and critical findings</h2>
-  {% with rows = alerts %}{% include "_findings_table.html" %}{% endwith %}
-</section>
+
+<div class="split">
+  <section class="block" aria-labelledby="chart-title-h">
+    <div class="block-head"><h2 id="chart-title-h">Queries per hour</h2></div>
+    <div class="panel chart-panel">{% include "_chart.html" %}</div>
+  </section>
+
+  <section class="block" aria-labelledby="today-title">
+    <div class="block-head"><h2 id="today-title">Today against the usual week</h2></div>
+    <div class="panel">
+      <table class="compact">
+        <thead><tr><th>Profile</th><th class="num">Queries</th><th class="num">Usual queries</th><th class="num">Blocked</th><th class="num">Usual blocked</th></tr></thead>
+        <tbody>
+          {% for volume in digest.volumes %}
+          <tr>
+            <td>{{ volume.profile }}{% if volume.queries and not volume.device_attribution %}<span class="note">Device attribution unavailable</span>{% endif %}</td>
+            <td class="num strong">{{ volume.queries|num }}</td>
+            <td class="num">{{ volume.avg_queries|avg }}</td>
+            <td class="num strong">{{ "%.1f"|format(100.0 * volume.blocked / volume.queries if volume.queries else 0) }}%</td>
+            <td class="num">{% if volume.avg_blocked_pct is not none %}{{ "%.1f"|format(volume.avg_blocked_pct) }}%{% else %}n/a{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h3>New devices{% if new_devices_avg is not none %} <span class="usual">usual {{ new_devices_avg|avg }} a day</span>{% endif %}</h3>
+      {% if digest.new_devices %}
+      <ul class="plain">
+        {% for device in digest.new_devices %}
+        <li>{{ device.profile }}: {% if device.is_address %}new address <span class="device">{{ device.device|text }}</span>{% else %}<span class="device">{{ device.device|text }}</span>{% if device.name %} (<span class="device">{{ device.name|text }}</span>){% endif %}{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">No new devices.</p>
+      {% endif %}
+      <h3>Findings by priority</h3>
+      <ul class="counts">
+        {% for level in levels %}<li><span class="swatch sev-{{ level }}"></span><span class="count-text">{{ digest.counts[level] }} {{ level }}</span>{% if digest.counts_avg[level] is not none %}<span class="usual">usual {{ digest.counts_avg[level]|avg }}</span>{% endif %}</li>{% endfor %}
+      </ul>
+    </div>
+  </section>
+</div>
 {% endblock %}

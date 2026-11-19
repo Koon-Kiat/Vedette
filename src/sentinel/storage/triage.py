@@ -156,6 +156,14 @@ class TriageStore:
             for row in rows
         ]
 
+    async def latest_for(self, finding_ids: Sequence[int]) -> dict[int, AuditEntry]:
+        """The most recent audit entry of each finding that has one."""
+        latest: dict[int, AuditEntry] = {}
+        for entry in await self.audit_for(finding_ids):
+            if entry.finding_id is not None:
+                latest[entry.finding_id] = entry
+        return latest
+
     async def audit_for(self, finding_ids: Sequence[int]) -> list[AuditEntry]:
         """Audit entries for the given findings, oldest first."""
         async with self._engine.connect() as connection:

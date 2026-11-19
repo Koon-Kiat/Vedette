@@ -4,27 +4,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
 <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true, "historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
 <title>{{ title }} · NextDNS Sentinel</title>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
 </head>
 {% if csrf is defined %}
-<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
-<header class="top">
+<body class="app" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+<header class="rail">
   <a class="brand" href="/">NextDNS Sentinel</a>
-  <nav>
+  <nav aria-label="Pages">
     {% for key, label, href in [("overview", "Overview", "/"), ("findings", "Findings", "/findings"), ("domains", "Domains", "/domains"), ("devices", "Devices", "/devices"), ("digests", "Digests", "/digests"), ("health", "Health", "/health"), ("evaluation", "Evaluation", "/evaluation")] %}
-    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}{% if key == "findings" and shell is defined and shell.open_findings %} <span class="count" title="{{ shell.open_findings }} open">{{ shell.open_findings|num }}</span>{% endif %}</a>
     {% endfor %}
   </nav>
+  {% if shell is defined %}
+  <a class="pipeline{% if shell.checks_ok < shell.checks_total %} pipeline-problem{% endif %}" href="/health">
+    <span class="pipeline-state">{% if not shell.checks_total %}No health checks yet{% elif shell.checks_ok == shell.checks_total %}All {{ shell.checks_total }} checks OK{% else %}{{ shell.checks_total - shell.checks_ok }} of {{ shell.checks_total }} checks failing{% endif %}</span>
+    <span class="pipeline-detail">Newest event {{ shell.newest_event|since(now) }}</span>
+  </a>
+  {% endif %}
   <form method="post" action="/logout" class="logout">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    <button type="submit">Log out</button>
+    <button type="submit" class="quiet">Log out</button>
   </form>
 </header>
 {% else %}
-<body>
+<body class="bare">
 {% endif %}
 <main>
 {% block content %}{% endblock %}

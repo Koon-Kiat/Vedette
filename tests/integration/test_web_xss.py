@@ -57,7 +57,7 @@ class Audit(HTMLParser):
             self.in_script = True
             if not values.get("src", "").startswith("/static/"):
                 self.problems.append(f"script without our src: {values}")
-        if tag == "svg" and values.get("class") != "chart":
+        if tag == "svg" and "chart" not in values.get("class", "").split():
             self.problems.append("unexpected <svg>")
         for name, value in values.items():
             if name.startswith("on"):
@@ -219,6 +219,7 @@ async def test_the_row_returned_after_an_action_is_safe_too(planted: Store) -> N
         '<a href="https://evil.example/">x</a>',
         '<form action="//evil.example/"></form>',
         '<svg onload="alert(1)"></svg>',
+        '<svg class="charted"></svg>',
         '<div onclick="x()"></div>',
     ],
 )
@@ -231,5 +232,6 @@ def test_the_checker_accepts_our_own_markup() -> None:
         '<script src="/static/vendor/htmx-2.0.11.min.js" defer></script>'
         '<a href="/findings/3">x</a><form method="post" action="/logout"></form>'
         '<svg class="chart"><rect class="bar-allowed"/></svg>'
+        '<svg class="chart span-bar"><rect class="span-seen"/></svg>'
     )
     assert audit(good) == []

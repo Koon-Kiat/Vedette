@@ -1,7 +1,8 @@
 {% if rows %}
+<div class="table-wrap findings-wrap">
 <table class="findings">
   <thead>
-    <tr><th>Last seen</th><th>Priority</th><th>Rule</th><th>About</th><th>Profile</th><th>Device</th><th class="num">Events</th><th>Status</th><th>Actions</th></tr>
+    <tr><th>No.</th><th>Priority</th><th>Rule</th><th>About</th><th>Profile · device</th><th>Last seen</th><th class="num">Events</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr>
   </thead>
   <tbody>
     {% for row in rows %}
@@ -9,6 +10,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-<p class="empty">No findings match.</p>
+<p class="empty">{{ empty_text if empty_text is defined else "No findings match these filters." }}</p>
 {% endif %}

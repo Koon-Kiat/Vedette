@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="login">
+<section class="login panel">
   <h1>NextDNS Sentinel</h1>
   <p>Enter the dashboard token from your <code>.env</code> file (<code>DASHBOARD_TOKEN</code>).</p>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
@@ -8,7 +8,7 @@
     <input type="hidden" name="login_nonce" value="{{ nonce }}">
     <label for="token">Token</label>
     <input id="token" name="token" type="password" required autofocus>
-    <button type="submit">Log in</button>
+    <button type="submit" class="primary">Log in</button>
   </form>
 </section>
 {% endblock %}

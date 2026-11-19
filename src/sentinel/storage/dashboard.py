@@ -37,7 +37,7 @@ from sentinel.storage.models import (
     threat_intel,
 )
 from sentinel.storage.store import StoredFinding, finding_from_row, to_event
-from sentinel.storage.triage import DOMAIN_RULES
+from sentinel.storage.triage import DOMAIN_RULES, AuditEntry, TriageStore
 
 DAY = timedelta(hours=24)
 YOUNG_DAYS = 30
@@ -58,10 +58,11 @@ class FindingFilter:
 
 @dataclass(frozen=True, slots=True)
 class FindingRow:
-    """A finding with its analysis, if it has one."""
+    """A finding with its analysis and its latest triage decision, if any."""
 
     finding: StoredFinding
     analysis: Analysis | None
+    decision: AuditEntry | None = None
 
     @property
     def priority(self) -> Severity:
@@ -69,6 +70,16 @@ class FindingRow:
         if self.analysis is None or self.analysis.priority.rank < self.finding.severity.rank:
             return self.finding.severity
         return self.analysis.priority
+
+
+@dataclass(frozen=True, slots=True)
+class Shell:
+    """What every page's navigation rail shows."""
+
+    open_findings: int
+    checks_ok: int
+    checks_total: int
+    newest_event: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,8 +231,10 @@ class DashboardQueries:
         return statement
 
     async def _with_analyses(self, found: list[StoredFinding]) -> list[FindingRow]:
-        analyses = await AnalysisStore(self._engine).analyses_for([item.id for item in found])
-        return [FindingRow(item, analyses.get(item.id)) for item in found]
+        ids = [item.id for item in found]
+        analyses = await AnalysisStore(self._engine).analyses_for(ids)
+        decisions = await TriageStore(self._engine).latest_for(ids) if ids else {}
+        return [FindingRow(item, analyses.get(item.id), decisions.get(item.id)) for item in found]
 
     async def findings(
         self, wanted: FindingFilter, *, tz: ZoneInfo, limit: int = 200
@@ -259,11 +272,37 @@ class DashboardQueries:
             return [str(value) for value in (await connection.execute(statement)).scalars()]
 
     async def open_alerts(self, *, limit: int = 10) -> list[FindingRow]:
-        """Open findings whose effective priority is high or critical, newest first."""
-        return await self.findings(
+        """Open high and critical findings: critical first, then newest first."""
+        rows = await self.findings(
             FindingFilter(min_severity=Severity.HIGH, status="open"),
             tz=ZoneInfo("UTC"),
             limit=limit,
+        )
+        return sorted(rows, key=lambda row: -row.priority.rank)
+
+    async def shell(self) -> Shell:
+        """Open findings, health check results and the newest event, for the rail."""
+        async with self._engine.connect() as connection:
+            open_count = int(
+                (
+                    await connection.execute(
+                        select(func.count())
+                        .select_from(findings)
+                        .where(findings.c.profile_id.in_(self._ids), findings.c.status == "open")
+                    )
+                ).scalar_one()
+            )
+            newest = (
+                await connection.execute(
+                    select(func.max(events.c.ts)).where(events.c.profile_id.in_(self._ids))
+                )
+            ).scalar_one_or_none()
+        checks = await HealthStore(self._engine).read()
+        return Shell(
+            open_findings=open_count,
+            checks_ok=sum(1 for check in checks if check.ok),
+            checks_total=len(checks),
+            newest_event=newest.replace(tzinfo=UTC) if newest is not None else None,
         )
 
     async def enrichment(self, finding: StoredFinding, now: datetime) -> Enrichment | None:

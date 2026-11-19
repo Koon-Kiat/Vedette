@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_tchart.html" import tchart with context %}
+{% block styles %}<link rel="stylesheet" href="/static/vendor/uPlot-1.6.32.min.css">{% endblock %}
+{% block scripts %}<script src="/static/vendor/uPlot-1.6.32.iife.min.js" defer></script>
+<script src="/static/charts.js" defer></script>{% endblock %}
+{% block content %}
+{% set totals = stats.per_minute|map("sum")|list %}
+{% set peak = [totals|max, 1]|max %}
+<header class="page-head">
+  <h1>Live</h1>
+  <p class="lead">Every DNS query from your profiles as it arrives. Domains are shown defanged and are never links.</p>
+  {% include "_live_line.html" %}
+</header>
+
+<section class="block live-top" aria-labelledby="rate-title">
+  <div class="panel rate-panel">
+    <div class="rate-head">
+      <h2 id="rate-title">Queries over time</h2>
+      <dl class="rate-figures">
+        <div><dt>Peak minute, last 30 minutes</dt><dd data-live="peak">{{ totals|max|num }}</dd></div>
+        <div><dt>Open findings</dt><dd data-live="open-findings">{{ stats.open_findings|num }}</dd></div>
+      </dl>
+    </div>
+    {% call tchart("live", 1800, [(1800, "30m", "30 minutes"), (3600, "1h", "hour"), (21600, "6h", "6 hours"), (86400, "24h", "24 hours")], "Queries over time, allowed and blocked, with findings", size="short") %}
+    <p class="hint">Queries per minute over the last 30 minutes; the bar on the right is the current minute.</p>
+    <svg class="chart minutes" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Queries per minute over the last 30 minutes" data-live="minutes">
+      {% for allowed, blocked in stats.per_minute %}
+      {% set total = allowed + blocked %}
+      <rect class="minute-bar{% if loop.last %} minute-now{% endif %}" x="{{ loop.index0 * 10 + 1 }}" y="{{ 64 - (total / peak * 60)|round(1) }}" width="8" height="{{ (total / peak * 60)|round(1) }}" rx="1"/>
+      <rect class="minute-blocked" x="{{ loop.index0 * 10 + 1 }}" y="{{ 64 - (blocked / peak * 60)|round(1) }}" width="8" height="{{ (blocked / peak * 60)|round(1) }}" rx="1"/>
+      {% endfor %}
+    </svg>
+    {% endcall %}
+  </div>
+</section>
+
+<section class="block" aria-labelledby="feed-title">
+  <div class="block-head feed-head">
+    <h2 id="feed-title">Queries</h2>
+    <div class="feed-controls" role="group" aria-label="Feed controls">
+      <span class="feed-buffer" data-live="buffer" hidden><button type="button" class="link" data-live="resume-buffer">Show <span data-live="buffer-count">0</span> new</button></span>
+      <label class="toggle"><input type="checkbox" data-live="only-blocked"> Only blocked</label>
+      <label class="select-label">Profile
+        <select data-live="profile">
+          <option value="">All</option>
+          {% for id, label in labels.items() %}<option value="{{ label }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="button" class="primary" data-live="pause" aria-pressed="false">Pause</button>
+    </div>
+  </div>
+  <div class="panel feed-panel">
+    <ol class="feed" data-live="feed" data-limit="200" data-filterable aria-live="off">
+      {% for item in recent %}{% include "_feed_row.html" %}{% else %}<li class="feed-empty">Waiting for the first query.</li>{% endfor %}
+    </ol>
+  </div>
+  <noscript><p class="note">The feed updates only with JavaScript on; reload the page to see new queries.</p></noscript>
+</section>
+{% endblock %}

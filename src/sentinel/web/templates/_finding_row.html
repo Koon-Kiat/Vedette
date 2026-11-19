@@ -2,19 +2,20 @@
 {% set level = row.priority.value %}
 {% set seen = f|span(tz) %}
 <tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ level }}">
-  <td class="no"><a href="/findings/{{ f.id }}" aria-label="Finding {{ f.id }}">{{ "%04d"|format(f.id) }}</a></td>
+  <td class="no col-wide"><a href="/findings/{{ f.id }}" aria-label="Finding {{ f.id }}">{{ "%04d"|format(f.id) }}</a></td>
   <td class="pri">{% include "_badge.html" %}</td>
-  <td class="rule"><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>
+  <td class="rule col-wide"><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>
   <td class="about">
     {% if f.target == f.profile_id %}<span class="own">{{ labels[f.profile_id] }}</span>{% else %}<span class="name">{{ f.target|domain }}</span>{% endif %}
     {% if level in ("critical", "high") %}<span class="why">{% if row.analysis %}{{ row.analysis.summary|prose }}{% else %}Not analysed yet.{% endif %}</span>{% endif %}
+    <span class="about-meta"><a href="/findings/{{ f.id }}">{{ "%04d"|format(f.id) }} · {{ f.rule_id }}</a> · {{ labels[f.profile_id] }}{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %} · {{ f.last_ts|local(tz) }} · {{ f.event_count|num }} event{{ "" if f.event_count == 1 else "s" }}</span>
   </td>
-  <td class="where">{{ labels[f.profile_id] }}{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %}</td>
-  <td class="seen">
+  <td class="where col-wide">{{ labels[f.profile_id] }}{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %}</td>
+  <td class="seen col-wide">
     <span class="when">{{ f.last_ts|local(tz) }}</span>
     <svg class="chart span-bar" viewBox="0 0 {{ seen.width }} {{ seen.height }}" width="{{ seen.width }}" height="{{ seen.height }}" role="img" aria-label="{{ seen.title }}"><title>{{ seen.title }}</title><rect class="span-track" x="0" y="0" width="{{ seen.width }}" height="{{ seen.height }}" rx="1"/>{% for hour in [6, 12, 18] %}<rect class="span-tick" x="{{ hour * 5 }}" y="0" width="1" height="{{ seen.height }}"/>{% endfor %}<rect class="span-seen{% if seen.from_earlier %} span-earlier{% endif %}" x="{{ seen.x }}" y="1" width="{{ seen.length }}" height="{{ seen.height - 2 }}" rx="1"/></svg>
   </td>
-  <td class="num events">{{ f.event_count|num }}</td>
+  <td class="num events col-wide">{{ f.event_count|num }}</td>
   <td class="decision">
     {% if f.status == "open" %}
     <span class="status-open">open</span>

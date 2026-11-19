@@ -161,6 +161,8 @@ async def planted(store: Store) -> Store:
 async def pages(store: Store) -> list[str]:
     finding_ids = [f.id for f in await store.list_findings(limit=100)]
     (digest,) = await NotificationStore(store.engine).digests(limit=1)
+    hostile_from = int((PERIOD_START + timedelta(hours=6)).timestamp())
+    hostile_to = int((PERIOD_START + timedelta(hours=7)).timestamp())
     return [
         "/",
         "/findings?status=all",
@@ -172,6 +174,9 @@ async def pages(store: Store) -> list[str]:
         f"/digests/{digest.id}",
         "/health",
         "/evaluation",
+        "/live",
+        "/partials/decide",
+        f"/partials/window?from={hostile_from}&to={hostile_to}",
     ]
 
 

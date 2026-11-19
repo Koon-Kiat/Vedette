@@ -1,0 +1,37 @@
+{% set total = window.allowed + window.blocked %}
+<section class="window" aria-label="What happened in this period">
+  <header class="window-head">
+    <h3>{{ window.start|local(tz) }} to {{ window.end|clock(tz) }}</h3>
+    <p class="window-totals"><strong>{{ total|num }}</strong> queries, <strong>{{ window.blocked|num }}</strong> blocked{% if total %} ({{ "%.1f"|format(100.0 * window.blocked / total) }}%){% endif %}</p>
+    <button type="button" class="quiet" data-action="clear-detail">Close list</button>
+  </header>
+  <div class="window-grid">
+    <div>
+      <h4>Findings</h4>
+      {% if found %}
+      <ul class="plain window-findings">
+        {% for f in found %}<li><span class="badge sev-{{ f.priority }}">{{ f.priority }}</span> <a href="/findings/{{ f.id }}">{{ "%04d"|format(f.id) }} {{ f.rule }}</a> <span class="name">{{ f.about }}</span>{% if f.status != "open" %} <span class="hint">{{ f.status }}</span>{% endif %}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">No findings in this period.</p>
+      {% endif %}
+      <h4>Most looked up</h4>
+      {% if window.top %}
+      <table class="compact">
+        <thead><tr><th>Domain</th><th class="num">Queries</th><th class="num">Blocked</th></tr></thead>
+        <tbody>
+          {% for row in window.top %}<tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.queries|num }}</td><td class="num">{{ row.blocked|num }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">No queries in this period.</p>
+      {% endif %}
+    </div>
+    <div>
+      <h4>Latest queries</h4>
+      <ol class="feed window-feed">
+        {% for item in latest %}{% include "_feed_row.html" %}{% else %}<li class="feed-empty">No queries in this period.</li>{% endfor %}
+      </ol>
+    </div>
+  </div>
+</section>

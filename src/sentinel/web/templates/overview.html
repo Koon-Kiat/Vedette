@@ -1,42 +1,45 @@
 {% extends "base.html" %}
+{% from "_tchart.html" import tchart with context %}
+{% block styles %}<link rel="stylesheet" href="/static/vendor/uPlot-1.6.32.min.css">{% endblock %}
+{% block scripts %}<script src="/static/vendor/uPlot-1.6.32.iife.min.js" defer></script>
+<script src="/static/charts.js" defer></script>{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>Overview</h1>
   <p class="lead">{% if alerts %}<span class="count">{{ alerts|length }}</span> high or critical finding{{ "" if alerts|length == 1 else "s" }} need{{ "s" if alerts|length == 1 else "" }} a decision.{% else %}Nothing high or critical is waiting for a decision.{% endif %} Last 24 hours, compared with the 7-day average.</p>
-  <p class="stamp">{{ now|local(tz) }}</p>
+  {% include "_live_line.html" %}
 </header>
 
 <section class="block" aria-labelledby="decide-title">
   <div class="block-head">
     <h2 id="decide-title">Needs a decision</h2>
-    <a href="/findings">All open findings{% if shell.open_findings %} ({{ shell.open_findings|num }}){% endif %}</a>
+    <a href="/findings">All open findings <span data-live="open-count-text">({{ shell.open_findings|num }})</span></a>
   </div>
+  <div id="decide" data-live="decide" hx-get="/partials/decide" hx-trigger="sentinel:findings from:body" hx-swap="innerHTML">
   {% with rows = alerts, empty_text = "No open high or critical findings." %}{% include "_findings_table.html" %}{% endwith %}
+  </div>
 </section>
 
-<div class="split">
-  <section class="block" aria-labelledby="chart-title-h">
-    <div class="block-head"><h2 id="chart-title-h">Queries per hour</h2></div>
-    <div class="panel chart-panel">{% include "_chart.html" %}</div>
+<section class="block" aria-labelledby="chart-title-h">
+  <div class="block-head"><h2 id="chart-title-h">Queries over time</h2></div>
+  <div class="panel chart-panel">
+    {% call tchart("overview", 86400, [(21600, "6h", "6 hours"), (86400, "24h", "24 hours"), (604800, "7d", "7 days"), (2592000, "30d", "30 days")], "Queries over time, allowed and blocked, with findings") %}{% include "_chart.html" %}{% endcall %}
+  </div>
+</section>
+
+<div class="split split-even">
+  <section class="block" aria-labelledby="now-title">
+    <div class="block-head"><h2 id="now-title">Right now</h2><a href="/live">Open the live feed</a></div>
+    <div class="panel feed-panel">
+      <ol class="feed feed-compact" data-live="feed" data-limit="8" aria-live="off">
+        {% for item in recent %}{% include "_feed_row.html" %}{% else %}<li class="feed-empty">Waiting for the first query.</li>{% endfor %}
+      </ol>
+    </div>
   </section>
 
-  <section class="block" aria-labelledby="today-title">
-    <div class="block-head"><h2 id="today-title">Today against the usual week</h2></div>
+  <section class="block" aria-labelledby="devices-title">
+    <div class="block-head"><h2 id="devices-title">New devices and findings</h2></div>
     <div class="panel">
-      <table class="compact">
-        <thead><tr><th>Profile</th><th class="num">Queries</th><th class="num">Usual queries</th><th class="num">Blocked</th><th class="num">Usual blocked</th></tr></thead>
-        <tbody>
-          {% for volume in digest.volumes %}
-          <tr>
-            <td>{{ volume.profile }}{% if volume.queries and not volume.device_attribution %}<span class="note">Device attribution unavailable</span>{% endif %}</td>
-            <td class="num strong">{{ volume.queries|num }}</td>
-            <td class="num">{{ volume.avg_queries|avg }}</td>
-            <td class="num strong">{{ "%.1f"|format(100.0 * volume.blocked / volume.queries if volume.queries else 0) }}%</td>
-            <td class="num">{% if volume.avg_blocked_pct is not none %}{{ "%.1f"|format(volume.avg_blocked_pct) }}%{% else %}n/a{% endif %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
       <h3>New devices{% if new_devices_avg is not none %} <span class="usual">usual {{ new_devices_avg|avg }} a day</span>{% endif %}</h3>
       {% if digest.new_devices %}
       <ul class="plain">
@@ -54,4 +57,24 @@
     </div>
   </section>
 </div>
+
+<section class="block" aria-labelledby="today-title">
+  <div class="block-head"><h2 id="today-title">Today against the usual week</h2></div>
+  <div class="panel">
+    <table class="compact">
+      <thead><tr><th>Profile</th><th class="num">Queries</th><th class="num">Usual queries</th><th class="num">Blocked</th><th class="num">Usual blocked</th></tr></thead>
+      <tbody>
+        {% for volume in digest.volumes %}
+        <tr>
+          <td>{{ volume.profile }}{% if volume.queries and not volume.device_attribution %}<span class="note">Device attribution unavailable</span>{% endif %}</td>
+          <td class="num strong">{{ volume.queries|num }}</td>
+          <td class="num">{{ volume.avg_queries|avg }}</td>
+          <td class="num strong">{{ "%.1f"|format(100.0 * volume.blocked / volume.queries if volume.queries else 0) }}%</td>
+          <td class="num">{% if volume.avg_blocked_pct is not none %}{{ "%.1f"|format(volume.avg_blocked_pct) }}%{% else %}n/a{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}

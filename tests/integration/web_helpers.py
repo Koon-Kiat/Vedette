@@ -4,6 +4,7 @@ import re
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 
@@ -34,6 +35,7 @@ def make_client(
     *,
     clock: Callable[[], datetime] | None = None,
     profiles: list[ProfileConfig] | None = None,
+    **live: Any,
 ) -> httpx.AsyncClient:
     context = DashboardContext(
         engine=store.engine,
@@ -44,6 +46,7 @@ def make_client(
         session_lifetime=timedelta(hours=12),
         allowed_hosts=["127.0.0.1", "localhost"],
         clock=clock or Clock(),
+        **live,
     )
     app = create_app(context)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE)

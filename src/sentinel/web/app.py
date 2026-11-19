@@ -12,9 +12,12 @@ Security, because the pages show attacker-controlled text:
 * only the configured host names are answered, which blocks DNS rebinding.
 """
 
+import asyncio
 import hmac
+import json
 import secrets
-from collections.abc import Awaitable, Callable, Sequence
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
@@ -24,7 +27,7 @@ import jinja2
 import structlog
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.datastructures import FormData, MutableHeaders
@@ -39,6 +42,8 @@ from sentinel.notify.render import prose, safe
 from sentinel.rules.model import RuleSpec, Severity
 from sentinel.storage.dashboard import DashboardQueries, FindingFilter
 from sentinel.storage.evaluation import EvalStore
+from sentinel.storage.live import LiveEvent, LiveQueries, LiveStats
+from sentinel.storage.series import SeriesFinding, SeriesQueries
 from sentinel.storage.store import StoredFinding
 from sentinel.storage.triage import DOMAIN_RULES, STATUSES, TriageStore
 from sentinel.web.auth import LOGIN_COOKIE, SESSION_COOKIE, LoginLimiter, Session, SessionStore
@@ -109,6 +114,13 @@ class DashboardContext:
     session_lifetime: timedelta
     allowed_hosts: Sequence[str]
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+    #: Live feed: how often to look for new events and to send counters, how
+    #: long one stream lasts before the browser reconnects, and how many
+    #: streams may be open at once.
+    live_poll_seconds: float = 1.0
+    live_stats_seconds: float = 5.0
+    live_max_seconds: float = 900.0
+    live_max_streams: int = 8
 
 
 class LoginRequired(Exception):
@@ -162,6 +174,8 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     sessions = SessionStore(ctx.session_lifetime, ctx.clock)
     limiter = LoginLimiter(ctx.clock)
     queries = DashboardQueries(ctx.engine, profiles=ctx.profiles)
+    live = LiveQueries(ctx.engine, profiles=ctx.profiles)
+    series = SeriesQueries(ctx.engine, profiles=ctx.profiles)
     triage = TriageStore(ctx.engine)
     labels = {profile.id: profile.label for profile in ctx.profiles}
     specs = {spec.id: spec for spec in ctx.specs}
@@ -274,13 +288,10 @@ def create_app(ctx: DashboardContext) -> FastAPI:
 
     # --- pages ------------------------------------------------------------------------
 
-    @app.get("/")
-    async def overview(session: SessionDep) -> HTMLResponse:
-        now = ctx.clock()
+    async def overview_chart(now: datetime, alerts: Sequence[Any]) -> Any:
         digest = await DigestBuilder(
             ctx.engine, profiles=ctx.profiles, tz=ctx.tz, specs=ctx.specs
         ).build(now)
-        alerts = await queries.open_alerts()
         averages = [v.avg_queries for v in digest.volumes if v.avg_queries is not None]
         usual = sum(averages) / 24 if averages else None
         chart = hourly_chart(
@@ -289,6 +300,13 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             usual=usual,
             markers=[(row.finding.id, row.finding.last_ts) for row in alerts],
         )
+        return digest, chart
+
+    @app.get("/")
+    async def overview(session: SessionDep) -> HTMLResponse:
+        now = ctx.clock()
+        alerts = await queries.open_alerts()
+        digest, chart = await overview_chart(now, alerts)
         return await page(
             "overview.html",
             nav="overview",
@@ -298,8 +316,169 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             levels=[level.value for level in sorted(Severity, key=lambda s: -s.rank)],
             chart=chart,
             alerts=alerts,
+            recent=[feed_item(item) for item in await live.recent(8)],
+            stats=await live.stats(now),
             new_devices_avg=await queries.new_devices_per_day(now),
             next_url="/",
+        )
+
+    @app.get("/partials/decide")
+    async def decide_partial(session: SessionDep) -> HTMLResponse:
+        return render(
+            "_findings_table.html",
+            rows=await queries.open_alerts(),
+            csrf=session.csrf,
+            next_url="/",
+            empty_text="No open high or critical findings.",
+        )
+
+    # --- interactive charts -----------------------------------------------------------
+
+    def span_of(request: Request, *, default: timedelta) -> tuple[datetime, datetime]:
+        now = ctx.clock()
+        params = request.query_params
+        try:
+            end = datetime.fromtimestamp(int(params["to"]), UTC) if params.get("to") else now
+            start = (
+                datetime.fromtimestamp(int(params["from"]), UTC)
+                if params.get("from")
+                else end - default
+            )
+        except ValueError, OverflowError, OSError:
+            raise HTTPException(422, "A time value was not valid.") from None
+        return SeriesQueries.clamp(start, end, now)
+
+    def finding_item(item: SeriesFinding) -> dict[str, Any]:
+        about = labels.get(item.profile_id, "") if item.about == item.profile_id else item.about
+        return {
+            "id": item.id,
+            "t": item.t,
+            "priority": item.priority,
+            "rule": item.rule,
+            "about": safe(about, limit=120),
+            "status": item.status,
+        }
+
+    @app.get("/api/series")
+    async def series_api(session: SessionDep, request: Request) -> Response:
+        start, end = span_of(request, default=timedelta(hours=24))
+        result = await series.series(start, end)
+        body = {
+            "start": result.start,
+            "end": result.end,
+            "step": result.step,
+            "t": result.t,
+            "allowed": result.allowed,
+            "blocked": result.blocked,
+            "usual": result.usual,
+            "findings": [finding_item(item) for item in result.findings],
+            "now": int(ctx.clock().timestamp()),
+        }
+        return Response(
+            json.dumps(body, ensure_ascii=True).replace("<", "\\u003c"),
+            media_type="application/json",
+        )
+
+    @app.get("/partials/window")
+    async def window_partial(session: SessionDep, request: Request) -> HTMLResponse:
+        start, end = span_of(request, default=timedelta(hours=1))
+        window = await series.window(start, end)
+        return render(
+            "_window.html",
+            window=window,
+            found=[finding_item(item) for item in window.findings],
+            latest=[feed_item(item) for item in window.latest],
+        )
+
+    # --- live feed --------------------------------------------------------------------
+
+    def feed_item(item: LiveEvent) -> dict[str, Any]:
+        """One event as the browser receives it: every string cleaned and defanged."""
+        return {
+            "id": item.event_id[:64],
+            "t": int(item.ts.timestamp()),
+            "time": f"{item.ts.astimezone(ctx.tz):%H:%M:%S}",
+            "profile": labels.get(item.profile_id, item.profile_id),
+            "device": safe(item.device, limit=64) if item.device else None,
+            "domain": safe(item.fqdn, limit=255),
+            "status": "blocked" if item.status == "blocked" else "allowed",
+            "reason": safe(item.reason, limit=80) if item.reason else None,
+        }
+
+    def stats_item(stats: LiveStats, now: datetime) -> dict[str, Any]:
+        age = (now - stats.newest_event).total_seconds() if stats.newest_event else None
+        return {
+            "last_minute": stats.last_minute,
+            "blocked_last_minute": stats.blocked_last_minute,
+            "per_minute": stats.per_minute,
+            "open_findings": stats.open_findings,
+            "newest_finding_id": stats.newest_finding_id,
+            "checks_ok": stats.checks_ok,
+            "checks_total": stats.checks_total,
+            "newest_event": _since(stats.newest_event, now),
+            "newest_event_age_s": None if age is None else max(int(age), 0),
+        }
+
+    @app.get("/live")
+    async def live_page(session: SessionDep) -> HTMLResponse:
+        now = ctx.clock()
+        return await page(
+            "live.html",
+            nav="live",
+            title="Live",
+            csrf=session.csrf,
+            recent=[feed_item(item) for item in await live.recent(60)],
+            stats=await live.stats(now),
+        )
+
+    streams = {"open": 0}
+
+    @app.get("/live/stream")
+    async def live_stream(session: SessionDep) -> Response:
+        if streams["open"] >= ctx.live_max_streams:
+            raise HTTPException(429, "Too many live views are open. Close one and reload.")
+
+        def message(event: str, data: Any) -> bytes:
+            # "<" is escaped too, so even a raw view of the stream shows no markup.
+            body = json.dumps(data, ensure_ascii=True).replace("<", "\\u003c")
+            return f"event: {event}\ndata: {body}\n\n".encode()
+
+        async def stream() -> AsyncIterator[bytes]:
+            streams["open"] += 1
+            try:
+                started = time.monotonic()
+                cursor = live.start(ctx.clock())
+                last_stats = 0.0
+                last_finding: int | None = None
+                last_open: int | None = None
+                yield b"retry: 3000\n\n"
+                # Starlette cancels this generator when the browser disconnects.
+                while time.monotonic() - started < ctx.live_max_seconds:
+                    if sessions.get(session.id) is None:  # logged out or expired
+                        yield message("bye", {"reason": "session ended"})
+                        break
+                    fresh = await live.poll(cursor)
+                    if fresh:
+                        yield message("queries", [feed_item(item) for item in fresh])
+                    if time.monotonic() - last_stats >= ctx.live_stats_seconds:
+                        last_stats = time.monotonic()
+                        now = ctx.clock()
+                        stats = await live.stats(now)
+                        yield message("stats", stats_item(stats, now))
+                        if last_open is not None and (
+                            stats.open_findings != last_open
+                            or stats.newest_finding_id != last_finding
+                        ):
+                            yield message("findings", {"open": stats.open_findings})
+                        last_open, last_finding = stats.open_findings, stats.newest_finding_id
+                    await asyncio.sleep(ctx.live_poll_seconds)
+            finally:
+                streams["open"] -= 1
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )
 
     def parse_filter(request: Request) -> FindingFilter:

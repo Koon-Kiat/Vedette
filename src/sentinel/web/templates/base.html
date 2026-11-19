@@ -4,25 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#08121c">
 <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true, "historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
 <title>{{ title }} · NextDNS Sentinel</title>
+<link rel="preload" href="/static/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
+{% block styles %}{% endblock %}
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
+{% if csrf is defined %}<script src="/static/live.js" defer></script>{% endif %}
+{% block scripts %}{% endblock %}
 </head>
 {% if csrf is defined %}
 <body class="app" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
 <header class="rail">
-  <a class="brand" href="/">NextDNS Sentinel</a>
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>NextDNS <strong>Sentinel</strong></span></a>
   <nav aria-label="Pages">
-    {% for key, label, href in [("overview", "Overview", "/"), ("findings", "Findings", "/findings"), ("domains", "Domains", "/domains"), ("devices", "Devices", "/devices"), ("digests", "Digests", "/digests"), ("health", "Health", "/health"), ("evaluation", "Evaluation", "/evaluation")] %}
-    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}{% if key == "findings" and shell is defined and shell.open_findings %} <span class="count" title="{{ shell.open_findings }} open">{{ shell.open_findings|num }}</span>{% endif %}</a>
+    {% for key, label, href in [("overview", "Overview", "/"), ("live", "Live", "/live"), ("findings", "Findings", "/findings"), ("domains", "Domains", "/domains"), ("devices", "Devices", "/devices"), ("digests", "Digests", "/digests"), ("health", "Health", "/health"), ("evaluation", "Evaluation", "/evaluation")] %}
+    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}{% if key == "findings" and shell is defined %} <span class="count{% if not shell.open_findings %} count-zero{% endif %}" data-live="open-count" title="Open findings">{{ shell.open_findings|num }}</span>{% elif key == "live" %} <span class="live-dot" data-live="dot" aria-hidden="true"></span>{% endif %}</a>
     {% endfor %}
   </nav>
   {% if shell is defined %}
-  <a class="pipeline{% if shell.checks_ok < shell.checks_total %} pipeline-problem{% endif %}" href="/health">
-    <span class="pipeline-state">{% if not shell.checks_total %}No health checks yet{% elif shell.checks_ok == shell.checks_total %}All {{ shell.checks_total }} checks OK{% else %}{{ shell.checks_total - shell.checks_ok }} of {{ shell.checks_total }} checks failing{% endif %}</span>
-    <span class="pipeline-detail">Newest event {{ shell.newest_event|since(now) }}</span>
+  <a class="pipeline{% if shell.checks_ok < shell.checks_total %} pipeline-problem{% endif %}" href="/health" data-live="pipeline">
+    <span class="pipeline-state" data-live="pipeline-state">{% if not shell.checks_total %}No health checks yet{% elif shell.checks_ok == shell.checks_total %}All {{ shell.checks_total }} checks OK{% else %}{{ shell.checks_total - shell.checks_ok }} of {{ shell.checks_total }} checks failing{% endif %}</span>
+    <span class="pipeline-detail">Newest event <span data-live="newest">{{ shell.newest_event|since(now) }}</span></span>
+    <span class="pipeline-detail connection" data-live="connection">Live updates start when the page has loaded.</span>
   </a>
   {% endif %}
   <form method="post" action="/logout" class="logout">

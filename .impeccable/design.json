@@ -1,91 +1,137 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-19T07:16:11Z",
+  "generatedAt": "2026-11-19T14:00:00Z",
   "title": "Design System: NextDNS Sentinel",
   "extensions": {
     "colorMeta": {
-      "deep": { "role": "primary", "displayName": "Deep-Water Navy", "canonical": "#0f2a44", "night": "#0c2236", "cssVar": "--deep", "tonalRamp": ["#07141f", "#0f2a44", "#17395b", "#26496b", "#4a6d8f", "#7f9cb8", "#b3c8db", "#e6eef5"] },
-      "deep-2": { "role": "primary", "displayName": "Navy Shoal", "canonical": "#17395b", "night": "#163452", "cssVar": "--deep-2" },
-      "deep-3": { "role": "primary", "displayName": "Navy Sounding Line", "canonical": "#26496b", "night": "#224466", "cssVar": "--deep-3" },
-      "on-deep": { "role": "primary", "displayName": "Rail Ink", "canonical": "#ffffff", "cssVar": "--on-deep" },
-      "on-deep-2": { "role": "primary", "displayName": "Rail Ink, Second", "canonical": "#b3c8db", "night": "#a3b8cb", "cssVar": "--on-deep-2" },
-      "chart-white": { "role": "neutral", "displayName": "Chart White", "canonical": "#fbfcfd", "night": "#0b141c", "cssVar": "--n0 (--ground)", "tonalRamp": ["#131a21", "#4b5b6b", "#b3c1cd", "#d4dde5", "#e7edf2", "#f3f6f9", "#fbfcfd", "#ffffff"] },
-      "panel": { "role": "neutral", "displayName": "Panel White", "canonical": "#ffffff", "night": "#0f1a24", "cssVar": "--panel" },
-      "n1-wash": { "role": "neutral", "displayName": "Wash", "canonical": "#f3f6f9", "night": "#111d28", "cssVar": "--n1 (--hover)" },
-      "n2-soft-rule": { "role": "neutral", "displayName": "Soft Rule", "canonical": "#e7edf2", "night": "#182633", "cssVar": "--n2 (--rule-soft)" },
-      "n3-rule": { "role": "neutral", "displayName": "Rule", "canonical": "#d4dde5", "night": "#233545", "cssVar": "--n3 (--rule)" },
-      "n4-control": { "role": "neutral", "displayName": "Control Line", "canonical": "#b3c1cd", "night": "#3f5568", "cssVar": "--n4 (--control)" },
-      "n7-ink-2": { "role": "neutral", "displayName": "Second Ink", "canonical": "#4b5b6b", "night": "#a3b4c4", "cssVar": "--n7 (--ink-2)" },
-      "n10-ink": { "role": "neutral", "displayName": "Ink", "canonical": "#131a21", "night": "#e2eaf1", "cssVar": "--n10 (--ink)" },
-      "depth-tint": { "role": "tertiary", "displayName": "Depth Tint", "canonical": "#cfe4f2", "night": "#1b3b56", "cssVar": "--tint", "tonalRamp": ["#0e2a40", "#1b3b56", "#3d6585", "#6f97b8", "#a3c6e0", "#cfe4f2", "#e6f1f9", "#f4f9fc"] },
-      "depth-tint-2": { "role": "tertiary", "displayName": "Shallow Tint", "canonical": "#e6f1f9", "night": "#142d42", "cssVar": "--tint-2" },
-      "blocked-blue": { "role": "tertiary", "displayName": "Blocked Blue", "canonical": "#7f9cb8", "night": "#4f6f8d", "cssVar": "--blocked" },
-      "correction-magenta": { "role": "secondary", "displayName": "Correction Magenta", "canonical": "#b0177a", "night": "#ea6fbd", "cssVar": "--magenta", "onColor": { "light": "#ffffff", "night": "#07111a" }, "tonalRamp": ["#3d0829", "#6b0f4a", "#b0177a", "#cf3d9b", "#ea6fbd", "#f3a5d6", "#f9d3ea", "#fdf0f7"] },
-      "buoy-red": { "role": "severity", "displayName": "Buoy Red (critical)", "canonical": "#c8102e", "nightInk": "#ff6b7d", "cssVar": "--critical (ink); fill fixed", "tonalRamp": ["#4a0612", "#8a0b20", "#c8102e", "#e03a52", "#ff6b7d", "#ff9aa6", "#ffccd2", "#fff0f2"] },
-      "buoy-orange": { "role": "severity", "displayName": "Buoy Orange (high)", "canonical": "#b84a0b", "nightInk": "#f39a5b", "cssVar": "--high (ink); fill fixed", "tonalRamp": ["#3f1903", "#7a3107", "#b84a0b", "#d96a26", "#f39a5b", "#f7bd92", "#fbdcc5", "#fef3eb"] },
-      "buoy-amber": { "role": "severity", "displayName": "Buoy Amber (medium)", "canonical": "#e3a400", "nightInk": "#e3bd4d", "cssVar": "fill fixed; ink is buoy-amber-ink", "onColor": "#131a21", "tonalRamp": ["#3a2a00", "#6b5000", "#8a6a00", "#b88a00", "#e3a400", "#e3bd4d", "#f3dc94", "#fdf6df"] },
-      "buoy-amber-ink": { "role": "severity", "displayName": "Amber Ink", "canonical": "#8a6a00", "night": "#e3bd4d", "cssVar": "--medium" },
-      "buoy-blue": { "role": "severity", "displayName": "Buoy Blue (low)", "canonical": "#2f6a9e", "nightInk": "#7db4e6", "cssVar": "--low (ink); fill fixed", "tonalRamp": ["#0c2236", "#1c4468", "#2f6a9e", "#4f8bc2", "#7db4e6", "#a9cdea", "#d3e6f6", "#eef5fb"] },
-      "buoy-grey": { "role": "severity", "displayName": "Buoy Grey (info)", "canonical": "#5d6b78", "nightInk": "#a3b4c4", "cssVar": "--info (ink); fill fixed", "tonalRamp": ["#1b2229", "#3a4651", "#5d6b78", "#7d8a96", "#a3b4c4", "#c3cfd9", "#e0e7ed", "#f4f7f9"] },
-      "ok-green": { "role": "status", "displayName": "Pass Green", "canonical": "#2c7a4b", "night": "#6fcf97", "cssVar": "--ok" },
-      "ok-on-deep": { "role": "status", "displayName": "Rail Green", "canonical": "#7fd6a4", "cssVar": "--ok-on-deep" },
-      "problem-on-deep": { "role": "status", "displayName": "Rail Coral", "canonical": "#ff9aa6", "cssVar": "--problem-on-deep" }
+      "ground": { "role": "neutral", "displayName": "Night Ground", "canonical": "#0a131d", "cssVar": "--ground", "tonalRamp": ["#070e16", "#0a131d", "#0f1b28", "#142334", "#1a2c40", "#2a4058", "#7c93ab", "#e7eef6"] },
+      "rail": { "role": "neutral", "displayName": "Rail Dark", "canonical": "#070e16", "cssVar": "--rail" },
+      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#0f1b28", "cssVar": "--surface" },
+      "surface-2": { "role": "neutral", "displayName": "Surface 2", "canonical": "#142334", "cssVar": "--surface-2" },
+      "surface-3": { "role": "neutral", "displayName": "Surface 3", "canonical": "#1a2c40", "cssVar": "--surface-3" },
+      "line": { "role": "neutral", "displayName": "Line", "canonical": "#1c2c3d", "cssVar": "--line" },
+      "line-strong": { "role": "neutral", "displayName": "Strong Line", "canonical": "#2a4058", "cssVar": "--line-strong" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#e7eef6", "cssVar": "--ink" },
+      "ink-2": { "role": "neutral", "displayName": "Second Ink", "canonical": "#a3b6c9", "cssVar": "--ink-2" },
+      "ink-3": { "role": "neutral", "displayName": "Third Ink", "canonical": "#7c93ab", "cssVar": "--ink-3" },
+      "tint": { "role": "tertiary", "displayName": "Depth Tint", "canonical": "#183650", "cssVar": "--tint", "tonalRamp": ["#081520", "#11273b", "#183650", "#2a5276", "#4f86c0", "#8ec3ff", "#c4def6", "#eef5fb"] },
+      "tint-2": { "role": "tertiary", "displayName": "Shallow Tint", "canonical": "#11273b", "cssVar": "--tint-2" },
+      "allowed": { "role": "tertiary", "displayName": "Allowed Blue", "canonical": "#4f86c0", "cssVar": "--allowed" },
+      "blocked": { "role": "tertiary", "displayName": "Blocked Slate", "canonical": "#8aa2bb", "cssVar": "--blocked" },
+      "magenta": { "role": "secondary", "displayName": "Correction Magenta", "canonical": "#ee6dbf", "cssVar": "--magenta", "onColor": "#160611", "tonalRamp": ["#160611", "#3a1730", "#6b1f55", "#a8388a", "#ee6dbf", "#f39bd3", "#f8c8e6", "#fdeef7"] },
+      "magenta-wash": { "role": "secondary", "displayName": "Magenta Wash", "canonical": "#3a1730", "cssVar": "--magenta-wash" },
+      "on-magenta": { "role": "secondary", "displayName": "On Magenta", "canonical": "#160611", "cssVar": "--on-magenta" },
+      "primary": { "role": "primary", "displayName": "Pale Chart Blue", "canonical": "#a9cdea", "cssVar": "--primary (also --link, --focus)", "onColor": "#07111b", "tonalRamp": ["#0c2236", "#1c4468", "#2f6a9e", "#4f8bc2", "#7db4e6", "#a9cdea", "#d3e6f6", "#eef5fb"] },
+      "primary-hi": { "role": "primary", "displayName": "Pale Chart Blue, Lit", "canonical": "#d3e6f6", "cssVar": "--primary-hi" },
+      "on-primary": { "role": "primary", "displayName": "On Primary", "canonical": "#07111b", "cssVar": "--on-primary" },
+      "span": { "role": "primary", "displayName": "Span Blue", "canonical": "#a9cdea", "cssVar": "--span" },
+      "ok": { "role": "status", "displayName": "Pass Green", "canonical": "#5fd39a", "cssVar": "--ok" },
+      "warn": { "role": "status", "displayName": "Signal Amber", "canonical": "#f5c95c", "cssVar": "--warn" },
+      "problem": { "role": "status", "displayName": "Coral", "canonical": "#ff8593", "cssVar": "--problem" },
+      "critical": { "role": "severity", "displayName": "Buoy Red (critical)", "canonical": "#ff8593", "cssVar": "--critical", "tonalRamp": ["#3a1522", "#5a2032", "#8a2c44", "#c4475f", "#ff8593", "#ffa9b3", "#ffccd2", "#fff0f2"] },
+      "critical-bg": { "role": "severity", "displayName": "Buoy Red Wash", "canonical": "#3a1522", "cssVar": "--critical-bg" },
+      "critical-line": { "role": "severity", "displayName": "Buoy Red Line", "canonical": "#5a2032", "cssVar": "--critical-line" },
+      "high": { "role": "severity", "displayName": "Buoy Orange (high)", "canonical": "#ffad7a", "cssVar": "--high", "tonalRamp": ["#3a2216", "#5a3420", "#8a4f2e", "#c4744a", "#ffad7a", "#ffc49e", "#ffdcc5", "#fff3eb"] },
+      "high-bg": { "role": "severity", "displayName": "Buoy Orange Wash", "canonical": "#3a2216", "cssVar": "--high-bg" },
+      "high-line": { "role": "severity", "displayName": "Buoy Orange Line", "canonical": "#5a3420", "cssVar": "--high-line" },
+      "medium": { "role": "severity", "displayName": "Buoy Amber (medium)", "canonical": "#f5c95c", "cssVar": "--medium", "tonalRamp": ["#33290f", "#4f3f17", "#7a6224", "#b8933a", "#f5c95c", "#f8d886", "#fbe8b6", "#fdf6df"] },
+      "medium-bg": { "role": "severity", "displayName": "Buoy Amber Wash", "canonical": "#33290f", "cssVar": "--medium-bg" },
+      "medium-line": { "role": "severity", "displayName": "Buoy Amber Line", "canonical": "#4f3f17", "cssVar": "--medium-line" },
+      "low": { "role": "severity", "displayName": "Buoy Blue (low)", "canonical": "#8ec3ff", "cssVar": "--low", "tonalRamp": ["#14283f", "#1f3d5e", "#2f5f8f", "#5a92d0", "#8ec3ff", "#b0d5ff", "#d3e8ff", "#eef6ff"] },
+      "low-bg": { "role": "severity", "displayName": "Buoy Blue Wash", "canonical": "#14283f", "cssVar": "--low-bg" },
+      "low-line": { "role": "severity", "displayName": "Buoy Blue Line", "canonical": "#1f3d5e", "cssVar": "--low-line" },
+      "info": { "role": "severity", "displayName": "Buoy Grey (info)", "canonical": "#b3c2d1", "cssVar": "--info", "tonalRamp": ["#1a2533", "#2a394b", "#4a5b6e", "#7d8fa2", "#b3c2d1", "#c8d4df", "#dfe6ed", "#f4f7f9"] },
+      "info-bg": { "role": "severity", "displayName": "Buoy Grey Wash", "canonical": "#1a2533", "cssVar": "--info-bg" },
+      "info-line": { "role": "severity", "displayName": "Buoy Grey Line", "canonical": "#2a394b", "cssVar": "--info-line" }
     },
-    "nightChart": {
-      "trigger": "@media (prefers-color-scheme: dark)",
-      "description": "The same world under a dimmed bridge: neutral ramp inverted, rail darkened, magenta and severity inks lightened, and the primary action role becomes pale chart blue (#a9cdea) with dark ink (#07111a). Filled severity badges keep their light-mode buoy fills.",
-      "roleOverrides": { "--primary": "#a9cdea", "--primary-hover": "#c4ddf1", "--on-primary": "#07111a", "--span": "#a9cdea", "--link": "#a9cdea", "--focus": "#a9cdea", "--allowed": "#8fb8da" }
+    "colorScheme": {
+      "value": "dark",
+      "description": "Night chart only. :root declares color-scheme: dark and the page sets meta color-scheme dark; there is no light mode and no prefers-color-scheme switch."
     },
+    "fonts": [
+      { "family": "Mona Sans", "source": "/static/fonts/mona-sans-latin-standard-normal.woff2", "format": "woff2-variations", "weight": "200 900", "stretch": "75% 125%", "style": "normal", "role": "The product's voice: titles, headings, body, labels, buttons, chart ticks and marker numbers." },
+      { "family": "JetBrains Mono", "source": "/static/fonts/jetbrains-mono-latin-wght-normal.woff2", "format": "woff2-variations", "weight": "100 800", "style": "normal", "role": "Data: feed times, evidence keys and values, code, the digest text." },
+      { "family": "JetBrains Mono", "source": "/static/fonts/jetbrains-mono-latin-wght-italic.woff2", "format": "woff2-variations", "weight": "100 800", "style": "italic", "role": "Every name from outside: domains (defanged) and, through .device, device names." }
+    ],
     "typographyMeta": {
-      "title": { "displayName": "Title (24)", "purpose": "Page titles and the login heading; one per page." },
-      "headline": { "displayName": "Headline (18)", "purpose": "Section headings above blocks and inside panels." },
+      "title": { "displayName": "Title (28)", "purpose": "Page titles and the login heading; one per page.", "fontStretch": "112%" },
+      "figure": { "displayName": "Figure (28)", "purpose": "Live figures beside the Live chart.", "fontStretch": "110%" },
+      "headline": { "displayName": "Headline (18)", "purpose": "Section headings above blocks and inside panels; the enlarged chart's title.", "fontStretch": "106%" },
+      "subhead": { "displayName": "Sub-heading (16)", "purpose": "Headings inside panels and the period list; side-panel headings on a finding's page." },
       "lead": { "displayName": "Lead (16)", "purpose": "The sentence under a title, a finding's summary, the current decision." },
-      "subhead": { "displayName": "Sub-heading (16)", "purpose": "Headings inside panels; side-panel headings on a finding's page." },
-      "body": { "displayName": "Body (14)", "purpose": "Tables, prose, controls, digest text." },
-      "label": { "displayName": "Label (12)", "purpose": "Table headers, filter labels, fact terms, row button text, counts; at 400, meta and chart ticks." },
-      "outside-domain": { "displayName": "Outside Domain (sloped mono)", "purpose": "Every domain, set italic, defanged, escaped and never a link.", "fontStyle": "italic" },
-      "record-mono": { "displayName": "Record Mono (upright)", "purpose": "Evidence keys and values, code, the product's own identifiers." }
+      "body": { "displayName": "Body (14)", "purpose": "Tables, prose, controls, the chart readout. Weight 420 for light-on-dark." },
+      "label": { "displayName": "Label (12)", "purpose": "Table headers, filter and fact labels, the live pill; buttons at 620; meta at 400 to 450." },
+      "data-mono": { "displayName": "Data Mono", "purpose": "Feed times at 12px; evidence, code and digest text at body size." },
+      "outside-name": { "displayName": "Outside Name (mono italic)", "purpose": "Every domain, set italic, defanged, escaped and never a link.", "fontStyle": "italic" }
     },
     "shadows": [
-      { "name": "login-lift", "value": "0 18px 40px rgb(3 10 18 / 0.35)", "purpose": "The single card on the bare navy ground (login, errors)." },
-      { "name": "outline-stroke", "value": "inset 0 0 0 1px currentColor", "purpose": "Outline round a decided finding's priority badge; not depth." }
+      { "name": "panel-lift", "value": "0 12px 32px -20px rgb(0 0 0 / 0.65)", "purpose": "Panels and table wrappers on the ground." },
+      { "name": "login-lift", "value": "0 24px 60px -24px rgb(0 0 0 / 0.8)", "purpose": "The single card on the bare rail ground (login, errors)." },
+      { "name": "dialog-lift", "value": "0 40px 100px -30px rgb(0 0 0 / 0.85)", "purpose": "The enlarged chart dialog." },
+      { "name": "dialog-backdrop", "value": "rgb(3 8 13 / 0.76)", "purpose": "Backdrop behind the enlarged chart." },
+      { "name": "hairline-stroke", "value": "inset 0 0 0 1px var(--line-strong)", "purpose": "Stroke round the decided-finding legend key; not depth." }
     ],
     "motion": [
-      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "The correction reveal." },
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "cssVar": "--ease-out", "purpose": "Default easing for every settle: correction reveal, fresh wash, ring, tick, dialog, minute bars." },
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "A new feed row opening its own height." },
+      { "name": "colour-change", "value": "120ms", "purpose": "Background, border, colour and press transitions on buttons, inputs, links, rail links, rows and segments." },
+      { "name": "feed-open", "value": "340ms cubic-bezier(0.4, 0, 0.2, 1); max-height 0 and zero padding/border to var(--row-max)", "purpose": "A new feed row opens its own space so the rows below glide down." },
+      { "name": "feed-appear", "value": "560ms ease-out; from opacity 0, translateY(-4px), surface-3 background", "purpose": "A new feed row fades in from a lit background while it opens." },
+      { "name": "feed-trim", "value": "600ms delay (live.js SETTLE_MS)", "purpose": "Rows past the feed's limit are removed once the new rows have opened." },
+      { "name": "fresh", "value": "2400ms ease-out; magenta-wash held 0 to 25%, then transparent", "purpose": "A finding newly arrived in the Needs a decision table." },
       { "name": "correction-reveal", "value": "clip-path inset(0 100% 0 0) to inset(0 0 0 0), 520ms ease-out", "purpose": "A decision is inked left to right onto the row htmx just swapped in." },
-      { "name": "colour-change", "value": "120ms", "purpose": "Background, border and colour changes on buttons and rail links." },
-      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce) { transition: none }", "purpose": "All transitions off; the correction simply appears." }
+      { "name": "ring", "value": "900ms ease-out; 2px ok ring from scale 0.5 opacity 0.8 to scale 1.6 opacity 0", "purpose": "The live dot pings on arriving queries, at most every 4000ms (live.js PING_MS) and never while paused." },
+      { "name": "live-dot", "value": "background-color 300ms", "purpose": "Live dot changes between open, connecting and paused." },
+      { "name": "tick", "value": "700ms ease-out; colour from primary-hi", "purpose": "A changed live figure flashes once." },
+      { "name": "minute-bars", "value": "y and height 600ms ease-out", "purpose": "The server-drawn per-minute bars grow to their new value." },
+      { "name": "dialog-in", "value": "220ms ease-out; from opacity 0, translateY(8px) scale(0.985)", "purpose": "The enlarged chart dialog rising into place." },
+      { "name": "chart-loading", "value": "canvas opacity 0.6 after a 150ms delay, 160ms", "purpose": "A chart refetching a finer series dims gently; the period list dims the same way while it loads." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce): transitions 0.01ms; no ring; feed rows fade in over 200ms linear (feed-in-calm); correction shown at once; no dialog-in", "purpose": "Every animation has a still form." }
     ],
     "breakpoints": [
-      { "name": "collapse-columns", "value": "1100px", "purpose": "Split and detail layouts become one column." },
-      { "name": "rail-to-topbar", "value": "860px", "purpose": "Rail becomes a top bar with a scrolling, fading nav row." },
-      { "name": "notice-cards", "value": "640px", "purpose": "Findings rows become stacked notice cards." }
-    ]
+      { "name": "ultrawide", "value": "min-width 2240px", "purpose": "Overview becomes a 2:1 board (decision table and chart left; Right now, new devices and today's volumes right); Live sets feed and chart side by side; Domains shows four tables in a row; a finding's main column splits in two beside a 400px side column." },
+      { "name": "wide", "value": "min-width 1800px", "purpose": "The findings table gives its spare width to the About column (38%)." },
+      { "name": "main-cap", "value": "max-width 3200px", "purpose": "Main fills a 3440px ultrawide; side padding clamp(36px, 2.4vw, 64px)." },
+      { "name": "laptop-fold", "value": "641px to 1180px", "purpose": "Findings table folds its wide columns into a meta line under the domain; rail 212px; main side padding 28px." },
+      { "name": "collapse-columns", "value": "1180px", "purpose": "The Overview's side panels and the finding detail become one column; the side column stops sticking." },
+      { "name": "rail-to-topbar", "value": "860px", "purpose": "Rail becomes a top bar with a scrolling, fading nav row; feed rows put profile and device on a second line." },
+      { "name": "phone", "value": "640px", "purpose": "Findings rows become stacked notice cards; charts 220px (180px short); the chart dialog fills the screen less 8px." },
+      { "name": "chart-container", "value": "@container max-width 760px", "purpose": "The period list under a chart becomes one column." },
+      { "name": "no-hover", "value": "@media (hover: none)", "purpose": "Chart hint switches to touch wording." }
+    ],
+    "charts": {
+      "library": "uPlot 1.6.32, vendored under /static/vendor/",
+      "palette": "Read from CSS custom properties at mount: --allowed, --blocked, --primary (current bar), --low (usual line), --tint (usual band at 0.55), --surface (halo), --magenta and --on-magenta (open markers), --surface-3, --line-strong and --ink-2 (decided markers), --ink-3 (axis text), --line (grid).",
+      "markers": "Pills 18px tall, radius half the height, 12px/700 Mona Sans four-digit number, 14px horizontal padding; open findings magenta with a 50% magenta drop line, decided findings surface-3 with a strong-line stroke and ink-2 text.",
+      "interaction": "Range buttons; drag to zoom; Ctrl + scroll zoom; Shift + scroll or Shift + drag pan; double-click back to live; hover readout; click a bar to list that period, a marker to open its finding (or list the period when it stands for several); keyboard arrows, Shift + arrows, Home/End, + and -, 0, Enter/Space; Enlarge moves the chart into a modal dialog.",
+      "density": "About one bar per 6px of plot width, 60 to 480 bars (the server clamps to 24 to 480); a resize that changes this by more than a fifth fetches again.",
+      "fallback": "The server-drawn SVG chart stays in place until the series loads and whenever JavaScript is off."
+    }
   },
   "components": [
     {
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one filled action in a row: Acknowledge on an open finding, and login.",
+      "description": "The one filled action in a row: Acknowledge on an open finding, Pause on the Live feed, log in.",
       "html": "<button class=\"ds-btn ds-btn-primary\">Acknowledge</button>",
-      "css": ".ds-btn { padding: 7px 12px; border: 1px solid var(--control, #b3c1cd); border-radius: 4px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 600 12px/1 var(--sans, \"Segoe UI\", system-ui, sans-serif); cursor: pointer; transition: background-color 120ms, border-color 120ms, color 120ms; } .ds-btn-primary { border-color: var(--primary, #0f2a44); background: var(--primary, #0f2a44); color: var(--on-primary, #ffffff); } .ds-btn-primary:hover { border-color: var(--primary-hover, #17395b); background: var(--primary-hover, #17395b); } .ds-btn:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 2px; } .ds-btn:active { transform: translateY(1px); }"
+      "css": ".ds-btn { padding: 8px 13px; border: 1px solid var(--line-strong, #2a4058); border-radius: 8px; background: var(--surface-2, #142334); color: var(--ink, #e7eef6); font: 620 12px/1 var(--sans, \"Mona Sans\", system-ui, sans-serif); letter-spacing: 0.01em; cursor: pointer; transition: background-color 120ms, border-color 120ms, color 120ms, transform 120ms; } .ds-btn-primary { border-color: var(--primary, #a9cdea); background: var(--primary, #a9cdea); color: var(--on-primary, #07111b); } .ds-btn-primary:hover { border-color: var(--primary-hi, #d3e6f6); background: var(--primary-hi, #d3e6f6); } .ds-btn:focus-visible { outline: 2px solid var(--focus, #a9cdea); outline-offset: 2px; } .ds-btn:active { transform: translateY(1px); }"
     },
     {
       "name": "Default Button",
       "kind": "button",
       "refersTo": "button",
-      "description": "Bordered secondary action, such as Mark benign.",
+      "description": "Bordered secondary action, such as Mark benign or Enlarge.",
       "html": "<button class=\"ds-btn-default\">Mark benign</button>",
-      "css": ".ds-btn-default { padding: 7px 12px; border: 1px solid var(--control, #b3c1cd); border-radius: 4px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 600 12px/1 var(--sans, \"Segoe UI\", system-ui, sans-serif); cursor: pointer; transition: border-color 120ms; } .ds-btn-default:hover { border-color: var(--ink-2, #4b5b6b); } .ds-btn-default:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 2px; } .ds-btn-default:active { transform: translateY(1px); }"
+      "css": ".ds-btn-default { padding: 8px 13px; border: 1px solid var(--line-strong, #2a4058); border-radius: 8px; background: var(--surface-2, #142334); color: var(--ink, #e7eef6); font: 620 12px/1 var(--sans, \"Mona Sans\", system-ui, sans-serif); letter-spacing: 0.01em; cursor: pointer; transition: background-color 120ms, border-color 120ms, transform 120ms; } .ds-btn-default:hover { border-color: var(--ink-3, #7c93ab); background: var(--surface-3, #1a2c40); } .ds-btn-default:focus-visible { outline: 2px solid var(--focus, #a9cdea); outline-offset: 2px; } .ds-btn-default:active { transform: translateY(1px); }"
     },
     {
       "name": "Quiet Button",
       "kind": "button",
       "refersTo": "button-quiet",
-      "description": "Underlined text action: Reopen, Log out.",
+      "description": "Underlined text action: Reopen, Log out, Back to live, Close list.",
       "html": "<button class=\"ds-btn-quiet\">Reopen</button>",
-      "css": ".ds-btn-quiet { padding: 7px 12px; border: 1px solid transparent; background: transparent; color: var(--ink-2, #4b5b6b); font: 600 12px/1 var(--sans, \"Segoe UI\", system-ui, sans-serif); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; } .ds-btn-quiet:hover { color: var(--ink, #131a21); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 2px; }"
+      "css": ".ds-btn-quiet { padding: 0; border: 0; background: transparent; color: var(--ink-2, #a3b6c9); font: 620 12px/1 var(--sans, \"Mona Sans\", system-ui, sans-serif); text-decoration: underline; text-decoration-color: var(--line-strong, #2a4058); text-underline-offset: 3px; cursor: pointer; transition: color 120ms; } .ds-btn-quiet:hover { color: var(--ink, #e7eef6); text-decoration-color: currentColor; } .ds-btn-quiet:focus-visible { outline: 2px solid var(--focus, #a9cdea); outline-offset: 2px; border-radius: 4px; }"
     },
     {
       "name": "Filter Field",
@@ -93,31 +139,39 @@
       "refersTo": "input",
       "description": "Labelled select or input in the filters bar.",
       "html": "<label class=\"ds-field\">Minimum priority<select class=\"ds-input\"><option>high</option></select></label>",
-      "css": ".ds-field { display: grid; gap: 4px; color: var(--ink-2, #4b5b6b); font: 600 12px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-input { min-width: 9rem; padding: 6px 8px; border: 1px solid var(--control, #b3c1cd); border-radius: 4px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 400 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-input:focus-visible { outline: 2px solid var(--focus, #0f2a44); outline-offset: 1px; }"
+      "css": ".ds-field { display: grid; gap: 5px; color: var(--ink-2, #a3b6c9); font: 560 12px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-input { min-width: 9rem; padding: 7px 10px; border: 1px solid var(--line-strong, #2a4058); border-radius: 8px; background: var(--surface-2, #142334); color: var(--ink, #e7eef6); font: 420 14px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); transition: border-color 120ms; } .ds-input:hover { border-color: var(--ink-3, #7c93ab); } .ds-input:focus-visible { outline: 2px solid var(--focus, #a9cdea); outline-offset: 1px; }"
     },
     {
-      "name": "Navy Rail",
+      "name": "Rail",
       "kind": "nav",
       "refersTo": "rail",
-      "description": "Navigation with the magenta open-findings count and pipeline health at its foot.",
-      "html": "<nav class=\"ds-rail\"><a class=\"ds-brand\" href=\"#\">NextDNS Sentinel</a><a class=\"ds-rail-link\" href=\"#\">Overview</a><a class=\"ds-rail-link\" aria-current=\"page\" href=\"#\">Findings <span class=\"ds-count\">5</span></a><a class=\"ds-rail-link\" href=\"#\">Health</a><span class=\"ds-pipeline\">All 3 checks OK</span></nav>",
-      "css": ".ds-rail { display: flex; flex-direction: column; width: 232px; padding: 22px 0 16px; background: var(--deep, #0f2a44); font: 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-brand { padding: 0 22px 22px; color: #ffffff; font-size: 16px; font-weight: 650; text-decoration: none; } .ds-rail-link { display: flex; justify-content: space-between; align-items: center; padding: 8px 22px; color: var(--on-deep-2, #b3c8db); text-decoration: none; transition: background-color 120ms, color 120ms; } .ds-rail-link:hover, .ds-rail-link[aria-current=\"page\"] { color: #ffffff; background: var(--deep-2, #17395b); } .ds-rail-link[aria-current=\"page\"] { font-weight: 600; } .ds-rail-link:focus-visible { outline: 2px solid #ffffff; outline-offset: -2px; } .ds-count { min-width: 22px; padding: 0 7px; border-radius: 10px; background: var(--magenta, #b0177a); color: var(--on-magenta, #ffffff); font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; } .ds-pipeline { margin-top: 16px; padding: 14px 22px 0; border-top: 1px solid var(--deep-3, #26496b); color: #ffffff; font-weight: 600; } .ds-pipeline::before { content: \"\"; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--ok-on-deep, #7fd6a4); }"
+      "description": "Navigation with the live dot, the magenta open-findings count and pipeline health at its foot.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-brand\" href=\"#\">NextDNS <strong>Sentinel</strong></a><a class=\"ds-rail-link\" href=\"#\">Overview</a><a class=\"ds-rail-link\" href=\"#\">Live <span class=\"ds-dot\"></span></a><a class=\"ds-rail-link\" aria-current=\"page\" href=\"#\">Findings <span class=\"ds-count\">5</span></a><a class=\"ds-rail-link\" href=\"#\">Health</a><span class=\"ds-pipeline\">All 3 checks OK</span></nav>",
+      "css": ".ds-rail { display: flex; flex-direction: column; gap: 2px; width: 240px; padding: 20px 12px 16px; border-right: 1px solid var(--line, #1c2c3d); background: var(--rail, #070e16); font: 420 14px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-brand { padding: 4px 10px 20px; color: var(--ink, #e7eef6); font-size: 16px; font-weight: 450; font-stretch: 110%; text-decoration: none; } .ds-brand strong { font-weight: 700; } .ds-rail-link { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; color: var(--ink-2, #a3b6c9); font-weight: 480; text-decoration: none; transition: background-color 120ms, color 120ms; } .ds-rail-link:hover { color: var(--ink, #e7eef6); background: var(--surface, #0f1b28); } .ds-rail-link[aria-current=\"page\"] { color: var(--ink, #e7eef6); background: var(--surface-2, #142334); font-weight: 600; } .ds-rail-link:focus-visible { outline: 2px solid var(--focus, #a9cdea); outline-offset: 2px; } .ds-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #5fd39a); } .ds-count { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--magenta, #ee6dbf); color: var(--on-magenta, #160611); font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; } .ds-pipeline { margin-top: 16px; padding: 14px 10px; border-top: 1px solid var(--line, #1c2c3d); color: var(--ink, #e7eef6); font-weight: 600; } .ds-pipeline::before { content: \"\"; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--ok, #5fd39a); }"
     },
     {
-      "name": "Severity Badges",
+      "name": "Severity Chips",
       "kind": "chip",
       "refersTo": "badge-critical",
-      "description": "Buoy-coloured priority; outline form once the finding is decided.",
-      "html": "<span class=\"ds-badge ds-critical\">critical</span> <span class=\"ds-badge ds-high\">high</span> <span class=\"ds-badge ds-medium\">medium</span> <span class=\"ds-badge ds-low\">low</span> <span class=\"ds-badge ds-info\">info</span> <span class=\"ds-badge ds-decided\">high</span>",
-      "css": ".ds-badge { display: inline-block; min-width: 64px; padding: 0 8px; border-radius: 3px; color: #ffffff; font: 650 12px/20px var(--sans, \"Segoe UI\", system-ui, sans-serif); text-align: center; } .ds-critical { background: #c8102e; } .ds-high { background: #b84a0b; } .ds-medium { background: #e3a400; color: #131a21; } .ds-low { background: #2f6a9e; } .ds-info { background: #5d6b78; } .ds-decided { background: transparent; color: var(--high, #b84a0b); box-shadow: inset 0 0 0 1px currentColor; }"
+      "description": "Buoy-tinted priority chips; outline only once the finding is decided.",
+      "html": "<span class=\"ds-badge ds-critical\">critical</span> <span class=\"ds-badge ds-high\">high</span> <span class=\"ds-badge ds-medium\">medium</span> <span class=\"ds-badge ds-low\">low</span> <span class=\"ds-badge ds-info\">info</span> <span class=\"ds-badge ds-high ds-decided\">high</span>",
+      "css": ".ds-badge { display: inline-block; min-width: 68px; padding: 0 9px; border: 1px solid; border-radius: 999px; font: 620 12px/20px var(--sans, \"Mona Sans\", system-ui, sans-serif); text-align: center; } .ds-critical { color: var(--critical, #ff8593); background: var(--critical-bg, #3a1522); border-color: var(--critical-line, #5a2032); } .ds-high { color: var(--high, #ffad7a); background: var(--high-bg, #3a2216); border-color: var(--high-line, #5a3420); } .ds-medium { color: var(--medium, #f5c95c); background: var(--medium-bg, #33290f); border-color: var(--medium-line, #4f3f17); } .ds-low { color: var(--low, #8ec3ff); background: var(--low-bg, #14283f); border-color: var(--low-line, #1f3d5e); } .ds-info { color: var(--info, #b3c2d1); background: var(--info-bg, #1a2533); border-color: var(--info-line, #2a394b); } .ds-decided { background: transparent; }"
     },
     {
       "name": "Panel",
       "kind": "card",
       "refersTo": "panel",
-      "description": "White bordered container; flat.",
+      "description": "Rounded surface container with a soft lift.",
       "html": "<section class=\"ds-panel\"><h2>Facts</h2><p>Profile: router</p></section>",
-      "css": ".ds-panel { padding: 18px 20px; border: 1px solid var(--rule, #d4dde5); border-radius: 6px; background: var(--panel, #ffffff); color: var(--ink, #131a21); font: 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-panel h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; } .ds-panel p { margin: 0; }"
+      "css": ".ds-panel { padding: 18px 20px; border: 1px solid var(--line, #1c2c3d); border-radius: 12px; background: var(--surface, #0f1b28); box-shadow: 0 12px 32px -20px rgb(0 0 0 / 0.65); color: var(--ink, #e7eef6); font: 420 14px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-panel h2 { margin: 0 0 14px; font-size: 18px; font-weight: 620; font-stretch: 106%; } .ds-panel p { margin: 0; }"
+    },
+    {
+      "name": "Live Pill and Feed Row",
+      "kind": "custom",
+      "refersTo": "live-line",
+      "description": "The live pill with its ringing dot, and a feed row that opens its own space and settles.",
+      "html": "<p class=\"ds-live\"><span class=\"ds-live-dot\"></span><strong>Live</strong> <span><b>42</b> queries in the last minute, <b>3</b> blocked</span></p><ol class=\"ds-feed\"><li class=\"ds-row ds-new\"><span class=\"ds-time\">14:02:11</span><span class=\"ds-name\">ads[.]example</span><span class=\"ds-chip\">blocked</span></li><li class=\"ds-row\"><span class=\"ds-time\">14:02:09</span><span class=\"ds-name\">cdn[.]example</span><span></span></li></ol>",
+      "css": ".ds-live { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 8px 14px; border: 1px solid var(--line, #1c2c3d); border-radius: 999px; background: var(--surface, #0f1b28); color: var(--ink-2, #a3b6c9); font: 12px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-live strong, .ds-live b { color: var(--ink, #e7eef6); font-weight: 620; } .ds-live-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #5fd39a); } .ds-live-dot::after { content: \"\"; position: absolute; inset: -5px; border: 2px solid var(--ok, #5fd39a); border-radius: 50%; opacity: 0; animation: ds-ring 900ms cubic-bezier(0.16, 1, 0.3, 1) infinite 3s; } .ds-feed { margin: 0; padding: 6px 0; list-style: none; border: 1px solid var(--line, #1c2c3d); border-radius: 12px; background: var(--surface, #0f1b28); } .ds-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 72px; align-items: baseline; gap: 14px; padding: 8px 20px; border-bottom: 1px solid var(--line, #1c2c3d); color: var(--ink, #e7eef6); font: 420 14px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-row:last-child { border-bottom: 0; } .ds-time { color: var(--ink-3, #7c93ab); font: 12px var(--mono, \"JetBrains Mono\", ui-monospace, monospace); } .ds-name { font-family: var(--mono, \"JetBrains Mono\", ui-monospace, monospace); font-style: italic; } .ds-chip { justify-self: end; padding: 0 8px; border: 1px solid var(--line-strong, #2a4058); border-radius: 999px; background: var(--surface-3, #1a2c40); color: var(--ink-2, #a3b6c9); font-size: 12px; font-weight: 560; line-height: 18px; } .ds-new { animation: ds-appear 560ms cubic-bezier(0.16, 1, 0.3, 1); } @keyframes ds-appear { from { opacity: 0; transform: translateY(-4px); background-color: var(--surface-3, #1a2c40); } } @keyframes ds-ring { from { opacity: 0.8; transform: scale(0.5); } to { opacity: 0; transform: scale(1.6); } } @media (prefers-reduced-motion: reduce) { .ds-live-dot::after { animation: none; } .ds-new { animation: none; } }"
     },
     {
       "name": "The Correction",
@@ -125,62 +179,57 @@
       "refersTo": "correction",
       "description": "A triage decision inked onto the record in magenta: struck old status, then new status and time, revealed left to right.",
       "html": "<span class=\"ds-corr\"><s>open</s> acknowledged 08:30</span>",
-      "css": ".ds-corr { display: inline-block; color: var(--magenta, #b0177a); font: 600 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); white-space: nowrap; clip-path: inset(0 0 0 0); transition: clip-path 520ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-corr s { display: block; width: max-content; margin: 0 0 1px; color: var(--ink-2, #4b5b6b); font-weight: 400; text-decoration-color: var(--magenta, #b0177a); text-decoration-thickness: 2px; } @media (prefers-reduced-motion: reduce) { .ds-corr { transition: none; } }"
+      "css": ".ds-corr { display: inline-block; color: var(--magenta, #ee6dbf); font: 620 14px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); white-space: nowrap; clip-path: inset(0 0 0 0); transition: clip-path 520ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-corr s { display: block; width: max-content; margin: 0 0 1px; color: var(--ink-3, #7c93ab); font-weight: 420; text-decoration-color: var(--magenta, #ee6dbf); text-decoration-thickness: 2px; } @media (prefers-reduced-motion: reduce) { .ds-corr { transition: none; } }"
     },
     {
-      "name": "Outside Names",
+      "name": "Time Chart Controls and Markers",
       "kind": "custom",
-      "refersTo": "outside-domain",
-      "description": "Sloped type for names from outside: domains in italic mono, defanged; devices in italic sans.",
-      "html": "<p class=\"ds-about\"><span class=\"ds-name\">bad[.]example</span> on router &middot; <span class=\"ds-device\">Kitchen tablet</span></p>",
-      "css": ".ds-about { margin: 0; color: var(--ink, #131a21); font: 14px/1.5 var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-name { font-family: var(--mono, \"Cascadia Mono\", Consolas, ui-monospace, monospace); font-style: italic; overflow-wrap: anywhere; } .ds-device { font-style: italic; }"
-    },
-    {
-      "name": "Chart Marker and Span Bar",
-      "kind": "custom",
-      "refersTo": "hourly-chart",
-      "description": "SVG geometry: a magenta four-digit notice marker over a bar and the usual-level band, and the 24-hour span bar.",
-      "html": "<svg class=\"ds-chart\" viewBox=\"0 0 160 90\" width=\"240\" height=\"135\"><rect class=\"ds-band\" x=\"0\" y=\"50\" width=\"160\" height=\"30\"/><rect class=\"ds-allowed\" x=\"60\" y=\"40\" width=\"18\" height=\"40\"/><rect class=\"ds-blocked\" x=\"60\" y=\"30\" width=\"18\" height=\"10\"/><line class=\"ds-usual\" x1=\"0\" y1=\"50\" x2=\"160\" y2=\"50\"/><g class=\"ds-marker\"><rect x=\"50\" y=\"10\" width=\"38\" height=\"15\" rx=\"7.5\"/><text x=\"69\" y=\"21.5\" text-anchor=\"middle\">0004</text></g></svg><svg class=\"ds-span\" viewBox=\"0 0 120 8\" width=\"120\" height=\"8\"><rect class=\"ds-track\" width=\"120\" height=\"8\" rx=\"1\"/><rect class=\"ds-tick\" x=\"30\" width=\"1\" height=\"8\"/><rect class=\"ds-tick\" x=\"60\" width=\"1\" height=\"8\"/><rect class=\"ds-tick\" x=\"90\" width=\"1\" height=\"8\"/><rect class=\"ds-seen\" x=\"70\" y=\"1\" width=\"12\" height=\"6\" rx=\"1\"/></svg>",
-      "css": ".ds-chart, .ds-span { display: block; margin-bottom: 8px; } .ds-band { fill: var(--tint, #cfe4f2); opacity: 0.6; } .ds-allowed { fill: var(--allowed, #0f2a44); } .ds-blocked { fill: var(--blocked, #7f9cb8); } .ds-usual { stroke: var(--low, #2f6a9e); stroke-width: 2; stroke-dasharray: 6 4; } .ds-marker rect { fill: var(--magenta, #b0177a); } .ds-marker text { fill: var(--on-magenta, #ffffff); font: 700 12px var(--sans, \"Segoe UI\", system-ui, sans-serif); } .ds-track { fill: var(--tint-2, #e6f1f9); } .ds-tick { fill: var(--rule, #d4dde5); } .ds-seen { fill: var(--span, #0f2a44); }"
+      "refersTo": "range-button-active",
+      "description": "The chart's range pill group and following-live state, over stacked bars, the usual band, an open magenta marker and a decided grey marker.",
+      "html": "<div class=\"ds-tbar\"><div class=\"ds-ranges\"><button>6h</button><button aria-pressed=\"true\">24h</button><button>7d</button><button>30d</button></div><span class=\"ds-follow\">Following live</span></div><svg class=\"ds-chart\" viewBox=\"0 0 200 90\" width=\"300\" height=\"135\"><rect class=\"ds-band\" x=\"0\" y=\"52\" width=\"200\" height=\"38\"/><rect class=\"ds-allowed\" x=\"40\" y=\"44\" width=\"16\" height=\"46\"/><rect class=\"ds-blocked\" x=\"40\" y=\"36\" width=\"16\" height=\"8\"/><rect class=\"ds-allowed\" x=\"120\" y=\"58\" width=\"16\" height=\"32\"/><rect class=\"ds-blocked\" x=\"120\" y=\"52\" width=\"16\" height=\"6\"/><rect class=\"ds-now\" x=\"180\" y=\"70\" width=\"16\" height=\"20\"/><line class=\"ds-halo\" x1=\"0\" y1=\"52\" x2=\"200\" y2=\"52\"/><line class=\"ds-usual\" x1=\"0\" y1=\"52\" x2=\"200\" y2=\"52\"/><g class=\"ds-open\"><rect x=\"29\" y=\"4\" width=\"38\" height=\"16\" rx=\"8\"/><text x=\"48\" y=\"15.5\" text-anchor=\"middle\">0004</text></g><g class=\"ds-decided\"><rect x=\"109\" y=\"4\" width=\"38\" height=\"16\" rx=\"8\"/><text x=\"128\" y=\"15.5\" text-anchor=\"middle\">0003</text></g></svg>",
+      "css": ".ds-tbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; font: 12px/1.55 var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-ranges { display: inline-flex; padding: 3px; border: 1px solid var(--line, #1c2c3d); border-radius: 999px; background: var(--ground, #0a131d); } .ds-ranges button { min-width: 44px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2, #a3b6c9); font: 560 12px/1 var(--sans, \"Mona Sans\", system-ui, sans-serif); cursor: pointer; transition: background-color 120ms, color 120ms; } .ds-ranges button:hover { background: var(--surface-2, #142334); color: var(--ink, #e7eef6); } .ds-ranges button[aria-pressed=\"true\"] { background: var(--surface-3, #1a2c40); color: var(--ink, #e7eef6); font-weight: 650; } .ds-ranges button:focus-visible { outline: 2px solid var(--focus, #a9cdea); outline-offset: 2px; } .ds-follow { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-2, #a3b6c9); } .ds-follow::before { content: \"\"; width: 7px; height: 7px; border-radius: 50%; background: var(--ok, #5fd39a); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok, #5fd39a) 18%, transparent); } .ds-chart { display: block; } .ds-band { fill: var(--tint, #183650); opacity: 0.55; } .ds-allowed { fill: var(--allowed, #4f86c0); } .ds-blocked { fill: var(--blocked, #8aa2bb); } .ds-now { fill: var(--primary, #a9cdea); } .ds-halo { stroke: var(--surface, #0f1b28); stroke-width: 4; } .ds-usual { stroke: var(--low, #8ec3ff); stroke-width: 2; stroke-dasharray: 6 4; } .ds-open rect { fill: var(--magenta, #ee6dbf); } .ds-open text { fill: var(--on-magenta, #160611); font: 700 12px var(--sans, \"Mona Sans\", system-ui, sans-serif); } .ds-decided rect { fill: var(--surface-3, #1a2c40); stroke: var(--line-strong, #2a4058); } .ds-decided text { fill: var(--ink-2, #a3b6c9); font: 700 12px var(--sans, \"Mona Sans\", system-ui, sans-serif); }"
     }
   ],
   "narrative": {
-    "northStar": "Notices and Chart Corrections",
-    "overview": "The dashboard is a nautical chart kept current by its owner. Every finding is a numbered notice (printed as four digits, `0004`), and every triage decision is written onto the record in magenta, the way a correction is inked onto a chart: the old status struck through, the new status and the time beside it. Nothing is erased; the record only grows.\n\nThe world is a deep-water navy rail beside a chart-white ground. One navy-tinted neutral ramp carries all text, rules and washes. Depth-tint blues mark the usual (the usual-traffic band in the chart, the span track, selection). Magenta is scarce and means one of two things: something needs attention, or a decision was made. Severity borrows buoy colours. The density is that of an operator's instrument: 14px body, tight tables, many figures, all tabular, read in short triage visits or glanced at from across the room.\n\nUpright system sans is the product's own voice. Anything that came from outside the product (a domain, a device name) is set sloped, so attacker-controlled text is always visibly someone else's words. Drawings are SVG geometry rendered by the server; there is no charting script, no icon font, no image.",
+    "northStar": "Notices and Chart Corrections, at Night",
+    "overview": "The dashboard is a nautical chart kept current by its owner and read on a dimmed bridge display. Every finding is a numbered notice (printed as four digits, `0004`), and every triage decision is written onto the record in magenta, the way a correction is inked onto a chart: the old status struck through, the new status and the time beside it. Nothing is erased; the record only grows.\n\nThe world is night only: a deep-water navy ground, never black, with a darker rail and three layered navy surfaces above it. One navy-tinted ramp carries every neutral, line and ink. Depth-tint blue marks the usual (the usual-traffic band in the charts, selection, the span track). Magenta is scarce and means one of two things: something needs attention, or a decision was made. Severity reads as buoy-coloured tinted chips. The density is an operator's instrument: 14px body, tight tables, many figures, all tabular, read in short triage visits or glanced at from across the room while the page is left open as a live monitor.\n\nMona Sans is the product's own voice, set a touch wider for titles and live figures. JetBrains Mono carries data, and its italic marks every name that came from outside (a domain, a device name), so attacker-controlled text is always visibly someone else's words. The page is visibly live: new queries open their own space and settle, the status dot rings, changed numbers flash once, and the time charts follow the present until the owner zooms away.",
     "keyCharacteristics": [
-      "Navy rail (232px) holding navigation, the magenta open-findings count and pipeline health at its foot.",
-      "Chart-white ground with white panels, 1px navy-grey rules, 6px corners, no resting shadows.",
-      "Magenta reserved for attention (counts, chart markers) and decisions (corrections, history).",
-      "Buoy severity: red, orange, amber with dark ink, blue, grey.",
-      "Upright sans for the product; sloped mono for domains; sloped sans for devices.",
-      "Tabular figures on every page; a five-step type ladder (12/14/16/18/24).",
-      "A \"night chart\" dark mode: the same world under a dimmed bridge, driven by `prefers-color-scheme`."
+      "Night chart only (`color-scheme: dark`): navy ground, darker rail, surfaces stepping lighter as they rise.",
+      "Magenta reserved for attention (the open count, open-finding markers, a newly arrived finding) and decisions (corrections, history).",
+      "Severity as tinted buoy chips: coloured text on a dark wash of the same hue, with a matching hairline.",
+      "Mona Sans upright for the product; JetBrains Mono for data; JetBrains Mono italic for every outside name.",
+      "Tabular figures everywhere; a five-step ladder (12/14/16/18/28).",
+      "Interactive time charts (uPlot) that follow live, zoom, pan, list a period, and enlarge into a dialog.",
+      "Rounded, softly lifted panels (12px corners, a low diffuse shadow) on the navy ground."
     ],
     "rules": [
-      { "name": "The Two Jobs Rule", "body": "Magenta does exactly two jobs: attention (what needs a decision) and decisions written on the record. It is never decoration, never a link colour, never a chart series.", "section": "colors" },
-      { "name": "The Buoy Rule", "body": "Severity is only ever told by the five buoy colours, in order critical, high, medium, low, info. The filled buoy fills are fixed in both modes; outline and text forms use the mode's severity ink.", "section": "colors" },
-      { "name": "The One Ramp Rule", "body": "Every neutral comes from the navy-tinted ramp (n0 to n10). No pure greys.", "section": "colors" },
-      { "name": "The Outside Voice Rule", "body": "Every name that came from outside is sloped: domains in italic mono (always defanged, never a link), device names in italic sans. The product's own words are never sloped, and outside names are never upright.", "section": "typography" },
-      { "name": "The Five Steps Rule", "body": "Sizes are 12, 14, 16, 18, 24 and nothing else, one job per step. Emphasis inside a step is weight (600 to 650), not size.", "section": "typography" },
+      { "name": "The Two Jobs Rule", "body": "Magenta does exactly two jobs: attention (what needs a decision) and decisions written onto the record. On a chart, an open finding's marker is magenta and a decided finding's marker is a grey pill (surface-3 with a strong-line stroke and second ink). Magenta is never a link, never a primary button, never a data series, never decoration.", "section": "colors" },
+      { "name": "The Buoy Chip Rule", "body": "Severity is only ever told by the five buoy hues, in order critical, high, medium, low, info, and always as a chip: buoy text on its own dark wash with its own hairline. No other colour carries severity.", "section": "colors" },
+      { "name": "The Never Black Rule", "body": "The darkest value is the rail navy; every neutral comes from the navy-tinted ramp. No pure black or pure grey surfaces.", "section": "colors" },
+      { "name": "The Outside Voice Rule", "body": "Every name that came from outside is sloped: domains in JetBrains Mono italic (always defanged, never a link), device names in italic. The product's own words are never sloped, and outside names are never upright.", "section": "typography" },
+      { "name": "The Five Steps Rule", "body": "Sizes are 12, 14, 16, 18 and 28, one job per step. Emphasis inside a step is weight (560 to 650), not size.", "section": "typography" },
+      { "name": "The Night Weight Rule", "body": "Light text on the dark ground is set one weight step heavier than it would be on paper (body 420, labels 560, buttons 620) with a touch more letter-spacing (0.005em body, 0.01em labels).", "section": "typography" },
       { "name": "The Tabular Rule", "body": "Figures are tabular everywhere (`font-variant-numeric: tabular-nums` on the body); numeric columns align right.", "section": "typography" },
-      { "name": "The Flat Chart Rule", "body": "Surfaces in the app shell never cast shadows. A boundary is a 1px rule or a change of wash.", "section": "elevation" }
+      { "name": "The Rising Surface Rule", "body": "A surface that sits higher is lighter, never more saturated: ground, surface, surface-2, surface-3. Lift comes from tone first; the shadow only softens the ground under it.", "section": "elevation" }
     ],
     "dos": [
       "**Do** print every finding number as a four-digit notice (`0004`), in the table, the page title and the chart markers alike.",
       "**Do** write a decision as a correction: struck old status, then new status and time, in correction magenta, and keep every past correction visible in the history.",
-      "**Do** set every outside name sloped (domains in italic mono, defanged; device names in italic sans), escaped and never as a link.",
-      "**Do** keep to the 12/14/16/18/24 ladder and tabular figures, with numeric columns right-aligned.",
-      "**Do** draw every chart, bar, marker and key as server-rendered SVG geometry or CSS shapes styled from `/static/style.css`, so the strict CSP needs no inline style or script.",
-      "**Do** keep a decided finding's priority visible as an outline badge rather than removing it.",
-      "**Do** take every neutral from the navy-tinted ramp, and give the night chart its own values for each token rather than inverting with filters."
+      "**Do** draw open-finding markers in magenta and decided-finding markers as grey pills, on every chart.",
+      "**Do** set every outside name sloped (domains in JetBrains Mono italic, defanged; device names in italic), escaped and never as a link.",
+      "**Do** keep to the 12/14/16/18/28 ladder, the night weights (body 420, labels 560, buttons 620) and tabular figures, with numeric columns right-aligned.",
+      "**Do** let live arrivals open their own space and settle, keep fixed-height feeds fixed, and reserve room for text that changes (readouts, Show N new, Pause/Resume) so nothing under the pointer moves.",
+      "**Do** step surfaces lighter as they rise (ground, surface, surface-2, surface-3) and take every neutral from the navy ramp.",
+      "**Do** give every animation a reduced-motion form: transitions near zero, no ring, feed rows fade in over 200ms, the correction and the dialog simply appear.",
+      "**Do** serve every font, script and stylesheet from `/static/`, with no inline style attributes or inline scripts, so the strict CSP holds."
     ],
     "donts": [
-      "**Don't** use magenta for links, buttons, decoration or a data series; it means attention or a decision, nothing else.",
-      "**Don't** show severity by any colour outside the five buoys, and don't put white text on the amber buoy.",
+      "**Don't** use magenta for links, primary buttons, decoration or a data series; it means attention or a decision, nothing else.",
+      "**Don't** show severity by any colour outside the five buoys, or as a solid fill instead of a tinted chip.",
       "**Don't** set the product's own words in italics, or an outside name upright.",
-      "**Don't** load fonts, scripts, icons or images from outside `/static/`, or use inline `style` attributes or inline scripts.",
-      "**Don't** cast shadows on app surfaces; the login lift on the bare navy ground is the only one.",
-      "**Don't** animate anything but the correction reveal and 120ms colour changes, and never when reduced motion is requested."
+      "**Don't** use pure black or a neutral grey for any surface; the darkest value is the rail navy.",
+      "**Don't** let a new row, a refreshed table or a changed figure push the page or shift a control.",
+      "**Don't** load fonts, scripts, icons or images from outside `/static/`."
     ]
   }
 }

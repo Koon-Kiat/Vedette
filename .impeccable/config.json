@@ -2,6 +2,13 @@
   "detector": {
     "ignoreRules": [],
     "ignoreFiles": [],
-    "ignoreValues": []
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "mona sans",
+        "createdAt": "2026-11-19T11:58:25.817Z",
+        "reason": "user confirmed: chose Mona Sans + JetBrains Mono in the font question on 2026-11-19"
+      }
+    ]
   }
 }

@@ -203,6 +203,18 @@ Mitigations:
 - **Audit.** Every triage action is written to an audit log in the same
   transaction as the change.
 - **Tests.** An XSS suite plants payloads in every field that reaches a page.
+- **Live feed.** The event stream needs the same session and stops when the
+  session ends. At most 8 streams may be open at once, and each lasts 15
+  minutes before the browser reconnects. Every string is cleaned and defanged
+  on the server, and the page script writes it with `textContent` only; a test
+  forbids HTML-writing calls in that script.
+- **Charts.** `/api/series` and `/partials/window` need the same session.
+  Their time and bar-count parameters must be whole numbers; the span is
+  clamped to 31 days and to now, and the bar count to 24 to 480, which bounds
+  the work one request can cause. Names in the JSON
+  are cleaned and defanged, and `<` is escaped. The chart script writes text
+  with `textContent` only, draws only finding numbers on the canvas, and opens
+  only `/findings/<number>`. The vendored uPlot file is checked by hash.
 
 Residual risk:
 - Malware already running as you on this computer can reach 127.0.0.1 and,

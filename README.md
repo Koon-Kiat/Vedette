@@ -188,9 +188,36 @@ A session lasts 12 hours (`dashboard.session_hours`) and ends when the
 container restarts. After five wrong tokens within a minute, logins are
 refused for a minute.
 
+The dashboard is live: counts, the pipeline status, new findings and the
+query feed update on their own while a page is open, so it can stay on a
+screen all day. The dot next to Live in the menu is green while updates are
+flowing. Everything it needs, fonts and chart code included, is served by
+the dashboard itself; nothing is loaded from the internet. It uses the whole
+width of wide and ultrawide screens: from 2,240 pixels the Overview and Live
+pages set their panels side by side instead of in one long column.
+
+The "Queries over time" charts on the Overview and Live pages follow live:
+each query joins its bar as it arrives. You can work with them directly:
+
+- **Range:** pick 30 minutes to 30 days with the buttons above the chart.
+- **Zoom:** drag across the chart, or hold Ctrl and scroll. Zooming in fetches
+  finer bars, down to one minute.
+- **Move through time:** hold Shift and scroll or drag, or scroll sideways on
+  a trackpad. A double-click, or "Back to live", returns to the present.
+- **Read exact numbers:** point at a bar for its queries, blocked share and
+  the usual level; point at a pink marker for the finding it stands for.
+- **Click through:** click a bar to list what happened then (totals,
+  findings, the most looked-up domains and the latest queries); click a
+  marker to open its finding.
+- **Enlarge:** opens the same chart over the whole window; Esc closes it.
+- **Keyboard:** focus the chart, then use the left and right arrows to move
+  between bars, Enter to list one, plus and minus to zoom, Shift with the
+  arrows to move through time, and 0 to go back to live.
+
 | Page | What it shows |
 | --- | --- |
-| Overview | The last 24 hours per profile against the 7-day average, findings by priority, new devices, queries per hour, and open high and critical findings |
+| Overview | Open high and critical findings first, updated as they arrive; queries over time with findings marked on it; the latest queries as they happen; new devices and findings by priority; the last 24 hours per profile against the 7-day average |
+| Live | Every DNS query as it arrives (within about a second), with a pause button, an only-blocked filter and a profile filter, above queries over time per minute |
 | Findings | Every finding, filtered by profile, device, rule, minimum priority, status and day, with the triage buttons; each one opens to its explanation, evidence, cached domain facts, recent queries and history |
 | Domains | Most allowed, most blocked, newly seen and recently registered domains, for 24 hours or 7 days |
 | Devices | Devices seen in the last 7 days, or a note that the profile reports none |

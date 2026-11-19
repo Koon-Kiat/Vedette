@@ -27,6 +27,47 @@
 - `docs/THREAT_MODEL.md`: STRIDE over the data flow, with the mitigation in
   the code and the residual risk for each threat.
 
+### Interactive charts
+
+- The "Queries over time" charts on the Overview and the Live page are
+  interactive, drawn by uPlot 1.6.32 (MIT), served by the dashboard itself
+  and checked by hash.
+  - Ranges from 30 minutes to 30 days; drag or Ctrl + scroll to zoom, with
+    finer bars fetched as you go; Shift + scroll or Shift + drag to move
+    through time; a double-click to go back to live.
+  - Exact numbers on hover, finding markers that open their finding, and a
+    click on a bar lists what happened then.
+  - Enlarge opens the same chart over the whole window.
+  - Full keyboard use: arrows, Enter, plus and minus, 0.
+- The charts follow live: each query from the live stream joins its bar as it
+  arrives.
+- New endpoints: `/api/series` and `/partials/window`. The chart partial that
+  the Overview polled every minute is gone.
+- The Overview chart spans the full width; "Right now" sits next to "New
+  devices and findings".
+- Wide and ultrawide screens: the dashboard fills up to 3,200 pixels instead
+  of stopping at 1,320, and from 2,240 pixels the Overview becomes two
+  columns, the Live page sets the feed beside the chart, Domains shows its
+  four lists in one row and a finding's page splits its main column. A wider
+  chart fetches finer bars, and Enlarge fills the window.
+- The list of what happened in a period shows "Most looked up" and "Latest
+  queries" as two matching tables whose rows line up.
+
+### Dark, live dashboard
+
+- Dark only: the night-chart theme replaces the light one.
+- Mona Sans and JetBrains Mono, self-hosted (OFL) and checked by hash.
+- Live updates over server-sent events: counts, pipeline status, new findings
+  (they arrive under a magenta wash) and a query feed, with no reload.
+- A new Live page streams every query with pause, an only-blocked filter, a
+  profile filter and queries per minute for the last 30 minutes. The
+  Overview gains "Right now" and a live line.
+- Motion: arrivals open their own space so nothing jumps; the live dot pings
+  on new data; counters tick when they change. All of it is reduced under
+  prefers-reduced-motion.
+- Findings tables fold their secondary columns at laptop widths, so the
+  decision buttons stay in view.
+
 ### Dashboard redesign
 
 - A new visual system, "notices and chart corrections", recorded in

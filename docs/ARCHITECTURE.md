@@ -246,6 +246,72 @@ our own static files, no element has an event-handler attribute, no URL uses
 `javascript:` or `data:`, every link stays inside the dashboard, and the
 payload text appears escaped rather than dropped.
 
+### Live updates
+
+`/live/stream` is a server-sent-event stream behind the same login.
+
+- **What it sends.** Each second it reads a short recent window of events by
+  event time and sends the ones it has not sent yet, so two profiles' writers
+  arriving slightly out of order lose nothing, and a backfill or import (old
+  timestamps) never floods the feed. Every five seconds it sends the counters,
+  and a separate signal when the open findings change.
+- **How the page uses it.** On that signal htmx re-fetches the decision table
+  from `/partials/decide`. Each query is also passed to the charts, which add
+  it to its bar (see below).
+- **Cleaning.** Every string is cleaned and defanged on the server and sent
+  as JSON with `<` escaped.
+- **The browser script.** `static/live.js`, our own, allowed by
+  `script-src 'self'`, writes it only with `textContent`. A test fails the
+  build if the script ever uses `innerHTML`, `outerHTML`,
+  `insertAdjacentHTML`, `document.write`, `eval` or `new Function`.
+- **Limits.** At most 8 streams at once. A stream ends after 15 minutes (the
+  browser reconnects by itself) or as soon as its session ends.
+
+### Interactive charts
+
+The "Queries over time" charts on the Overview and Live pages are drawn by
+uPlot 1.6.32 on a canvas, from `static/charts.js`.
+
+- **Data.** `GET /api/series?from=&to=&points=` (Unix seconds, behind the
+  login) returns allowed and blocked queries per bar, the usual level per bar
+  (the 7-day average) and the findings in the span. The server picks the bar
+  size from the span: one minute up to one day, with at most `points` bars.
+  The chart asks for about one bar per 6 pixels of its width, so a wide
+  screen gets finer bars; the server holds `points` between 24 and 480 (240
+  when it is not given) and fetches again when a resize changes it by more
+  than a fifth. The span is at most 31 days and never reaches past now, which
+  bounds the cost of a request. Times or bar counts that do not parse as whole
+  numbers get a 422.
+- **Zooming and moving.** Each change of view fetches the series for the new
+  span after a short pause, so zooming in brings finer bars.
+- **Following live.** While a chart shows the present, each query from the
+  live stream is added to its bar at once, the view slides on as time passes,
+  and the series is fetched again every 30 seconds to 5 minutes (half a bar)
+  so the bars stay exact. Queries the stream delivered after the server
+  counted are added again on top of each fetch.
+- **What happened in a period.** A click on a bar (or Enter on the keyboard)
+  loads `GET /partials/window?from=&to=`, a server-rendered partial swapped in
+  by htmx: totals, findings, the ten most looked-up roots and the latest 40
+  queries, all escaped and defanged like any page.
+- **Enlarge** moves the same chart into a native modal `<dialog>`, so focus,
+  Esc and the backdrop come from the browser.
+- **Without JavaScript** the server-drawn chart that the canvas replaces
+  stays in place.
+- **Safety.** The vendored files are checked by SHA-256, as for htmx and the
+  fonts. uPlot sets sizes and positions through `element.style`, which the
+  CSP allows; it writes no `style` attributes, HTML or code. `charts.js`
+  writes text only with `textContent` and draws only finding numbers on the
+  canvas. Tests fail the build if either of our scripts uses an HTML-writing
+  call or `cssText`, and if `charts.js` builds a request or link from anything
+  but numbers it has checked.
+
+### Fonts
+
+Mona Sans (variable weight and width) and JetBrains Mono (upright and italic)
+are served from `static/fonts/`: the latin subsets of `@fontsource-variable`
+5.3.0 under the SIL Open Font License, with the licence files beside them. A
+test checks each file's SHA-256, as for htmx.
+
 ## Containers
 
 | Service | Purpose | Network | Hardening |
@@ -436,7 +502,8 @@ payload text appears escaped rather than dropped.
     third-party JavaScript to review, pin and keep updated; the data never
     passes through JavaScript or inline JSON; it works under the strict CSP
     without exceptions; and it renders with JavaScript off. A library is worth
-    adding if the dashboard needs interactive charts.
+    adding if the dashboard needs interactive charts. (It did: decision 73
+    adds one, and this drawing stays as what pages show without JavaScript.)
 52. **htmx 2.0.11 is vendored and locked down.** A test checks the file's
     SHA-256 against the reviewed release. Its configuration turns off `eval`
     and script tags in swapped content, allows requests to this origin only,
@@ -539,8 +606,55 @@ payload text appears escaped rather than dropped.
     "notices and chart corrections": a navy rail, a chart-white ground,
     magenta only for attention and decisions, and sloped type for every name
     from outside. It was chosen from a design round, reviewed, and recorded in
-    `DESIGN.md`. The system font stack stays: an operating screen needs no
-    downloaded face, and the strict CSP allows no external fonts.
+    `DESIGN.md`. At first it used the system font stack, because no font
+    download had been approved (decision 69 replaces that).
+68. **Dark only, at the owner's request.** The world became the night chart:
+    a navy ground (never black), a darker rail, layered navy surfaces,
+    severity as tinted chips, and magenta still kept for attention and
+    decisions. There is no light theme.
+69. **Self-hosted fonts.** The owner chose Mona Sans and JetBrains Mono and
+    approved the download. They are served by the dashboard itself, because
+    the strict CSP allows no external fonts. Only the latin subset is shipped:
+    about 181 KB, with the interface face preloaded.
+70. **Server-sent events for the live feed**, not WebSockets or htmx polling.
+    The feed is one-way, the browser reconnects on its own, it works under
+    `connect-src 'self'`, and it needs no extra library. Small server-rendered
+    partials (refetched by htmx) keep tables in one template, so the live view
+    and a page reload can never disagree.
+71. **The live feed follows event time.** A short overlap window plus a record
+    of ids already sent is simpler and more robust than a write-order cursor;
+    the feed is for what is happening now, not for history.
+72. **At laptop widths the findings tables fold.** Between 641 and 1,180
+    pixels, the number, rule, device, last-seen time and event count move into
+    one line under the domain, so the decision buttons stay in view. Phones
+    show each finding as a card.
+73. **uPlot for the interactive charts.** The owner asked for charts that zoom,
+    move through time, enlarge and click through, and approved the download.
+    uPlot is about 51 KB, has no dependencies, draws on a canvas so thousands
+    of bars stay fast, is MIT-licensed, and works under the strict CSP: it
+    needs no `eval`, no inline `<style>` and no `style` attributes. Larger
+    chart libraries were not needed for bar series.
+74. **The server picks the bar size.** The browser asks for a span and how
+    many bars its width suits; the server answers with at most that many (24
+    to 480), from one minute to one day. Zooming therefore brings finer bars
+    without the browser ever holding raw events, and every request costs one
+    grouped query.
+75. **Live charts add queries in the browser and check against the server.**
+    Each query from the live stream joins its bar at once, and the series is
+    fetched again every half bar (30 seconds to 5 minutes) to correct any
+    drift, rather than re-fetching on every query.
+76. **The Overview chart spans the full width.** An interactive chart needs
+    the room, and the list of what happened in a period opens beneath it.
+    "Right now" moved next to "New devices and findings".
+77. **Wide screens get more columns, not longer lines.** The owner uses an
+    ultrawide screen. The main column fills up to 3,200 pixels (a 3,440-pixel
+    display less the rail) instead of stopping at 1,320, and from 2,240
+    pixels the pages recompose. The Overview becomes two columns (decisions
+    and the chart beside the live and daily panels), the Live page sets the
+    feed beside the chart, Domains puts its four lists in one row, and a
+    finding's page splits its main column. The breakpoint is where the
+    findings table still shows every column in two thirds of the width;
+    below it the layouts are as before.
 
 ## Verified facts the design relies on
 

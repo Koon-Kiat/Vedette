@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from pathlib import Path
 
+import httpx
 import pytest
 import respx
 
@@ -25,6 +26,10 @@ class SleepRecorder:
 @pytest.fixture
 def router() -> Iterator[respx.MockRouter]:
     with respx.mock(assert_all_called=False, assert_all_mocked=True) as mock_router:
+        # The health monitor asks Ollama which models it has; answer for any host.
+        mock_router.get(path="/api/tags").mock(
+            return_value=httpx.Response(200, json={"models": [{"name": "qwen3:8b"}]})
+        )
         yield mock_router
 
 

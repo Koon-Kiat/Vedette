@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo
@@ -13,8 +14,13 @@ from sentinel import __version__
 from sentinel.config import ConfigError, Settings, load_settings
 from sentinel.llm.schema import Analysis
 from sentinel.log import configure_logging
+from sentinel.notify.channels import Channel, DeliveryError
 from sentinel.notify.defang import clean_text, defang, defang_text
+from sentinel.notify.digest import DigestBuilder, render_digest
+from sentinel.notify.factory import build_channel
+from sentinel.notify.render import render_test
 from sentinel.pipeline.runner import run_until_signalled
+from sentinel.rules.loader import load_rules
 from sentinel.rules.model import Severity
 from sentinel.sources.base import DnsEvent
 from sentinel.sources.nextdns_export import ExportFormatError, read_export
@@ -48,9 +54,7 @@ def _load_or_exit(config: Path | None) -> Settings:
 
 def _secret_values(settings: Settings) -> list[str]:
     """Secret values the log redactor must scrub."""
-    if settings.nextdns_api_key is None:
-        return []
-    return [settings.nextdns_api_key.get_secret_value()]
+    return settings.secret_values()
 
 
 @app.callback()
@@ -328,3 +332,100 @@ def import_export(
             "This profile is not enabled, so the rules will not evaluate these events yet. "
             "Set 'enabled: true' for it in config.yaml and restart the pipeline."
         )
+
+
+async def _send_test(channel: Channel, settings: Settings) -> None:
+    try:
+        await channel.send(render_test(datetime.now(UTC), ZoneInfo(settings.timezone)))
+    finally:
+        await channel.aclose()
+
+
+@app.command()
+def notify(
+    test: Annotated[
+        bool, typer.Option("--test", help="Send a test message through the configured channel.")
+    ] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Check that notifications reach you."""
+    if not test:
+        typer.echo("Nothing to do: use --test to send a test notification.", err=True)
+        raise typer.Exit(code=2)
+    settings = _load_or_exit(config)
+    channel = build_channel(settings)
+    if channel is None:
+        typer.echo(
+            "No notification channel is configured (notify.channel is none). Set "
+            "notify.channel to ntfy, discord or email in config.yaml, add its secret to .env, "
+            "and try again.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    name = channel.name
+    try:
+        asyncio.run(_send_test(channel, settings))
+    except DeliveryError as exc:
+        typer.echo(f"Test notification failed via {name}: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Test notification sent via {name}.")
+
+
+async def _build_digest(settings: Settings, period_end: datetime) -> tuple[str, str]:
+    store = Store.open(settings.storage.database_url)
+    try:
+        builder = DigestBuilder(
+            store.engine,
+            profiles=settings.enabled_profiles,
+            tz=ZoneInfo(settings.timezone),
+            specs=load_rules(settings.rules.file),
+        )
+        return render_digest(await builder.build(period_end))
+    finally:
+        await store.close()
+
+
+@app.command()
+def digest(
+    at: Annotated[
+        str | None,
+        typer.Option(
+            "--at",
+            help="End of the 24-hour period, local time (YYYY-MM-DDTHH:MM). Defaults to now.",
+        ),
+    ] = None,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Print the digest for the last 24 hours. Nothing is sent or stored."""
+    settings = _load_or_exit(config)
+    tz = ZoneInfo(settings.timezone)
+    if at is None:
+        period_end = datetime.now(UTC)
+    else:
+        try:
+            period_end = datetime.fromisoformat(at).replace(tzinfo=tz).astimezone(UTC)
+        except ValueError:
+            typer.echo("--at must look like 2026-03-15T08:00", err=True)
+            raise typer.Exit(code=2) from None
+    database_url = settings.storage.database_url
+    missing = _database_missing(database_url)
+    if missing is not None:
+        typer.echo(f"No database yet at {missing}: start the pipeline with 'sentinel run' first.")
+        return
+    run_migrations(database_url)
+    title, body = asyncio.run(_build_digest(settings, period_end))
+    typer.echo(f"{title}\n\n{body}")

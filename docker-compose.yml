@@ -34,6 +34,19 @@ services:
       - egress   # outbound to api.nextdns.io
       - llm      # internal only: reaches http://ollama:11434
     stop_grace_period: 30s
+    # /healthz listens on 127.0.0.1 inside the container only; this check runs
+    # inside the container too. It fails while the service is starting or if
+    # its health checks stop running. Keep the port in step with health.healthz_port.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=5)
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
 
   ollama:
     image: ollama/ollama:0.40.16

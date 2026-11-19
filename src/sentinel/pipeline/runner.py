@@ -1,16 +1,18 @@
 """Starts the pipeline stages and stops them cleanly.
 
-The collector, enricher, rule engine and LLM analyst are real. The remaining
-stages are idle placeholders: each one starts, waits for the stop signal and exits. Real stages
-replace them one at a time.
+All six stages run: collector, enricher, rule engine, LLM analyst, notifier
+and health monitor, plus the ``/healthz`` endpoint on the loopback interface.
 """
 
 import asyncio
 import signal
 from datetime import timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import structlog
+from sqlalchemy.engine import make_url
 
 from sentinel import __version__
 from sentinel.config import Settings
@@ -19,10 +21,17 @@ from sentinel.enrich.first_seen import FirstSeenTracker
 from sentinel.enrich.popularity import PopularityList
 from sentinel.enrich.rdap import DomainAges, RdapClient
 from sentinel.enrich.threat_intel import ThreatIntel
+from sentinel.health.monitor import HealthMonitor, OllamaProbe
+from sentinel.health.server import start_health_server
+from sentinel.health.state import HealthState
 from sentinel.llm.analyst import Analyst
 from sentinel.llm.ollama import OllamaClient
+from sentinel.notify.digest import DigestBuilder
+from sentinel.notify.factory import build_channel
+from sentinel.notify.schedule import QuietHours, parse_clock
 from sentinel.pipeline.analyst import AnalystWorker
 from sentinel.pipeline.collector import ProfileCollector
+from sentinel.pipeline.notifier import AlertWorker, DeliveryWorker, DigestScheduler
 from sentinel.pipeline.processor import Batch, EnricherWorker, RuleWorker
 from sentinel.pipeline.queue import MemoryQueue
 from sentinel.rules.allowlist import Allowlist
@@ -30,7 +39,9 @@ from sentinel.rules.engine import RuleEngine
 from sentinel.rules.loader import load_rules
 from sentinel.sources.nextdns import NextDnsSource
 from sentinel.storage.analysis import AnalysisStore
+from sentinel.storage.health import HealthStore
 from sentinel.storage.migrate import run_migrations
+from sentinel.storage.notifications import NotificationStore
 from sentinel.storage.reference import ReferenceStore
 from sentinel.storage.store import Store
 
@@ -44,8 +55,8 @@ STAGE_NAMES: tuple[str, ...] = (
     "notifier",
     "health_monitor",
 )
-_ACTIVE_STAGES = STAGE_NAMES[:4]
-_PLACEHOLDER_STAGES = STAGE_NAMES[4:]
+_ACTIVE_STAGES = STAGE_NAMES
+_PLACEHOLDER_STAGES: tuple[str, ...] = ()
 
 
 class Pipeline:
@@ -94,7 +105,7 @@ class Pipeline:
             log.info("stage_stopped", stage=name)
 
     async def _work_until(self, stop: asyncio.Event) -> None:
-        """Run collector, enricher, rule engine and analyst until ``stop`` is set."""
+        """Run every stage until ``stop`` is set."""
         settings = self._settings
         if settings.nextdns_api_key is None:  # pragma: no cover - guarded by the caller
             raise RuntimeError("pipeline started without an API key")
@@ -127,6 +138,9 @@ class Pipeline:
             num_ctx=llm.num_ctx,
             keep_alive=llm.keep_alive,
         )
+        probe = OllamaProbe(llm.base_url, llm.model)
+        channel = build_channel(settings)
+        healthz: asyncio.Server | None = None
         try:
             reference = ReferenceStore(store.engine)
             enrich = settings.enrich
@@ -175,10 +189,36 @@ class Pipeline:
                 cache_ttl=timedelta(hours=llm.cache_ttl_hours),
             )
             queue: MemoryQueue[Batch] = MemoryQueue()
+            tz = ZoneInfo(settings.timezone)
+            notify = settings.notify
+            labels = {profile.id: profile.label for profile in profiles}
+            cooldown = timedelta(minutes=notify.alert_cooldown_minutes)
+            notifications = NotificationStore(store.engine)
+            health_state = HealthState()
+            monitor = HealthMonitor(
+                store=store,
+                state=health_state,
+                health_store=HealthStore(store.engine),
+                notifications=notifications,
+                profiles=profiles,
+                config=settings.health,
+                ollama=probe,
+                data_path=_data_dir(database_url),
+                tz=tz,
+            )
+            healthz = await _start_healthz(monitor, settings.health.healthz_port)
+            if channel is None:
+                log.warning("notify_channel_not_configured", detail="alerts are kept, not sent")
+            else:
+                log.info("notify_channel", channel=channel.name)
             workers = [
                 *(
                     ProfileCollector(
-                        profile.id, source, store, backfill_days=settings.ingest.backfill_days
+                        profile.id,
+                        source,
+                        store,
+                        backfill_days=settings.ingest.backfill_days,
+                        health=health_state,
                     ).run()
                     for profile in profiles
                 ),
@@ -193,6 +233,28 @@ class Pipeline:
                     warm_up=timedelta(hours=baseline_hours + 2),
                 ).run(),
                 AnalystWorker(analysis_store, analyst, batch_size=llm.max_findings_per_batch).run(),
+                AlertWorker(
+                    notifications,
+                    specs=specs,
+                    labels=labels,
+                    tz=tz,
+                    cooldown=cooldown,
+                    max_age=timedelta(minutes=notify.alert_max_age_minutes),
+                    analysis_wait=timedelta(seconds=notify.analysis_wait_seconds),
+                ).run(),
+                DeliveryWorker(
+                    notifications,
+                    channel,
+                    quiet_hours=QuietHours.parse(notify.quiet_hours),
+                    tz=tz,
+                ).run(),
+                DigestScheduler(
+                    notifications,
+                    DigestBuilder(store.engine, profiles=profiles, tz=tz, specs=specs),
+                    digest_time=parse_clock(notify.digest_time),
+                    tz=tz,
+                ).run(),
+                monitor.run(),
             ]
             async with asyncio.TaskGroup() as group:
                 tasks = [group.create_task(worker) for worker in workers]
@@ -200,10 +262,33 @@ class Pipeline:
                 for task in tasks:
                     task.cancel()
         finally:
+            if healthz is not None:
+                healthz.close()
+                await healthz.wait_closed()
+            if channel is not None:
+                await channel.aclose()
+            await probe.aclose()
             await ollama.aclose()
             await web.aclose()
             await source.aclose()
             await store.close()
+
+
+def _data_dir(database_url: str) -> Path | None:
+    """Directory of the SQLite database file, for the disk check."""
+    url = make_url(database_url)
+    if url.get_backend_name() != "sqlite" or not url.database:
+        return None
+    return Path(url.database).parent
+
+
+async def _start_healthz(monitor: HealthMonitor, port: int) -> asyncio.Server | None:
+    """Serve /healthz on the loopback interface; carry on without it if the port is taken."""
+    try:
+        return await start_health_server(monitor.snapshot, host="127.0.0.1", port=port)
+    except OSError as exc:
+        log.error("healthz_unavailable", port=port, reason=type(exc).__name__)
+        return None
 
 
 async def run_until_signalled(settings: Settings) -> None:

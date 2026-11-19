@@ -43,11 +43,13 @@ NextDNS API (per profile)
 | Enrichment | `src/sentinel/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
 | Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine |
 | Enricher and rule workers | `src/sentinel/pipeline/processor.py` | Done |
-| Defanging | `src/sentinel/notify/defang.py` | Done: used by the CLI now, by notifications later |
+| Defanging | `src/sentinel/notify/defang.py` | Done: CLI, alerts and digests |
 | LLM analyst | `src/sentinel/llm/`, `src/sentinel/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
-| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs collector, enricher, rule engine and analyst; other stages are idle placeholders |
-| CLI | `src/sentinel/cli.py` | `sentinel run`, `sentinel findings`, `sentinel import`, `sentinel --version` |
-| Notifier, health, dashboard | `src/sentinel/*/` | Not started |
+| Notifier | `src/sentinel/notify/`, `src/sentinel/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
+| Health monitor | `src/sentinel/health/` | Done: six kinds of check, alerts on change, `/healthz` |
+| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs all six stages and `/healthz` |
+| CLI | `src/sentinel/cli.py` | `sentinel run`, `findings`, `import`, `notify --test`, `digest`, `--version` |
+| Dashboard | `src/sentinel/web/` | Not started |
 
 ## How the collector avoids gaps and duplicates
 
@@ -147,6 +149,60 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 Not done yet: the deterministic pre-filter that flags instruction-like words in
 labels, and measuring the injection success rate. Both belong to the hardening
 and evaluation work.
+
+## How alerts, digests and health messages are sent
+
+Every message goes through an outbox table before anything is sent, together
+with what happened to it (`pending`, `sent`, `failed`, `skipped`,
+`suppressed`). Three workers use it:
+
+1. **Alert worker** (every 2 seconds). Picks up findings whose effective
+   priority is high or critical and that have no outbox entry yet. A finding
+   whose own floor is high or critical waits up to 60 seconds for the model's
+   explanation. Each finding gets exactly one entry: `pending`, `skipped`
+   (`too_old`, last event over an hour ago) or `suppressed` (`cooldown`, the
+   same rule, profile, device and target was alerted within the last hour).
+2. **Delivery worker** (every 2 seconds). Sends due entries through the
+   configured channel. During quiet hours it holds high alerts and health
+   messages until the hours end; critical alerts and digests go immediately.
+   Failures that may pass are retried with backoff from 30 seconds up to an
+   hour (or the channel's `Retry-After`), at most 10 attempts; others fail at
+   once. With no channel configured, entries are marked `skipped`.
+3. **Digest scheduler** (every minute). At the configured local time it builds
+   the digest for the previous 24 hours, archives it (text and JSON) and
+   queues it, in one transaction. The first digest comes at the first digest
+   time after the service starts; if digests were missed while it was down,
+   only the most recent is produced, late.
+
+### Health monitor
+
+Runs every 60 seconds. Per enabled profile: silence (no events for
+`stale_after_minutes`, not counting the profile's own `quiet_hours`) and
+NextDNS errors (the collector reports every success and failure; an open
+stream that is simply quiet is not an error). Then: the local model (Ollama's
+model list, and that the configured model is downloaded), the backlog of
+events waiting for the rules, and disk space where the database lives.
+
+A check that goes bad raises a health alert at once. It counts as recovered
+after two good checks in a row, and then a "Resolved" message is sent. What
+the user was last told about each check is read back from the outbox, counting
+only messages that were sent or are queued, so a restart neither repeats an
+alert nor forgets to resolve one.
+
+Results are stored for the digest and the dashboard, and served by `/healthz`
+on 127.0.0.1 inside the container: 503 until the first check and if checks
+stop running, otherwise 200 with `ok` or `degraded`. Docker's health check
+calls it, so container health means "the service is running its checks".
+
+### Channels
+
+| Channel | Format | Safeguards |
+| --- | --- | --- |
+| ntfy | JSON publish to the server root; plain text (Markdown off); priority 1 to 5 from severity | Body capped at 4,000 bytes (ntfy turns larger messages into attachments); `https` required except for a server on the local Docker network |
+| Discord | Webhook with `?wait=true` | Every formatting character escaped, `allowed_mentions: {parse: []}`, link previews suppressed (flag 4), at most ten 1,900-character parts, short rate limits waited out |
+| E-mail | `text/plain` over SMTP | STARTTLS or implicit TLS only, certificate checked, subject cleaned so it cannot add headers |
+
+Error messages never contain the topic, token, webhook URL or password.
 
 ## Containers
 
@@ -290,6 +346,48 @@ and evaluation work.
 38. **The dev container joins the internal `llm` network** so `pytest --live`
     can reach the model. It is never deployed.
 
+39. **A durable outbox for every message.** Alerts survive restarts and
+    network loss, every decision (sent, too old, cooldown, no channel) can be
+    seen later, and a finding can never be alerted twice.
+40. **No channel means "kept, not sent".** The spec's `NOTIFY_CHANNEL`
+    placeholder is read as `none`. Choosing a channel later does not flood you
+    with old alerts: they were already recorded as skipped.
+41. **Alerts are for fresh findings.** Only findings whose last event is under
+    an hour old (`notify.alert_max_age_minutes`) are alerted, so a first
+    backfill or an imported file does not set off a burst of old alerts. They
+    still appear in `sentinel findings` and in the digest.
+42. **A short wait for the model.** A high or critical finding waits up to
+    60 seconds (`notify.analysis_wait_seconds`) so the alert can carry the
+    model's explanation; then it is sent without one. Spec: high and critical
+    findings go straight to the notifier; this keeps that while adding the
+    explanation when it is quick.
+43. **The cooldown applies to finding alerts, not to health messages.** Found
+    in a live test: with a cooldown, a problem that came back within the hour
+    after a "Resolved" message was never reported. Health messages now always
+    report a change, and two good checks in a row are needed to count as
+    recovered, which absorbs flapping.
+44. **Quiet hours hold, they do not drop.** Held messages are sent when quiet
+    hours end. Critical alerts and digests are never held; the digest time is
+    chosen by the user.
+45. **Notification secrets come only from the environment or Docker secrets**
+    (`NTFY_TOPIC`, `NTFY_TOKEN`, `DISCORD_WEBHOOK_URL`, `SMTP_PASSWORD`). They
+    are refused in `config.yaml`, redacted from logs, and checked at start-up:
+    a channel without its secret stops the service with a clear message.
+46. **Plain `http` for ntfy only on the local Docker network** (a host name
+    without dots, or localhost). E-mail has no unencrypted option.
+47. **`/healthz` is a minimal standard-library server**, not a web framework,
+    until the dashboard brings FastAPI. It reads one short request with a
+    timeout and answers only `GET /healthz`.
+48. **Docker health means liveness.** `/healthz` stays 200 when a check fails
+    (it reports `degraded`), so an offline laptop profile does not make the
+    container look broken; the problem is reported by alert and digest.
+49. **An idle stream is not an error.** A read timeout after the stream opened
+    is reported as `StreamIdle` and the collector reconnects without counting a
+    failure.
+50. **The digest is built from stored data only** (events, findings, analyses,
+    health results), so `sentinel digest` can preview it from the command line,
+    and the archive keeps both the text as sent and the numbers as JSON.
+
 ## Verified facts the design relies on
 
 Checked against the official NextDNS API documentation on 2026-11-12:
@@ -319,7 +417,8 @@ Observed on a live run against the owner's router profile on 2026-11-12:
   2.5 minutes without being rate-limited.
 - A stream with no traffic stayed open for several minutes; one was closed by
   the server after about a minute. Both cases reconnect from the stored cursor.
-- Behaviour of an expired stream id is still unobserved.
+- Behaviour of an expired stream id: a 6½-day-old id was accepted (see below);
+  the age at which NextDNS stops accepting one is still unknown.
 
 Checked on 2026-11-12 for enrichment:
 
@@ -344,6 +443,21 @@ Checked on 2026-11-12 for enrichment:
   `device_id`, `device_name`, `device_model`, `device_local_ip`,
   `matched_name`, `client_name`. There is no `encrypted` or `tracker` column.
 - The laptop profile does report a device id and name, unlike the router.
+- Live tests on 2026-11-19 against a local ntfy server (v2.36.0, a
+  throwaway container on the internal network; nothing went to ntfy.sh):
+  - `sentinel notify --test` was stored by the server with the expected title,
+    priority 3 and timestamp.
+  - Stopping Ollama with a 1-minute window: alert 76 seconds after the stop
+    command (window plus one 10-second check); "Resolved" 10 seconds after it
+    was started again.
+  - Cutting the container's internet route with a 1-minute API window and a
+    2-minute silence window: "NextDNS API failing" after 64 seconds, "No events
+    from router for 2 min" after 114 seconds, both resolved within 26 seconds
+    of reconnecting.
+- **NextDNS accepted a 6½-day-old stream cursor** and replayed the missed
+  events (about 900 a second at first), so a long outage left no gap. The
+  replay was slowed by HTTP 429 `rateLimit` when two profiles reconnected at
+  once; with a 1-minute window this raised a short "API failing" alert.
 - First run over the router profile's week (161,117 events): processed in about
   90 seconds. Before decision 23, `dga-like` produced 287 findings, nearly all
   customer hostnames on cloud platforms, and 92 of 103 RDAP lookups were for
@@ -357,7 +471,10 @@ Checked on 2026-11-12 for enrichment:
   should be off by default.
 - Rule thresholds are first guesses. They are to be judged by the evaluation
   suite, not tuned on the same week of data they were first run on.
-- The notification channel (ntfy, Discord webhook or email) is not chosen.
+- The notification channel (ntfy, Discord webhook or email) is not chosen, so
+  delivery has been proven only against a local ntfy server.
+- The laptop profile has sent nothing for 19 days and is reported as a health
+  problem. Give it `stale_after_minutes` or `quiet_hours`, or disable it.
 - No Git remote exists yet, so the CI workflow has not run on GitHub.
 - Whether to pace history requests to stay under the undocumented rate limit,
   for example when several profiles backfill at once.
@@ -369,3 +486,6 @@ Checked on 2026-11-12 for enrichment:
 - Optional abuse.ch feeds for users who register for a free key.
 - Use the Public Suffix List to tell registrable domains from platform
   customer names exactly, instead of the parent-rank heuristic.
+- A health check on notification delivery itself (a broken channel is
+  currently visible only in the logs and the outbox).
+- Batch stream writes if catch-up after long outages needs to be faster.

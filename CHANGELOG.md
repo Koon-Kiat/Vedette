@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Notifications and health monitoring
+
+- Delivery through ntfy, a Discord webhook or e-mail, chosen by
+  `notify.channel`; secrets only from the environment. `none` keeps every
+  message without sending it.
+- Instant alerts for fresh high and critical findings, with a 60-minute
+  cooldown per rule, profile, device and target, and quiet hours that hold
+  non-critical alerts.
+- Daily digest at the configured local time: findings grouped and ranked, new
+  devices, query volume and blocking against the 7-day average, and health.
+  Archived as text and JSON. `docs/example-digest.txt` is rendered from test
+  data.
+- A durable outbox with retries and backoff, so restarts and network loss lose
+  nothing.
+- Health monitor: profile silence (with per-profile windows and quiet hours),
+  NextDNS errors, the local model, the processing backlog and disk space, with
+  alerts on change and "Resolved" messages.
+- `/healthz` on 127.0.0.1 inside the container, used by Docker's health check.
+- New commands: `sentinel notify --test` and `sentinel digest`.
+- The collector reports to the health monitor; a quiet stream is no longer
+  counted as an error.
+
 ### LLM analyst
 
 - Findings are explained by the local model through Ollama's chat API with a

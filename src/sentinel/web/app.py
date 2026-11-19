@@ -38,6 +38,7 @@ from sentinel.notify.digest import DigestBuilder
 from sentinel.notify.render import prose, safe
 from sentinel.rules.model import RuleSpec, Severity
 from sentinel.storage.dashboard import DashboardQueries, FindingFilter
+from sentinel.storage.evaluation import EvalStore
 from sentinel.storage.store import StoredFinding
 from sentinel.storage.triage import DOMAIN_RULES, STATUSES, TriageStore
 from sentinel.web.auth import LOGIN_COOKIE, SESSION_COOKIE, LoginLimiter, Session, SessionStore
@@ -444,7 +445,11 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     @app.get("/evaluation")
     async def evaluation_page(session: SessionDep) -> HTMLResponse:
         return await page(
-            "evaluation.html", nav="evaluation", title="Evaluation", csrf=session.csrf
+            "evaluation.html",
+            nav="evaluation",
+            title="Evaluation",
+            csrf=session.csrf,
+            run=await EvalStore(ctx.engine).latest(),
         )
 
     return app

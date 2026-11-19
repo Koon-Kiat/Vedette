@@ -12,6 +12,8 @@ from sqlalchemy.engine import make_url
 
 from sentinel import __version__
 from sentinel.config import ConfigError, Settings, load_settings
+from sentinel.eval.report import render_markdown
+from sentinel.eval.suite import run_suite
 from sentinel.llm.schema import Analysis
 from sentinel.log import configure_logging
 from sentinel.notify.channels import Channel, DeliveryError
@@ -26,6 +28,7 @@ from sentinel.sources.base import DnsEvent, SourceError
 from sentinel.sources.nextdns import NextDnsSource
 from sentinel.sources.nextdns_export import ExportFormatError, read_export
 from sentinel.storage.analysis import AnalysisStore
+from sentinel.storage.evaluation import EvalStore
 from sentinel.storage.migrate import run_migrations
 from sentinel.storage.retention import Purged, private_umask, purge_all, purge_expired
 from sentinel.storage.store import Store, StoredFinding
@@ -580,6 +583,84 @@ def backfill(
     for profile_id, (read, new) in counts.items():
         label = clean_text(labels.get(profile_id, profile_id), limit=64)
         typer.echo(f"{label}: read {read} events, {new} new.")
+
+
+async def _evaluate(
+    settings: Settings, models: list[str], thinks: list[bool], with_llm: bool
+) -> tuple[dict[str, Any], str]:
+    started = datetime.now(UTC)
+    summary = await run_suite(
+        settings, load_rules(), models=models, thinks=thinks, with_llm=with_llm, now=started
+    )
+    report = render_markdown(summary)
+    store = Store.open(settings.storage.database_url)
+    try:
+        await EvalStore(store.engine).save(
+            started_at=started, finished_at=datetime.now(UTC), summary=summary, report=report
+        )
+    finally:
+        await store.close()
+    return summary, report
+
+
+@app.command("eval")
+def evaluate(
+    model: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--model", "-m", help="Model to test; repeat for several. Default: llm.model."
+        ),
+    ] = None,
+    think: Annotated[
+        str,
+        typer.Option(help="Thinking for the injection test: off, on or both."),
+    ] = "both",
+    llm: Annotated[
+        bool, typer.Option("--llm/--no-llm", help="Run the prompt-injection test on the model.")
+    ] = True,
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Where to write the report (Markdown).")
+    ] = Path("EVALUATION.md"),
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Measure detection, false alerts, prompt-injection resistance, speed and load.
+
+    Uses the local reference data and your stored history (only counted, never
+    printed) and asks the local model about crafted names. Nothing is sent
+    anywhere else. The results also appear on the dashboard's Evaluation page.
+    """
+    settings = _load_or_exit(config)
+    configure_logging(settings.log_level, secrets=_secret_values(settings))
+    modes = {"off": [False], "on": [True], "both": [False, True]}
+    if think not in modes:
+        typer.echo("--think must be off, on or both.", err=True)
+        raise typer.Exit(code=2)
+    models = model or [settings.llm.model]
+    run_migrations(settings.storage.database_url)
+    summary, report = asyncio.run(_evaluate(settings, models, modes[think], llm))
+    output.write_text(report, encoding="utf-8")
+    history = summary["history"]
+    per_day = history["alerts_per_day"]
+    typer.echo(f"Report written to {output}.")
+    typer.echo(
+        "False alerts per day: " + ("n/a" if per_day is None else f"{per_day:.2f}") + " (target 2)."
+    )
+    for row in summary["injection"]:
+        rate = row["success_rate"]
+        typer.echo(
+            f"Injection success, {row['model']}, thinking {'on' if row['think'] else 'off'}, "
+            f"defences {'on' if row['defences'] else 'off'}: "
+            + ("n/a" if rate is None else f"{rate:.0%}")
+        )
+    for error in summary["errors"]:
+        typer.echo(f"Note: {error}", err=True)
 
 
 async def _purge(database_url: str, settings: Settings, *, everything: bool) -> Purged:

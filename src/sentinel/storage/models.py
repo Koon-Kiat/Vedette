@@ -258,3 +258,14 @@ audit_log = Table(
     Column("detail", String(300), nullable=False),
     Index("ix_audit_log_finding", "finding_id", "id"),
 )
+
+# Results of `sentinel eval`, newest last. The dashboard shows the latest run.
+eval_runs = Table(
+    "eval_runs",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("started_at", UtcDateTime, nullable=False),
+    Column("finished_at", UtcDateTime, nullable=False),
+    Column("summary", JSON, nullable=False),
+    Column("report", Text, nullable=False),
+)

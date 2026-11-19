@@ -19,6 +19,7 @@ from typing import Any
 
 from sentinel.enrich.lexical import lexical_features
 from sentinel.enrich.model import EnrichedEvent
+from sentinel.rules import prefilter
 from sentinel.rules.allowlist import Allowlist
 from sentinel.rules.model import Finding, RuleSpec, bucket
 from sentinel.sources.base import DnsEvent
@@ -33,7 +34,12 @@ class RuleEngine:
     """Evaluates every enabled rule against each enriched event."""
 
     def __init__(
-        self, specs: Sequence[RuleSpec], *, allowlist: Allowlist, learning: timedelta
+        self,
+        specs: Sequence[RuleSpec],
+        *,
+        allowlist: Allowlist,
+        learning: timedelta,
+        instruction_prefilter: bool = True,
     ) -> None:
         """Create an engine.
 
@@ -42,10 +48,14 @@ class RuleEngine:
             allowlist: Roots the domain rules must not flag.
             learning: Time after a profile's first event during which rules that
                 compare against history (new device, new category) stay quiet.
+            instruction_prefilter: Raise findings about domain names that contain
+                instruction-like words (see :mod:`sentinel.rules.prefilter`).
+                Only the evaluation suite turns this off, to measure its effect.
         """
         self._specs = {spec.id: spec for spec in specs if spec.enabled}
         self._allowlist = allowlist
         self._learning = learning
+        self._prefilter = instruction_prefilter
         self._profile_start: dict[str, datetime] = {}
         self._hourly: dict[_Subject, Counter[datetime]] = defaultdict(Counter)
         self._baseline_cache: dict[tuple[_Subject, datetime], float | None] = {}
@@ -156,6 +166,8 @@ class RuleEngine:
             self._new_category,
         ):
             findings.extend(check(item))
+        if self._prefilter:
+            return [prefilter.apply(finding) for finding in findings]
         return findings
 
     def _finding(

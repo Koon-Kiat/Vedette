@@ -39,7 +39,14 @@ CONFIG_FILE_ENV = "SENTINEL_CONFIG_FILE"
 DEFAULT_SECRETS_DIR = Path("/run/secrets")
 
 _SECRET_FIELDS = frozenset(
-    {"nextdns_api_key", "ntfy_topic", "ntfy_token", "discord_webhook_url", "smtp_password"}
+    {
+        "nextdns_api_key",
+        "ntfy_topic",
+        "ntfy_token",
+        "discord_webhook_url",
+        "smtp_password",
+        "dashboard_token",
+    }
 )
 _DISCORD_WEBHOOK = re.compile(
     r"^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api(?:/v\d+)?/webhooks/\d+/[A-Za-z0-9_-]+$"
@@ -260,6 +267,22 @@ class HealthConfig(_Section):
     healthz_port: int = Field(default=8081, ge=1, le=65535)
 
 
+class DashboardConfig(_Section):
+    """The local web dashboard. Its login token comes from DASHBOARD_TOKEN.
+
+    ``host`` is where the server listens inside the process. Docker Compose sets
+    it to 0.0.0.0 inside the container and publishes the port on 127.0.0.1 only.
+    """
+
+    enabled: bool = True
+    host: NonEmptyStr = "127.0.0.1"
+    port: int = Field(default=8080, ge=1, le=65535)
+    session_hours: int = Field(default=12, ge=1, le=168)
+    allowed_hosts: list[NonEmptyStr] = Field(
+        default_factory=lambda: ["127.0.0.1", "localhost"], min_length=1
+    )
+
+
 class RetentionConfig(_Section):
     """How long local data is kept before the scheduled purge."""
 
@@ -287,6 +310,7 @@ class Settings(BaseSettings):
     llm: LlmConfig = Field(default_factory=LlmConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     health: HealthConfig = Field(default_factory=HealthConfig)
+    dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     nextdns_write_enabled: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -307,6 +331,9 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = Field(
         default=None, validation_alias=AliasChoices("SMTP_PASSWORD", "smtp_password")
     )
+    dashboard_token: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("DASHBOARD_TOKEN", "dashboard_token")
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -323,6 +350,7 @@ class Settings(BaseSettings):
         "ntfy_token",
         "discord_webhook_url",
         "smtp_password",
+        "dashboard_token",
         mode="before",
     )
     @classmethod
@@ -341,6 +369,13 @@ class Settings(BaseSettings):
                     raise ValueError(f"duplicate profile {attr}: {value!r}")
                 seen.add(value)
         return self
+
+    @field_validator("dashboard_token")
+    @classmethod
+    def _token_is_long_enough(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value()) < 24:
+            raise ValueError("DASHBOARD_TOKEN must be at least 24 characters")
+        return value
 
     @model_validator(mode="after")
     def _channel_is_complete(self) -> Self:
@@ -373,6 +408,7 @@ class Settings(BaseSettings):
             self.ntfy_token,
             self.discord_webhook_url,
             self.smtp_password,
+            self.dashboard_token,
         )
         return [secret.get_secret_value() for secret in secrets if secret is not None]
 

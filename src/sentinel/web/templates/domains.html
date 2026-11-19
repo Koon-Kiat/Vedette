@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% macro table(rows, empty) %}
+{% if rows %}
+<table>
+  <thead><tr><th>Domain</th><th class="num">Queries</th><th class="num">Top-sites rank</th><th class="num">Registered</th></tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.count|num }}</td><td class="num">{{ row.rank if row.rank else "–" }}</td><td class="num">{{ "%d days ago"|format(row.age_days) if row.age_days is not none else "unknown" }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">{{ empty }}</p>
+{% endif %}
+{% endmacro %}
+{% block content %}
+<h1>Domains</h1>
+<p class="lead">
+  Showing the last {{ "24 hours" if period == "24h" else "7 days" }}.
+  {% if period == "24h" %}<a href="/domains?period=7d">Show 7 days</a>{% else %}<a href="/domains?period=24h">Show 24 hours</a>{% endif %}.
+  Ranks and registration dates come from the local caches; nothing is looked up from this page.
+</p>
+<section class="columns">
+  <div><h2>Most allowed</h2>{{ table(page.top_allowed, "No allowed queries.") }}</div>
+  <div><h2>Most blocked</h2>{{ table(page.top_blocked, "No blocked queries.") }}</div>
+  <div><h2>Newly seen</h2>{{ table(page.newly_seen, "No new domains.") }}</div>
+  <div><h2>Registered in the last 30 days</h2>{{ table(page.young, "No recently registered domains.") }}</div>
+</section>
+{% endblock %}

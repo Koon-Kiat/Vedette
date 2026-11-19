@@ -1,0 +1,34 @@
+{% set f = row.finding %}
+<tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ row.priority.value }}">
+  <td class="when">{{ f.last_ts|local(tz) }}</td>
+  <td>{% with level = row.priority.value %}{% include "_badge.html" %}{% endwith %}</td>
+  <td><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>
+  <td class="name">{% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}{{ f.target|domain }}{% endif %}</td>
+  <td>{{ labels[f.profile_id] }}</td>
+  <td>{% if f.device_mode %}{{ f.subject|text }}{% else %}<span class="muted">unavailable</span>{% endif %}</td>
+  <td class="num">{{ f.event_count|num }}</td>
+  <td class="status">{{ f.status }}</td>
+  <td class="actions">
+    {% if f.status != "acknowledged" %}
+    <form method="post" action="/findings/{{ f.id }}/acknowledge" hx-post="/findings/{{ f.id }}/acknowledge" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit">Acknowledge</button>
+    </form>
+    {% endif %}
+    {% if f.status != "benign" %}
+    <form method="post" action="/findings/{{ f.id }}/benign" hx-post="/findings/{{ f.id }}/benign" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML"{% if f.rule_id in domain_rules %} hx-confirm="Mark as benign and stop flagging {{ f.target|domain }} on {{ labels[f.profile_id] }}?"{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit">Benign</button>
+    </form>
+    {% endif %}
+    {% if f.status != "open" %}
+    <form method="post" action="/findings/{{ f.id }}/reopen" hx-post="/findings/{{ f.id }}/reopen" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit">Reopen</button>
+    </form>
+    {% endif %}
+  </td>
+</tr>

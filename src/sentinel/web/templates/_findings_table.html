@@ -1,0 +1,14 @@
+{% if rows %}
+<table class="findings">
+  <thead>
+    <tr><th>Last seen</th><th>Priority</th><th>Rule</th><th>About</th><th>Profile</th><th>Device</th><th class="num">Events</th><th>Status</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% include "_finding_row.html" %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No findings match.</p>
+{% endif %}

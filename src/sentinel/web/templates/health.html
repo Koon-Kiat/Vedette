@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Health</h1>
+<section>
+  <h2>Checks</h2>
+  {% if health.checks %}
+  <table>
+    <thead><tr><th>Check</th><th>State</th><th>Detail</th><th>Since</th></tr></thead>
+    <tbody>
+      {% for check in health.checks %}
+      <tr class="{{ "ok" if check.ok else "problem" }}"><td>{{ check.label|text }}</td><td>{{ "OK" if check.ok else "PROBLEM" }}</td><td>{{ check.detail|text }}</td><td class="when">{{ check.since|local(tz) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">Checked {{ health.checks[0].updated_at|local(tz) }}.</p>
+  {% else %}
+  <p class="empty">No health checks have run yet.</p>
+  {% endif %}
+</section>
+<section class="columns">
+  <div>
+    <h2>Newest event per profile</h2>
+    <table>
+      <thead><tr><th>Profile</th><th>Newest event</th><th>Lag</th></tr></thead>
+      <tbody>
+        {% for profile in health.profiles %}
+        <tr><td>{{ profile.label }}</td><td class="when">{{ profile.last_event|local(tz) }}</td><td>{{ profile.lag|ago if profile.lag is not none else "–" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <h2>Queues</h2>
+    <ul>
+      <li>{{ health.unprocessed_events|num }} events waiting for the rules</li>
+      <li>{{ health.unanalysed_findings|num }} findings waiting for the local model</li>
+      <li>{{ health.outbox_pending|num }} messages waiting to be sent</li>
+      <li>{{ health.outbox_failed_7d|num }} messages failed in the last 7 days</li>
+    </ul>
+  </div>
+  <div>
+    <h2>Local model, last 7 days</h2>
+    <ul>
+      <li>{{ health.llm_calls_7d|num }} calls{% for outcome, count in health.llm_outcomes|dictsort %}{{ "; " if loop.first else ", " }}{{ count }} {{ outcome }}{% endfor %}</li>
+      <li>Latency {% if health.p50_ms is not none %}p50 {{ health.p50_ms|secs }}, p95 {{ health.p95_ms|secs }}{% else %}not measured yet{% endif %}</li>
+      <li>Cache hit rate {{ health.cache_hit_rate|pct if health.cache_hit_rate is not none else "not measured yet" }}</li>
+      <li>{{ health.analysis_sources.get("template", 0) }} standard explanations used instead of the model</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

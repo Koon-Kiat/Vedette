@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Digests</h1>
+{% if digests %}
+<table>
+  <thead><tr><th>Period ending</th><th>Digest</th><th>Delivery</th></tr></thead>
+  <tbody>
+    {% for digest in digests %}
+    <tr><td class="when">{{ digest.period_end|local(tz) }}</td><td><a href="/digests/{{ digest.id }}">{{ digest.title }}</a></td><td>{{ digest.delivery or "unknown" }}{% if digest.delivery == "skipped" %} (no channel){% endif %}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No digest yet. The first one is produced at the next digest time.</p>
+{% endif %}
+{% endblock %}

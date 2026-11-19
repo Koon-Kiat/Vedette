@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Findings</h1>
+<form class="filters" method="get" action="/findings" hx-get="/findings" hx-target="#findings-table" hx-push-url="true" hx-trigger="change, submit">
+  <label>Profile
+    <select name="profile">
+      <option value="">any</option>
+      {% for id, label in labels.items() %}<option value="{{ id }}"{% if wanted.profile_id == id %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Device
+    <select name="device">
+      <option value="">any</option>
+      {% for device in devices %}<option value="{{ device }}"{% if wanted.device == device %} selected{% endif %}>{{ device|text }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Rule
+    <select name="rule">
+      <option value="">any</option>
+      {% for rule in rules %}<option value="{{ rule }}"{% if wanted.rule_id == rule %} selected{% endif %}>{{ rule }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>At least
+    <select name="severity">
+      <option value="">any</option>
+      {% for level in severities %}<option value="{{ level }}"{% if wanted.min_severity and wanted.min_severity.value == level %} selected{% endif %}>{{ level }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Status
+    <select name="status">
+      {% for status in statuses %}<option value="{{ status }}"{% if (wanted.status or "all") == status %} selected{% endif %}>{{ status }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Day
+    <input type="date" name="date" value="{{ wanted.day.isoformat() if wanted.day else "" }}">
+  </label>
+  <button type="submit">Filter</button>
+</form>
+<div id="findings-table">
+{% include "_findings_table.html" %}
+</div>
+{% endblock %}

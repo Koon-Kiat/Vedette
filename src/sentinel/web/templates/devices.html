@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Devices</h1>
+<p class="lead">Devices seen in the last 7 days.</p>
+{% for profile in profiles %}
+<section>
+  <h2>{{ profile.label }}</h2>
+  {% if not profile.attribution %}
+  <p>Device attribution unavailable on this profile: NextDNS reports no devices for it, so per-device rules count the whole profile. {{ profile.client_ips|num }} client address{{ "" if profile.client_ips == 1 else "es" }} seen.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>Device</th><th>Name</th><th>First seen</th><th>Last seen</th><th class="num">Queries, 24 h</th><th class="num">Queries, 7 days</th><th class="num">Findings</th></tr></thead>
+    <tbody>
+      {% for device in profile.devices %}
+      <tr><td>{{ device.device_id|text }}</td><td>{{ device.name|text if device.name else "–" }}</td><td class="when">{{ device.first_seen|local(tz) }}</td><td class="when">{{ device.last_seen|local(tz) }}</td><td class="num">{{ device.queries_24h|num }}</td><td class="num">{{ device.queries_7d|num }}</td><td class="num">{{ device.findings|num }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

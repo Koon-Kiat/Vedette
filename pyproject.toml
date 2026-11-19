@@ -8,16 +8,22 @@ dependencies = [
     # Versioned schema migrations: SQLite now, Postgres later.
     "alembic>=1.20",
     "aiosqlite>=0.22",
+    # Dashboard. Web-facing dependencies are pinned exactly, each to a release
+    # at least two weeks old when added; bump them deliberately.
+    "fastapi==0.162.0",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.3",
+    "jinja2==3.1.6",
     "pydantic>=2.14",
     "pydantic-settings>=2.16",
+    "python-multipart==0.0.33",
     "pyyaml>=6.0.3",
     "sqlalchemy[asyncio]>=2.1",
     "structlog>=26.1",
     "typer>=0.29",
     # IANA time zone data for zoneinfo: python:3.14-slim ships none.
     "tzdata>=2026.6",
+    "uvicorn==0.54.0",
 ]
 
 [project.scripts]

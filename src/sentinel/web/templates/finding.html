@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+{% set f = row.finding %}
+{% set a = row.analysis %}
+{% set level = row.priority.value %}
+<p><a href="/findings">All findings</a></p>
+<h1>{% include "_badge.html" %} {{ f.rule_id }}: {% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}{{ f.target|domain }}{% endif %}</h1>
+<dl class="facts">
+  <dt>Status</dt><dd>{{ f.status }}</dd>
+  <dt>Profile</dt><dd>{{ labels[f.profile_id] }}</dd>
+  <dt>Device</dt><dd>{% if f.device_mode %}{{ f.subject|text }}{% else %}attribution unavailable on this profile{% endif %}</dd>
+  <dt>First seen</dt><dd>{{ f.first_ts|local(tz) }}</dd>
+  <dt>Last seen</dt><dd>{{ f.last_ts|local(tz) }}</dd>
+  <dt>Events</dt><dd>{{ f.event_count|num }}</dd>
+  <dt>Rule floor</dt><dd>{{ f.severity.value }}{% if row.priority != f.severity %}; raised to {{ row.priority.value }} by the local model{% endif %}</dd>
+</dl>
+<section class="actions-bar">
+  {% for action, label in [("acknowledge", "Acknowledge"), ("benign", "Mark benign"), ("reopen", "Reopen")] %}
+  {% if (action == "acknowledge" and f.status != "acknowledged") or (action == "benign" and f.status != "benign") or (action == "reopen" and f.status != "open") %}
+  <form method="post" action="/findings/{{ f.id }}/{{ action }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <button type="submit">{{ label }}</button>
+  </form>
+  {% endif %}
+  {% endfor %}
+  {% if f.rule_id in domain_rules and f.status != "benign" %}<p class="muted">Marking it benign also stops the rules flagging {{ f.target|domain }} on {{ labels[f.profile_id] }}.</p>{% endif %}
+</section>
+<section>
+  <h2>Explanation</h2>
+  {% if a %}
+  <p>{{ a.summary|prose }}</p>
+  <p><strong>Likely cause:</strong> {{ a.likely_cause|prose }}</p>
+  <p><strong>Recommended action:</strong> {{ a.recommended_action|prose }}</p>
+  <p class="muted">{% if a.source == "template" %}Standard explanation; the local model was not used.{% else %}Explained by {{ a.model|text }}, confidence {{ "%.2f"|format(a.confidence) }}{% if a.source == "cache" %}, reused from an earlier identical finding{% endif %}.{% endif %}</p>
+  {% else %}
+  <p>Not analysed yet. {% if spec %}{{ spec.description|prose }}{% endif %}</p>
+  {% endif %}
+</section>
+<section>
+  <h2>Evidence</h2>
+  <table class="kv">
+    {% for key, value in f.evidence|dictsort %}{% if value is not none %}<tr><th>{{ key|text }}</th><td>{{ value|text }}</td></tr>{% endif %}{% endfor %}
+  </table>
+</section>
+{% if enrichment %}
+<section>
+  <h2>What the local caches know</h2>
+  <ul>
+    <li>{% if enrichment.rank %}On the top-sites list at rank {{ enrichment.rank|num }}{% elif enrichment.popularity_known %}Not on the top-sites list{% else %}Top-sites list not downloaded yet{% endif %}{% if enrichment.platform_rank %}; hosted under a site ranked {{ enrichment.platform_rank|num }}{% endif %}</li>
+    <li>{% if enrichment.age_days is not none %}Registered {{ enrichment.age_days }} days ago{% elif enrichment.age_status %}Registration date unknown (registry answered: {{ enrichment.age_status }}){% else %}Registration date not looked up{% endif %}</li>
+    <li>{% if enrichment.threat_feeds %}Listed by: {{ enrichment.threat_feeds|join(", ") }}{% else %}Not on any threat feed{% endif %}</li>
+    <li>First seen on this profile: {{ enrichment.first_seen|local(tz) }}</li>
+    {% if enrichment.lexical %}<li>Leftmost label {{ enrichment.lexical.label|text }}: {{ enrichment.lexical.label_length }} characters, entropy {{ "%.2f"|format(enrichment.lexical.entropy) }} bits per character</li>{% endif %}
+  </ul>
+</section>
+{% endif %}
+<section>
+  <h2>Recent queries</h2>
+  {% if queries %}
+  <table>
+    <thead><tr><th>Time</th><th>Name</th><th>Status</th><th>Device</th></tr></thead>
+    <tbody>
+      {% for q in queries %}<tr><td class="when">{{ q.ts|local(tz) }}</td><td class="name">{{ q.fqdn|domain }}</td><td>{{ q.status }}</td><td>{% if q.device_id %}{{ q.device_id|text }}{% if q.device_name %} ({{ q.device_name|text }}){% endif %}{% else %}<span class="muted">unavailable</span>{% endif %}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No stored queries for this finding.</p>
+  {% endif %}
+</section>
+<section>
+  <h2>History</h2>
+  {% if audit %}
+  <ul>{% for entry in audit %}<li>{{ entry.at|local(tz) }}: {{ entry.action }} by {{ entry.actor }} ({{ entry.detail|text }})</li>{% endfor %}</ul>
+  {% else %}
+  <p class="empty">No changes yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

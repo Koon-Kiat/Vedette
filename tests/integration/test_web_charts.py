@@ -130,6 +130,19 @@ async def test_the_series_never_reaches_past_now(charted: Store) -> None:
     assert default["end"] == future["end"] == epoch(NOW)
 
 
+async def test_the_chart_can_ask_for_more_bars(charted: Store) -> None:
+    async with logged_in(charted) as (client, _):
+        default = (await client.get("/api/series")).json()
+        wide = (await client.get("/api/series?points=300")).json()
+        too_many = (await client.get("/api/series?points=9999")).json()
+        bad = await client.get("/api/series?points=many")
+
+    assert (default["step"], len(default["t"])) == (900, 97)
+    assert (wide["step"], len(wide["t"])) == (300, 289)
+    assert too_many["step"] == 300  # held at 480 bars at most
+    assert bad.status_code == 422
+
+
 @pytest.mark.parametrize("query", ["from=soon", "to=1.5", "from=99999999999999999999"])
 async def test_a_bad_time_is_refused(charted: Store, query: str) -> None:
     async with logged_in(charted) as (client, _):

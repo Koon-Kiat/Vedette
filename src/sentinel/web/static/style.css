@@ -304,11 +304,13 @@ html[data-paused="true"] .live-dot { background: var(--ink-3); }
 .logout { padding: 4px 10px 0; }
 .rail button.quiet { padding-left: 0; }
 
+/* Main fills the screen up to a 3440px ultrawide; the pages recompose into
+   more columns as it widens instead of stretching one column. */
 main {
   width: 100%;
-  max-width: 1320px;
+  max-width: 3200px;
   min-width: 0;
-  padding: 32px 36px 72px;
+  padding: 32px clamp(36px, 2.4vw, 64px) 72px;
 }
 
 body.bare {
@@ -398,15 +400,27 @@ body.bare main {
 .note { display: block; margin: 12px 0 0; color: var(--ink-3); font-size: 12px; }
 td .note { margin: 2px 0 0; }
 
-.split {
+/* Page boards. The Overview stacks its main blocks, with the side panels in
+   pairs below; on an ultrawide screen the side panels become a column of
+   their own beside the main one. The Live page sets its feed beside its chart
+   there. */
+.board,
+.board-main,
+.board-side,
+.live-board {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(340px, 1fr);
-  gap: 24px;
-  margin-top: 40px;
+  gap: 40px 24px;
+  align-content: start;
+  min-width: 0;
 }
-.split-even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.split > .block { margin-top: 0; display: flex; flex-direction: column; }
-.split > .block > .panel { flex: 1; }
+.board > *,
+.board-main > .block,
+.board-side > .block,
+.live-board > .block { margin-top: 0; min-width: 0; }
+.board-side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.board-side > .block { display: flex; flex-direction: column; }
+.board-side > .block > .panel { flex: 1; }
+.board-side > .board-span { grid-column: 1 / -1; }
 
 .quad,
 .trio {
@@ -753,15 +767,13 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
   line-height: 18px;
 }
 
-.live-top { margin-top: 0; }
-.page-head + .live-top { margin-top: 0; }
 .rate-head {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: 12px 32px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .rate-head h2 { margin: 0; }
 svg.minutes { display: block; width: 100%; height: 72px; }
@@ -936,33 +948,52 @@ svg.hourly { display: block; width: 100%; height: auto; }
 .window-totals { margin: 0; color: var(--ink-2); }
 .window-totals strong { color: var(--ink); font-weight: 620; }
 .window-head button { margin-left: auto; }
-.window-grid {
+.window h4 { margin: 0 0 8px; color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.window-found { margin-top: 16px; }
+.window-findings .name { overflow-wrap: anywhere; }
+/* Two lists in matching boxes: same top, same header, same row height and
+   the same height, so their rows line up across the gap. Long names are cut
+   with an ellipsis; the full name is in the row's tooltip. */
+.window-cols {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px 32px;
-  margin-top: 14px;
+  align-items: stretch;
+  gap: 18px 24px;
+  margin-top: 16px;
 }
-.window h4 { margin: 0 0 8px; color: var(--ink-2); font-size: 12px; font-weight: 600; }
-.window h4 ~ h4 { margin-top: 20px; }
-.window-findings .name { overflow-wrap: anywhere; }
-.window-feed {
-  max-height: 380px;
-  overflow-y: auto;
+.window-col { display: flex; flex-direction: column; min-width: 0; }
+.window-box {
+  flex: 1;
+  max-height: 476px; /* the header and ten rows */
+  overflow: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  box-shadow: none;
 }
-.window-feed .feed-row { grid-template-columns: 62px minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 12px; }
-.window-feed .feed-where { grid-column: 2; grid-row: 2; text-align: left; white-space: normal; }
-.window-feed .feed-status { grid-column: 3; grid-row: 1; }
-@container (max-width: 700px) {
-  .window-grid { grid-template-columns: minmax(0, 1fr); }
+.window-table { table-layout: fixed; }
+.window-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.window-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.window-table .col-num,
+.window-table .col-status { width: 92px; }
+.window-table .col-time { width: 88px; }
+.window-table .col-where { width: 28%; }
+.window-table td.when { color: var(--ink-3); font-family: var(--mono); font-size: 12px; }
+.window-table td.where { color: var(--ink-2); font-size: 12px; }
+.window-table tr.status-blocked td.name { color: var(--ink-2); }
+.window-box .empty { margin: 0; padding: 12px; }
+@container (max-width: 760px) {
+  .window-cols { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Enlarged: the same chart, moved into a modal dialog that fills the window. */
 dialog.tchart-dialog {
-  width: min(1480px, calc(100vw - 48px));
-  height: min(940px, calc(100dvh - 48px));
+  width: calc(100vw - 48px);
+  height: calc(100dvh - 48px);
   max-width: none;
   max-height: none;
   padding: 22px 24px 18px;
@@ -1155,6 +1186,52 @@ pre.digest {
   @keyframes feed-in-calm { from { opacity: 0; } }
 }
 
+/* --- Wide screens ------------------------------------------------------------- */
+
+/* Desktop monitors: the finding's explanation takes the extra width, so the
+   domain and why it fired wrap less. */
+@media (min-width: 1800px) {
+  .findings td.about { width: 38%; max-width: none; }
+}
+
+/* Ultrawide: what sat in rows becomes columns side by side, so the page uses
+   the width instead of stretching each table across all of it. */
+@media (min-width: 2240px) {
+  .board { grid-template-columns: minmax(0, 2fr) minmax(440px, 1fr); }
+  .board-side { grid-template-columns: minmax(0, 1fr); }
+
+  .live-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "feed chart";
+  }
+  .live-board .live-feed { grid-area: feed; }
+  .live-board .live-chart { grid-area: chart; position: sticky; top: 32px; }
+  /* Equal heads, so the two panels start on one line. */
+  .live-board .block-head { min-height: 52px; align-items: end; }
+  /* The chart grows with the window to sit level with the feed beside it. */
+  .live-board .tchart-short .tchart-plot { height: clamp(340px, 100vh - 760px, 560px); }
+
+  .quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .quad > .block { margin-top: 0; }
+
+  .detail { grid-template-columns: minmax(0, 1fr) 400px; }
+  .detail-main {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "explain evidence"
+      "cache evidence"
+      "queries queries";
+    align-items: start;
+    gap: 40px 32px;
+  }
+  .detail-main > .block { margin-top: 0; min-width: 0; }
+  .detail-explain { grid-area: explain; }
+  .detail-evidence { grid-area: evidence; }
+  .detail-cache { grid-area: cache; }
+  .detail-queries { grid-area: queries; }
+}
+
 /* --- Narrow screens ----------------------------------------------------------- */
 
 /* Laptop widths: the secondary columns fold into one line under the domain,
@@ -1176,7 +1253,7 @@ pre.digest {
 }
 
 @media (max-width: 1180px) {
-  .split, .split-even, .detail { grid-template-columns: minmax(0, 1fr); }
+  .board-side, .detail { grid-template-columns: minmax(0, 1fr); }
   .detail-side { position: static; }
   .trio { grid-template-columns: minmax(0, 1fr); }
   .trio > .block + .block { margin-top: 32px; }

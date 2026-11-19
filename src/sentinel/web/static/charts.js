@@ -173,6 +173,7 @@
       recent: [],
       seq: 0,
       controller: null,
+      points: 0, // how many bars the last fetch asked for
     };
     state.span = state.range;
 
@@ -290,10 +291,18 @@
       return true;
     }
 
+    // About one bar per 6 pixels, so a wider chart gets finer bars.
+    function wantedPoints() {
+      const width = (u ? u.over.clientWidth : section.clientWidth - 60) || 800;
+      return Math.round(clamp(width / 6, 60, 480));
+    }
+
     async function load({ quiet = false } = {}) {
       const [min, max] = view();
       const from = Math.floor(min);
       const to = Math.ceil(Math.min(max, nowEst()));
+      const points = wantedPoints();
+      state.points = points;
       const seq = ++state.seq;
       if (state.controller) state.controller.abort();
       const controller = new AbortController();
@@ -301,7 +310,7 @@
       state.lastFetch = Date.now();
       if (!quiet && u) section.classList.add("is-loading");
       try {
-        const response = await fetch(`/api/series?from=${from}&to=${to}`, {
+        const response = await fetch(`/api/series?from=${from}&to=${to}&points=${points}`, {
           headers: { Accept: "application/json" },
           credentials: "same-origin",
           cache: "no-store",
@@ -874,6 +883,8 @@
       const width = Math.floor(plot.clientWidth);
       const height = Math.floor(plot.clientHeight);
       if (width > 0 && height > 0 && (width !== u.width || height !== u.height)) u.setSize({ width, height });
+      // Much wider or narrower than when the bars were fetched: fetch bars to suit.
+      if (state.points && Math.abs(wantedPoints() - state.points) / state.points > 0.2) scheduleLoad();
     }
 
     function create() {

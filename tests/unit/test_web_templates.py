@@ -111,7 +111,8 @@ def test_the_chart_script_builds_urls_only_from_numbers() -> None:
 
     # The only requests and navigations, each with numbers the script checked.
     assert script.count("fetch(") == 1
-    assert "fetch(`/api/series?from=${from}&to=${to}`" in script
+    assert "fetch(`/api/series?from=${from}&to=${to}&points=${points}`" in script
+    assert "return Math.round(clamp(width / 6, 60, 480));" in script
     assert "`/partials/window?from=${Math.floor(from)}&to=${Math.ceil(to)}`" in script
     assert "window.location.assign(`/findings/${c.items[0].id}`)" in script
     assert "Number.isInteger(c.items[0].id)" in script

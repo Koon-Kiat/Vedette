@@ -27,6 +27,15 @@ def test_the_bar_size_follows_the_span(span: timedelta, step: int) -> None:
     assert span.total_seconds() / step <= MAX_POINTS
 
 
+@pytest.mark.parametrize(
+    ("points", "step"),
+    [(60, 1800), (240, 900), (300, 300), (480, 300), (100000, 300), (-5, 3600)],
+)
+def test_a_wider_chart_gets_finer_bars_within_limits(points: int, step: int) -> None:
+    # 24 hours: 300 points allow five-minute bars; the limits are 24 and 480 bars.
+    assert choose_step(timedelta(hours=24), points) == step
+
+
 def test_a_span_ending_in_the_future_ends_now() -> None:
     start, end = SeriesQueries.clamp(NOW - timedelta(hours=1), NOW + timedelta(days=1), NOW)
 

@@ -11,7 +11,7 @@
 
 <div class="detail">
   <div class="detail-main">
-    <section class="block" aria-labelledby="explain-title">
+    <section class="block detail-explain" aria-labelledby="explain-title">
       <h2 id="explain-title">Explanation</h2>
       {% if a %}
       <p class="summary">{{ a.summary|prose }}</p>
@@ -25,7 +25,7 @@
       {% endif %}
     </section>
 
-    <section class="block" aria-labelledby="evidence-title">
+    <section class="block detail-evidence" aria-labelledby="evidence-title">
       <h2 id="evidence-title">Evidence</h2>
       <div class="table-wrap">
       <table class="kv">
@@ -35,7 +35,7 @@
     </section>
 
     {% if enrichment %}
-    <section class="block" aria-labelledby="cache-title">
+    <section class="block detail-cache" aria-labelledby="cache-title">
       <h2 id="cache-title">What the local caches know</h2>
       <ul class="plain facts-list">
         <li>{% if enrichment.rank %}On the top-sites list at rank {{ enrichment.rank|num }}{% elif enrichment.popularity_known %}Not on the top-sites list{% else %}Top-sites list not downloaded yet{% endif %}{% if enrichment.platform_rank %}; hosted under a site ranked {{ enrichment.platform_rank|num }}{% endif %}</li>
@@ -47,7 +47,7 @@
     </section>
     {% endif %}
 
-    <section class="block" aria-labelledby="queries-title">
+    <section class="block detail-queries" aria-labelledby="queries-title">
       <h2 id="queries-title">Recent queries</h2>
       {% if queries %}
       <div class="table-wrap">

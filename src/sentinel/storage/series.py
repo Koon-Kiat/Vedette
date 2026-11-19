@@ -1,7 +1,8 @@
 """Time series and time windows behind the dashboard's interactive charts.
 
 The bucket size follows the span asked for, so zooming into a chart fetches
-finer data: about 240 buckets at most, from one minute up to one day.
+finer data, from one minute up to one day. A chart asks for as many buckets
+as its width suits: 240 at most by default, up to 480 on a wide screen.
 """
 
 from collections.abc import Sequence
@@ -17,15 +18,18 @@ from sentinel.storage.live import LiveEvent, live_event
 from sentinel.storage.models import events, finding_analysis, findings
 
 STEPS = (60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400)
-MAX_POINTS = 240
+MAX_POINTS = 240  # buckets when the chart does not say
+MIN_POINTS = 24
+POINTS_LIMIT = 480  # the most any chart may ask for
 MAX_SPAN = timedelta(days=31)
 USUAL_WINDOW = timedelta(days=7)
 
 
-def choose_step(span: timedelta) -> int:
-    """The smallest bucket, in seconds, that keeps the span within ``MAX_POINTS``."""
+def choose_step(span: timedelta, points: int = MAX_POINTS) -> int:
+    """The smallest bucket, in seconds, that keeps the span within ``points`` buckets."""
+    points = min(max(points, MIN_POINTS), POINTS_LIMIT)
     seconds = max(span.total_seconds(), 60)
-    return next((step for step in STEPS if seconds / step <= MAX_POINTS), STEPS[-1])
+    return next((step for step in STEPS if seconds / step <= points), STEPS[-1])
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,9 +143,9 @@ class SeriesQueries:
             )
         return out
 
-    async def series(self, start: datetime, end: datetime) -> Series:
+    async def series(self, start: datetime, end: datetime, *, points: int = MAX_POINTS) -> Series:
         """Queries per bucket between ``start`` and ``end`` (UTC), oldest first."""
-        step = choose_step(end - start)
+        step = choose_step(end - start, points)
         first = _epoch(start) // step * step
         last = _epoch(end)
         # "//" is integer division in SQL; "/" is true division and would match no bar.

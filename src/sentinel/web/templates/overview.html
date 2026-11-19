@@ -10,6 +10,8 @@
   {% include "_live_line.html" %}
 </header>
 
+<div class="board">
+<div class="board-main">
 <section class="block" aria-labelledby="decide-title">
   <div class="block-head">
     <h2 id="decide-title">Needs a decision</h2>
@@ -26,39 +28,39 @@
     {% call tchart("overview", 86400, [(21600, "6h", "6 hours"), (86400, "24h", "24 hours"), (604800, "7d", "7 days"), (2592000, "30d", "30 days")], "Queries over time, allowed and blocked, with findings") %}{% include "_chart.html" %}{% endcall %}
   </div>
 </section>
-
-<div class="split split-even">
-  <section class="block" aria-labelledby="now-title">
-    <div class="block-head"><h2 id="now-title">Right now</h2><a href="/live">Open the live feed</a></div>
-    <div class="panel feed-panel">
-      <ol class="feed feed-compact" data-live="feed" data-limit="8" aria-live="off">
-        {% for item in recent %}{% include "_feed_row.html" %}{% else %}<li class="feed-empty">Waiting for the first query.</li>{% endfor %}
-      </ol>
-    </div>
-  </section>
-
-  <section class="block" aria-labelledby="devices-title">
-    <div class="block-head"><h2 id="devices-title">New devices and findings</h2></div>
-    <div class="panel">
-      <h3>New devices{% if new_devices_avg is not none %} <span class="usual">usual {{ new_devices_avg|avg }} a day</span>{% endif %}</h3>
-      {% if digest.new_devices %}
-      <ul class="plain">
-        {% for device in digest.new_devices %}
-        <li>{{ device.profile }}: {% if device.is_address %}new address <span class="device">{{ device.device|text }}</span>{% else %}<span class="device">{{ device.device|text }}</span>{% if device.name %} (<span class="device">{{ device.name|text }}</span>){% endif %}{% endif %}</li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="empty">No new devices.</p>
-      {% endif %}
-      <h3>Findings by priority</h3>
-      <ul class="counts">
-        {% for level in levels %}<li><span class="swatch sev-{{ level }}"></span><span class="count-text">{{ digest.counts[level] }} {{ level }}</span>{% if digest.counts_avg[level] is not none %}<span class="usual">usual {{ digest.counts_avg[level]|avg }}</span>{% endif %}</li>{% endfor %}
-      </ul>
-    </div>
-  </section>
 </div>
 
-<section class="block" aria-labelledby="today-title">
+<div class="board-side">
+<section class="block" aria-labelledby="now-title">
+  <div class="block-head"><h2 id="now-title">Right now</h2><a href="/live">Open the live feed</a></div>
+  <div class="panel feed-panel">
+    <ol class="feed feed-compact" data-live="feed" data-limit="8" aria-live="off">
+      {% for item in recent %}{% include "_feed_row.html" %}{% else %}<li class="feed-empty">Waiting for the first query.</li>{% endfor %}
+    </ol>
+  </div>
+</section>
+
+<section class="block" aria-labelledby="devices-title">
+  <div class="block-head"><h2 id="devices-title">New devices and findings</h2></div>
+  <div class="panel">
+    <h3>New devices{% if new_devices_avg is not none %} <span class="usual">usual {{ new_devices_avg|avg }} a day</span>{% endif %}</h3>
+    {% if digest.new_devices %}
+    <ul class="plain">
+      {% for device in digest.new_devices %}
+      <li>{{ device.profile }}: {% if device.is_address %}new address <span class="device">{{ device.device|text }}</span>{% else %}<span class="device">{{ device.device|text }}</span>{% if device.name %} (<span class="device">{{ device.name|text }}</span>){% endif %}{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No new devices.</p>
+    {% endif %}
+    <h3>Findings by priority</h3>
+    <ul class="counts">
+      {% for level in levels %}<li><span class="swatch sev-{{ level }}"></span><span class="count-text">{{ digest.counts[level] }} {{ level }}</span>{% if digest.counts_avg[level] is not none %}<span class="usual">usual {{ digest.counts_avg[level]|avg }}</span>{% endif %}</li>{% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="block board-span" aria-labelledby="today-title">
   <div class="block-head"><h2 id="today-title">Today against the usual week</h2></div>
   <div class="panel">
     <table class="compact">
@@ -77,4 +79,6 @@
     </table>
   </div>
 </section>
+</div>
+</div>
 {% endblock %}

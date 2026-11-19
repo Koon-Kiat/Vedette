@@ -12,15 +12,16 @@
   {% include "_live_line.html" %}
 </header>
 
-<section class="block live-top" aria-labelledby="rate-title">
-  <div class="panel rate-panel">
-    <div class="rate-head">
-      <h2 id="rate-title">Queries over time</h2>
-      <dl class="rate-figures">
-        <div><dt>Peak minute, last 30 minutes</dt><dd data-live="peak">{{ totals|max|num }}</dd></div>
-        <div><dt>Open findings</dt><dd data-live="open-findings">{{ stats.open_findings|num }}</dd></div>
-      </dl>
-    </div>
+<div class="live-board">
+<section class="block live-chart" aria-labelledby="rate-title">
+  <div class="block-head rate-head">
+    <h2 id="rate-title">Queries over time</h2>
+    <dl class="rate-figures">
+      <div><dt>Peak minute, last 30 minutes</dt><dd data-live="peak">{{ totals|max|num }}</dd></div>
+      <div><dt>Open findings</dt><dd data-live="open-findings">{{ stats.open_findings|num }}</dd></div>
+    </dl>
+  </div>
+  <div class="panel chart-panel">
     {% call tchart("live", 1800, [(1800, "30m", "30 minutes"), (3600, "1h", "hour"), (21600, "6h", "6 hours"), (86400, "24h", "24 hours")], "Queries over time, allowed and blocked, with findings", size="short") %}
     <p class="hint">Queries per minute over the last 30 minutes; the bar on the right is the current minute.</p>
     <svg class="chart minutes" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Queries per minute over the last 30 minutes" data-live="minutes">
@@ -34,7 +35,7 @@
   </div>
 </section>
 
-<section class="block" aria-labelledby="feed-title">
+<section class="block live-feed" aria-labelledby="feed-title">
   <div class="block-head feed-head">
     <h2 id="feed-title">Queries</h2>
     <div class="feed-controls" role="group" aria-label="Feed controls">
@@ -56,4 +57,5 @@
   </div>
   <noscript><p class="note">The feed updates only with JavaScript on; reload the page to see new queries.</p></noscript>
 </section>
+</div>
 {% endblock %}

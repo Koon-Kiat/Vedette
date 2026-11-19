@@ -43,7 +43,7 @@ from sentinel.rules.model import RuleSpec, Severity
 from sentinel.storage.dashboard import DashboardQueries, FindingFilter
 from sentinel.storage.evaluation import EvalStore
 from sentinel.storage.live import LiveEvent, LiveQueries, LiveStats
-from sentinel.storage.series import SeriesFinding, SeriesQueries
+from sentinel.storage.series import MAX_POINTS, SeriesFinding, SeriesQueries
 from sentinel.storage.store import StoredFinding
 from sentinel.storage.triage import DOMAIN_RULES, STATUSES, TriageStore
 from sentinel.web.auth import LOGIN_COOKIE, SESSION_COOKIE, LoginLimiter, Session, SessionStore
@@ -362,7 +362,11 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     @app.get("/api/series")
     async def series_api(session: SessionDep, request: Request) -> Response:
         start, end = span_of(request, default=timedelta(hours=24))
-        result = await series.series(start, end)
+        try:  # how many bars the chart's width suits; choose_step keeps it in range
+            points = int(request.query_params.get("points") or MAX_POINTS)
+        except ValueError:
+            raise HTTPException(422, "The number of bars was not valid.") from None
+        result = await series.series(start, end, points=points)
         body = {
             "start": result.start,
             "end": result.end,

@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Hardening and evaluation
+
+- Instruction-word pre-filter: a domain finding whose labels contain words
+  such as `ignore`, `override` or `benign` gets them added to its evidence and
+  its severity raised one step. It never removes anything.
+- Retention: raw events are purged after 30 days and findings after 180, with
+  their analyses, messages and decisions, by an hourly worker.
+  `sentinel purge` runs it now; `sentinel purge --all` wipes all local data.
+- The database and everything else Sentinel writes are owner-only (umask 077),
+  and existing files are tightened at start-up.
+- Ollama now runs as a non-root user with a read-only root filesystem; a
+  one-shot `ollama-volume-owner` service hands it the model volume.
+- New command: `sentinel backfill` reads a period of history from the API
+  without disturbing the live stream.
+- New command: `sentinel eval`.
+  - It measures detection recall on threat-feed, DGA and tunnelling names,
+    false alerts on the top-sites list and on your own history, and the
+    prompt-injection success rate on 60 crafted names with the defences on and
+    off, with thinking off and on.
+  - It also reports schema failures, latency and model load.
+  - It writes `docs/EVALUATION.md` and fills the dashboard's Evaluation page.
+    Migration `0006` adds the stored runs.
+- `docs/THREAT_MODEL.md`: STRIDE over the data flow, with the mitigation in
+  the code and the residual risk for each threat.
+
+### Dashboard redesign
+
+- A new visual system, "notices and chart corrections", recorded in
+  `DESIGN.md`:
+  - A navy navigation rail with the open-findings count and pipeline status.
+  - Findings set as numbered notices, with the reason on high and critical
+    rows and a bar showing when each was seen that day.
+  - Triage decisions drawn in magenta: the old status struck, the new one
+    written in with its time.
+  - Queries per hour drawn against the usual level, with open findings marked
+    by number.
+  - On a phone, findings stack as cards with the actions in reach.
+- Light and dark ("night chart") themes; sloped type marks every name that
+  came from outside.
+
 ### Dashboard
 
 - A local dashboard on http://127.0.0.1:8080 (FastAPI, Jinja2, vendored

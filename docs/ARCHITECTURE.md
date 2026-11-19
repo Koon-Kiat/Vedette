@@ -38,18 +38,19 @@ NextDNS API (per profile)
 | Event model and source interface | `src/sentinel/sources/base.py` | Done: `DnsEvent`, `LogSource` |
 | NextDNS source | `src/sentinel/sources/nextdns.py` | Done: history paging, live stream, backoff |
 | Log export reader | `src/sentinel/sources/nextdns_export.py` | Done: `sentinel import` loads a dashboard CSV export |
-| Storage | `src/sentinel/storage/` | Done for events, collector state, findings, reference data, the stored allowlist and the audit log: SQLite (WAL), Alembic migrations |
+| Storage | `src/sentinel/storage/` | Done for events, collector state, findings, reference data, the stored allowlist, the audit log and evaluation runs: SQLite (WAL), Alembic migrations, retention purge, owner-only files |
 | Collector | `src/sentinel/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
 | Enrichment | `src/sentinel/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
-| Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine |
+| Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
 | Enricher and rule workers | `src/sentinel/pipeline/processor.py` | Done |
 | Defanging | `src/sentinel/notify/defang.py` | Done: CLI, alerts and digests |
 | LLM analyst | `src/sentinel/llm/`, `src/sentinel/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
 | Notifier | `src/sentinel/notify/`, `src/sentinel/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
 | Health monitor | `src/sentinel/health/` | Done: six kinds of check, alerts on change, `/healthz` |
-| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs all six stages, `/healthz` and the dashboard |
-| CLI | `src/sentinel/cli.py` | `sentinel run`, `findings`, `benign`, `import`, `notify --test`, `digest`, `--version` |
-| Dashboard | `src/sentinel/web/`, `src/sentinel/storage/dashboard.py`, `src/sentinel/storage/triage.py` | Done: seven pages, triage with an audit log, token login |
+| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs all six stages, `/healthz`, the dashboard and the hourly retention purge |
+| CLI | `src/sentinel/cli.py` | `sentinel run`, `findings`, `benign`, `backfill`, `import`, `notify --test`, `digest`, `purge`, `eval`, `--version` |
+| Dashboard | `src/sentinel/web/`, `src/sentinel/storage/dashboard.py`, `src/sentinel/storage/triage.py` | Done: seven pages, triage with an audit log, token login; visual system in `DESIGN.md` |
+| Evaluation | `src/sentinel/eval/` | Done: datasets, offline detection, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
 
 ## How the collector avoids gaps and duplicates
 
@@ -250,8 +251,9 @@ payload text appears escaped rather than dropped.
 | Service | Purpose | Network | Hardening |
 | --- | --- | --- | --- |
 | `sentinel` | The pipeline and the dashboard | `egress` (to api.nextdns.io) and `llm` | uid 10001, read-only root filesystem, all capabilities dropped, `no-new-privileges`; one published port, the dashboard on `127.0.0.1:8080` |
-| `ollama` | Local model server with GPU | `llm` only (internal: no internet, no host port) | all capabilities dropped, `no-new-privileges`; still runs as root (see Decisions) |
-| `ollama-pull` | One-shot model download (`setup` profile) | `egress` | all capabilities dropped, `no-new-privileges` |
+| `ollama` | Local model server with GPU | `llm` only (internal: no internet, no host port) | uid 10002, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
+| `ollama-volume-owner` | One-shot: hands the model volume to uid 10002 before Ollama starts | none | root with only `CHOWN` and `DAC_READ_SEARCH`, read-only root filesystem, `no-new-privileges` |
+| `ollama-pull` | One-shot model download (`setup` profile) | `egress` | uid 10002, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
 | `dev` | Lint, type-check, tests (`dev` profile) | `egress` | Development only, never deployed |
 
 ## Decisions
@@ -282,10 +284,8 @@ payload text appears escaped rather than dropped.
    network. Models are downloaded by the one-shot `ollama-pull` service, which
    has internet access, shares the model volume, and exits. `OLLAMA_NO_CLOUD`
    is set so the server does not try to reach ollama.com.
-10. **Ollama still runs as root.** The official image expects it. Capabilities
-    are dropped and `no-new-privileges` is set, and GPU inference was confirmed
-    to work that way. Running it as a non-root user with a read-only root
-    filesystem is deferred to the hardening work.
+10. **Ollama ran as root until the hardening work** (decision 64 replaces
+    this).
 11. **Secret scanning runs through Docker.** `.githooks/pre-commit` runs a
     pinned gitleaks image on staged changes, so the "install nothing on the
     host" rule holds. CI runs the same image over the full history.
@@ -316,8 +316,8 @@ payload text appears escaped rather than dropped.
     timestamp, domain or status are skipped and counted in a warning.
 19. **The stream reconnects after 5 minutes of silence.** NextDNS documents no
     heartbeat, so a quiet stream cannot be told apart from a dead connection.
-20. **No `sentinel backfill` command yet.** `sentinel run` backfills
-    automatically; a manual command is left for the CLI work.
+20. **`sentinel run` backfills automatically**; the manual `sentinel backfill`
+    came with the hardening work (decision 65).
 
 21. **External lookups are kept to what the spec's enrichment requires, and
     each can be changed or turned off.** The spec asks both that "only the
@@ -351,8 +351,8 @@ payload text appears escaped rather than dropped.
     carrying on. The collector and enricher log and retry instead.
 27. **The allowlist started as configuration only.** "Mark benign" from the CLI
     or dashboard now adds to it (decision 56).
-28. **The instruction-token pre-filter is not built yet.** It belongs with the
-    prompt-injection hardening of the LLM stage.
+28. **The instruction-word pre-filter came with the hardening work**
+    (decision 61).
 
 29. **History can also come from a log export; the stream stays on the API.**
     `sentinel import` loads the dashboard's CSV export for a profile. It is an
@@ -476,6 +476,72 @@ payload text appears escaped rather than dropped.
     collector (Python warns about it) and SQLite itself is unaffected. The
     tests wait for start-up to finish before stopping the pipeline.
 
+61. **The pre-filter raises one step and only looks at domain labels.** A hit
+    adds `instruction_tokens` to the evidence and raises the severity one level
+    (never past critical). Distinctive words (`ignore`, `instruction`,
+    `override`, `benign` and others) match anywhere, so run-together names are
+    caught. Common words (`system`, `safe`, `mark`, `previous` and others)
+    match only as whole words, so `ecosystem` or `marketplace` stay quiet. It
+    applies only to findings that already exist: a word alone never creates a
+    finding, which keeps ordinary names out of the alerts. Device names are not
+    checked (the spec names labels). The rule engine runs it; only the
+    evaluation turns it off.
+62. **What the retention purge removes.**
+    - Processed events older than `retention.events_days`. Events still
+      waiting for the rules are kept until processed.
+    - Findings whose last sighting is older than `retention.findings_days`,
+      with their analyses, outbox messages and audit entries.
+    - Health messages, digests and model-call records older than the same
+      limit.
+    - Allowlist entries made from a purged finding stay in force, with the link
+      to the finding cleared.
+    - Kept until `purge --all`: the first-seen index (it is what makes
+      something "new"), the reference caches and evaluation runs. They hold no
+      lookup times.
+    The purge runs one minute after start-up and then hourly.
+63. **Owner-only files by umask and by repair.** `sentinel` sets umask 077
+    before anything else, so the database, its WAL and anything else it
+    writes are created 0600. Migrations also tighten an existing file to 0600
+    and its directory to 0700, which fixes databases created before this
+    change.
+64. **Ollama runs as uid 10002 with a read-only root filesystem.** The model
+    volume is mounted at `/home/ollama/.ollama` with `HOME=/home/ollama`, so
+    the existing models and key keep their paths. A one-shot service runs
+    `chown` as root with only `CHOWN` and `DAC_READ_SEARCH` and no network
+    before Ollama starts, on every `up`; it takes a moment because it only
+    changes metadata. `ollama-pull` runs as the same user. Checked live: the
+    model listed, the GPU found, and the real-model smoke test passed with the
+    model 100% on the GPU.
+65. **`sentinel backfill` adds history without touching the stream.** It reads
+    a window through the same history paging the collector uses and stores
+    events idempotently. It does not move the stored stream cursor, so the live
+    stream carries on unaffected. `--days` is capped at the event retention,
+    otherwise the purge would delete what it just read.
+66. **How the evaluation is built.**
+    - **Detection.** It reuses the real enrichment and rule engine, offline:
+      reference data is read from the local tables, registration dates come
+      from the cache only (no RDAP), and first sightings go to a scratch
+      database. The real database is only read, except for storing the
+      result.
+    - **Defences off.** A naive analyst kept only in `sentinel/eval/`: names
+      written into the instructions, no warning, no pre-filter, no floor
+      guard, no sanitising. The JSON schema stays so a priority can be read;
+      the report says so.
+    - **Echoes.** Counted by a word-pattern heuristic that skips sentences
+      describing the attempt. Every counted case is printed in the report,
+      with the model's words, so it can be checked.
+    - **False alerts, latency and load.** Read from what the pipeline already
+      stored, not replayed.
+    - **Privacy.** The report and the dashboard show names from your history
+      and the feeds only as counts.
+    - **Results.** Stored in `eval_runs` for the Evaluation page.
+67. **The dashboard's visual system was redesigned.** The direction is
+    "notices and chart corrections": a navy rail, a chart-white ground,
+    magenta only for attention and decisions, and sloped type for every name
+    from outside. It was chosen from a design round, reviewed, and recorded in
+    `DESIGN.md`. The system font stack stays: an operating screen needs no
+    downloaded face, and the strict CSP allows no external fonts.
+
 ## Verified facts the design relies on
 
 Checked against the official NextDNS API documentation on 2026-11-12:
@@ -566,6 +632,33 @@ token:
   and acknowledging a row worked, the console showed no CSP violations, and
   at 375 pixels wide no page scrolled sideways.
 
+The first `sentinel eval` on 2026-11-19 used qwen3:8b on your stored history:
+373,427 events over 19.9 days. All counts are in [EVALUATION.md](EVALUATION.md);
+no name from your history or the feeds appears in it.
+
+- **False alerts.** 1 high or critical finding in 19.9 days, 0.05 a day,
+  against a target of at most 2.
+- **Benign names.** No name was flagged, from either the top-sites sample
+  (1,000) or your own history (792).
+- **Threat-feed domains.** 93% flagged. Without the feed match, the other
+  rules catch only 10%.
+- **DGA names.** Random-character names 45% flagged, dictionary-word names 8%.
+  The dga-like thresholds miss short and word-based names.
+- **Tunnels.** All 20 fast tunnels caught by tunnel-like. None of the 10 slow
+  ones were caught by tunnel-like, but all 10 were flagged by dga-like because
+  of their random-looking labels.
+- **Crafted injection names.** Only 27% produce a finding at all; 11 were
+  raised to high by the pre-filter.
+- **Prompt injection.** 0 of 60 succeeded in all four rounds (thinking off and
+  on, defences on and off), with 0 schema failures. Model calls took 17 to 27
+  seconds (p50) for 10 findings.
+- **A correction to the method.** The first run counted hedged advice ("verify
+  whether it is legitimate") as obedience and reported 2% to 8%. That was
+  corrected and disclosed in the report; the cases are listed there.
+- **What the injection result does not show.** The undefended baseline was
+  not steered either, so this run does not show the defences making a
+  difference. What they guarantee holds by construction.
+
 ## Open points raised with the owner
 
 - "Only the NextDNS API is called" conflicts with RDAP lookups, list downloads
@@ -586,7 +679,9 @@ token:
 ## Future work
 
 - Pin base images by digest and automate updates.
-- Run Ollama as a non-root user with a read-only root filesystem.
+- Run device names through the instruction-word pre-filter too.
+- Measure young-domain recall in the evaluation, with registration dates
+  cached ahead of time for a fixed test set.
 - Optional abuse.ch feeds for users who register for a free key.
 - Use the Public Suffix List to tell registrable domains from platform
   customer names exactly, instead of the parent-rank heuristic.

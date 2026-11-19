@@ -21,7 +21,11 @@ instant alerts, a digest is produced every morning, and a health monitor
 watches the whole pipeline. Alerts go out once you choose a notification
 channel; until then they are kept and listed but not sent. A dashboard on
 http://127.0.0.1:8080, reachable from this computer only, shows all of it and
-lets you triage findings. See
+lets you triage findings. Old data is purged on a schedule, every container
+runs as a non-root user, and `sentinel eval` measures how well the rules and
+the prompt-injection defences hold up
+([docs/EVALUATION.md](docs/EVALUATION.md),
+[docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)). See
 [CHANGELOG.md](CHANGELOG.md) for progress and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and decisions.
 
@@ -259,12 +263,64 @@ Events the collector already has are recognised and not stored twice, so
 importing the same file again adds nothing. Import before enabling a profile
 if you can, so its history is evaluated in order.
 
+To read a period of history from the API instead (for example after the
+service was off for longer than the stream can catch up), run:
+
+```powershell
+docker compose exec sentinel sentinel backfill --days 3
+docker compose exec sentinel sentinel backfill --profile pc --days 7
+```
+
+Events already stored are recognised and not stored twice, and the live
+stream is not disturbed. `--days` may not be longer than the retention of raw
+events (30 days by default). Reading many days makes many API requests.
+
 An export is NextDNS's raw view: it includes repeat lookups that the API's
 default view removes. The importer keeps A, AAAA and HTTPS queries and merges
 rows that differ only by query type, but an imported period still holds more
 events than a collected one (about a third more in the file this was tested
 with). If the two must match exactly, set `ingest.raw: true`, which makes the
 API deliver the raw view too.
+
+## Keeping and wiping your data
+
+Your DNS history is personal data and stays in the `sentinel-data` volume, in
+files only the service's own user can read. By default raw events are kept
+for 30 days and findings for 180 (`retention` in `config.yaml`). Once an hour
+the pipeline deletes anything older, together with what came from it: the
+model's explanations, alerts and digests about it, and its triage history.
+Allowlist entries you made by marking findings benign stay in force.
+
+Delete expired data now, or everything:
+
+```powershell
+docker compose exec sentinel sentinel purge
+docker compose stop sentinel
+docker compose run --rm sentinel purge --all
+```
+
+`purge --all` deletes every event, finding, digest, decision and cache, and
+asks first (`--yes` skips the question). When the service starts again it
+reads the backfill window from NextDNS anew; to stop collecting altogether,
+disable the profiles in `config.yaml` or remove `NEXTDNS_API_KEY`.
+
+## Measuring how well it works
+
+`sentinel eval` runs known-good names (the top-sites list and a sample of your
+own history), known-bad names (threat-feed domains and synthetic DGA and
+tunnelling names) and 60 crafted prompt-injection names through the real rules
+and the local model, with the defences on and off. It writes a report and
+fills the dashboard's Evaluation page. Names from your history and the feeds
+are only counted, never printed. It talks only to the local model.
+
+```powershell
+docker compose run --rm -v "${PWD}/docs:/out" sentinel eval --output /out/EVALUATION.md
+```
+
+(bash: `-v "$PWD/docs:/out"`.) It takes a while: every injection round asks
+the model about all 60 names, with thinking off and on. `--think off` halves
+that, `--no-llm` skips the model entirely, and `--model` (repeatable) tests
+another downloaded model.
 
 ## How to add a profile
 
@@ -318,6 +374,11 @@ It returns `ok` or `degraded` with every check's result. If you change
 - **`dashboard_unavailable`:** the dashboard's port is taken inside the
   container. The rest of the pipeline keeps running; change `dashboard.port`
   and the `ports` line in `docker-compose.yml` together.
+- **`retention_purge_failed`:** the scheduled purge could not finish; it
+  tries again an hour later. The message names the error.
+- **Ollama keeps restarting with a permission error:** the model volume was
+  not handed to Ollama's user. Run `docker compose up ollama-volume-owner`
+  and then `docker compose up -d`.
 - **"Invalid host header" in the browser:** open the dashboard as
   http://127.0.0.1:8080 or http://localhost:8080, or add the name you use to
   `dashboard.allowed_hosts`.

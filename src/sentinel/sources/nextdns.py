@@ -37,6 +37,7 @@ from sentinel.sources.base import (
     SourceUnavailable,
     StreamCursorRejected,
     StreamedEvent,
+    StreamIdle,
 )
 
 log = structlog.get_logger(__name__)
@@ -332,10 +333,17 @@ class NextDnsSource(LogSource):
                 return
             params = {**params, "cursor": cursor}
 
-    async def stream(self, profile_id: str, cursor: str) -> AsyncIterator[StreamedEvent]:
-        """Yield live events following ``cursor`` until the connection ends."""
+    async def stream(
+        self, profile_id: str, cursor: str, *, on_open: Callable[[], None] | None = None
+    ) -> AsyncIterator[StreamedEvent]:
+        """Yield live events following ``cursor`` until the connection ends.
+
+        A read timeout after the stream opened means the profile was quiet,
+        not that NextDNS failed, and is reported as :class:`StreamIdle`.
+        """
         path = f"{self._logs_path(profile_id)}/stream"
         params = {**self._base_params(), "id": cursor}
+        opened = False
         try:
             async with aconnect_sse(
                 self._client, "GET", path, params=params, timeout=self._stream_timeout
@@ -350,6 +358,9 @@ class NextDnsSource(LogSource):
                     # Undocumented territory: any other refusal is treated as
                     # "this cursor is no longer accepted".
                     raise StreamCursorRejected(f"NextDNS refused the stream cursor (HTTP {status})")
+                opened = True
+                if on_open is not None:
+                    on_open()
                 async for message in source.aiter_sse():
                     if not message.data:
                         continue
@@ -362,5 +373,9 @@ class NextDnsSource(LogSource):
                         log.warning("nextdns_stream_event_skipped", profile_id=profile_id)
                         continue
                     yield StreamedEvent(event=event, cursor=message.id or None)
+        except httpx.ReadTimeout as exc:
+            if opened:
+                raise StreamIdle("no stream data within the idle timeout") from exc
+            raise SourceUnavailable(f"NextDNS stream failed: {type(exc).__name__}") from exc
         except httpx.TransportError as exc:
             raise SourceUnavailable(f"NextDNS stream failed: {type(exc).__name__}") from exc

@@ -5,7 +5,7 @@ Home, Pi-hole) can be added by implementing :class:`LogSource` alone.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -84,6 +84,13 @@ class SourceUnavailable(SourceError):
         self.retry_after = retry_after
 
 
+class StreamIdle(SourceError):
+    """The live stream sent nothing for longer than the idle timeout.
+
+    Not an error: a quiet profile is normal. The caller simply reconnects.
+    """
+
+
 class StreamCursorRejected(SourceError):
     """The live stream refused the stored cursor; history must be re-read."""
 
@@ -100,10 +107,18 @@ class LogSource(ABC):
         """
 
     @abstractmethod
-    def stream(self, profile_id: str, cursor: str) -> AsyncIterator[StreamedEvent]:
+    def stream(
+        self, profile_id: str, cursor: str, *, on_open: Callable[[], None] | None = None
+    ) -> AsyncIterator[StreamedEvent]:
         """Yield live events that follow ``cursor`` until the connection ends.
+
+        Args:
+            profile_id: Profile to stream.
+            cursor: Position to continue from.
+            on_open: Called once the source has accepted the stream.
 
         Raises:
             StreamCursorRejected: The source no longer accepts ``cursor``.
+            StreamIdle: The open stream was quiet for longer than the idle timeout.
             SourceUnavailable: The connection failed or dropped.
         """

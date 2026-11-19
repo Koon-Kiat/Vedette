@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 
+from sentinel.health.state import HealthState
 from sentinel.retry import backoff_delay
 from sentinel.sources.base import (
     LogSource,
@@ -28,6 +29,7 @@ from sentinel.sources.base import (
     SourceError,
     SourceUnavailable,
     StreamCursorRejected,
+    StreamIdle,
 )
 from sentinel.storage.store import CollectorState, Store
 
@@ -56,6 +58,7 @@ class ProfileCollector:
         clock: Callable[[], datetime] = _utc_now,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         rng: Callable[[], float] = random.random,
+        health: HealthState | None = None,
     ) -> None:
         """Create a collector.
 
@@ -67,8 +70,10 @@ class ProfileCollector:
             clock: Returns the current time (UTC); replaced in tests.
             sleep: Awaitable used to wait between attempts.
             rng: Random source for backoff jitter.
+            health: Where to report whether the source is reachable.
         """
         self._profile_id = profile_id
+        self._health = health
         self._source = source
         self._store = store
         self._backfill_days = backfill_days
@@ -84,15 +89,27 @@ class ProfileCollector:
             delay = await self._attempt()
             await self._sleep(delay)
 
+    def _source_ok(self) -> None:
+        if self._health is not None:
+            self._health.source_ok(self._profile_id, now=self._clock())
+
+    def _source_failed(self, reason: str) -> None:
+        if self._health is not None:
+            self._health.source_failed(self._profile_id, reason, now=self._clock())
+
     async def _attempt(self) -> float:
         """Run one backfill or one stream session; return seconds to wait next."""
         try:
             await self._cycle()
+        except StreamIdle:
+            self._log.info("collector_stream_idle")
+            self._source_ok()
         except StreamCursorRejected as exc:
             await self._store.clear_stream_cursor(self._profile_id)
             self._log.warning("collector_stream_cursor_rejected", reason=str(exc))
         except SourceAuthError as exc:
             self._log.error("collector_auth_failed", reason=str(exc))
+            self._source_failed(str(exc))
             return AUTH_RETRY_SECONDS
         except SourceUnavailable as exc:
             delay = (
@@ -102,12 +119,15 @@ class ProfileCollector:
             )
             self._failures += 1
             self._log.warning("collector_source_unavailable", reason=str(exc), retry_in=delay)
+            self._source_failed(str(exc))
             return delay
         except SourceError as exc:
             self._log.error("collector_source_error", reason=str(exc))
+            self._source_failed(str(exc))
             return ERROR_RETRY_SECONDS
         except Exception:  # noqa: BLE001 - must keep running unattended; logged with traceback
             self._log.exception("collector_unexpected_error")
+            self._source_failed("unexpected error in the collector")
             return UNEXPECTED_RETRY_SECONDS
         delay = backoff_delay(self._failures, rng=self._rng)
         self._failures += 1
@@ -120,7 +140,9 @@ class ProfileCollector:
             self._failures = 0
             return
         self._log.info("collector_stream_opening")
-        async for item in self._source.stream(self._profile_id, state.stream_cursor):
+        async for item in self._source.stream(
+            self._profile_id, state.stream_cursor, on_open=self._source_ok
+        ):
             await self._store.save_stream_events(
                 self._profile_id, [item.event], stream_cursor=item.cursor
             )
@@ -153,4 +175,5 @@ class ProfileCollector:
         await self._store.complete_backfill(
             self._profile_id, stream_cursor=stream_cursor, synced_through=newest
         )
+        self._source_ok()
         self._log.info("collector_backfill_completed", kind=kind, pages=pages, events_stored=stored)

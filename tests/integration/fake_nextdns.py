@@ -34,10 +34,14 @@ class _SseBody(httpx.AsyncByteStream):
             while self._next < len(server.entries):
                 if server.break_stream_after is not None and sent >= server.break_stream_after:
                     raise httpx.ReadError("connection reset by fake server")
+                if server.idle_after is not None and sent >= server.idle_after:
+                    raise httpx.ReadTimeout("no data within the read timeout")
                 entry = server.entries[self._next]
                 self._next += 1
                 sent += 1
                 yield f"id: s{self._next}\ndata: {json.dumps(entry)}\n\n".encode()
+            if server.idle_after is not None:
+                raise httpx.ReadTimeout("no data within the read timeout")
             if not server.hold_stream_open:
                 return
             await asyncio.sleep(0.005)
@@ -56,6 +60,7 @@ class FakeNextDns:
         self.rejected_stream_ids: set[str] = set()
         self.stream_prefix_chunks: list[bytes] = []
         self.break_stream_after: int | None = None
+        self.idle_after: int | None = None
         self.hold_stream_open = False
         self.omit_stream_id = False
         self.block_logs_after: int | None = None

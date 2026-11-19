@@ -11,8 +11,11 @@ Secrets are accepted only from the first two, never from the YAML file.
 """
 
 import os
+import re
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
@@ -35,7 +38,14 @@ from sentinel.rules.allowlist import AllowlistEntry
 CONFIG_FILE_ENV = "SENTINEL_CONFIG_FILE"
 DEFAULT_SECRETS_DIR = Path("/run/secrets")
 
-_SECRET_FIELDS = frozenset({"nextdns_api_key"})
+_SECRET_FIELDS = frozenset(
+    {"nextdns_api_key", "ntfy_topic", "ntfy_token", "discord_webhook_url", "smtp_password"}
+)
+_DISCORD_WEBHOOK = re.compile(
+    r"^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api(?:/v\d+)?/webhooks/\d+/[A-Za-z0-9_-]+$"
+)
+_NTFY_TOPIC = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _CLOCK = r"([01]\d|2[0-3]):[0-5]\d"
 
 NonEmptyStr = Annotated[str, Field(min_length=1)]
@@ -52,11 +62,18 @@ class _Section(BaseModel):
 
 
 class ProfileConfig(_Section):
-    """One NextDNS profile to watch."""
+    """One NextDNS profile to watch.
+
+    ``stale_after_minutes`` overrides the health check's silence window for this
+    profile (0 switches the check off), and ``quiet_hours`` are local times when
+    silence is expected, for example while a laptop is usually off.
+    """
 
     id: NonEmptyStr
     label: NonEmptyStr
     enabled: bool = True
+    stale_after_minutes: int | None = Field(default=None, ge=0)
+    quiet_hours: str | None = Field(default=None, pattern=rf"^{_CLOCK}-{_CLOCK}$")
 
 
 class IngestConfig(_Section):
@@ -147,13 +164,100 @@ class LlmConfig(_Section):
     cache_ttl_hours: int = Field(default=168, ge=0)
 
 
-class NotifyConfig(_Section):
-    """Alert and digest delivery. The channel itself has not been chosen yet."""
+def _is_address(value: str) -> bool:
+    _, address = parseaddr(value)
+    return (
+        bool(address)
+        and address == value.strip()
+        and "@" in address
+        and not any(ch.isspace() for ch in address)
+    )
 
-    channel: NonEmptyStr = "NOTIFY_CHANNEL"
+
+class NtfyConfig(_Section):
+    """An ntfy server. The topic and optional token come from the environment."""
+
+    url: NonEmptyStr = "https://ntfy.sh"
+
+    @field_validator("url")
+    @classmethod
+    def _secure_url(cls, value: str) -> str:
+        parts = urlsplit(value)
+        host = parts.hostname or ""
+        internal = "." not in host or host in _LOCAL_HOSTS
+        if parts.scheme not in ("https", "http") or not host:
+            raise ValueError("must be an https:// URL")
+        if parts.scheme == "http" and not internal:
+            raise ValueError(
+                "must use https; plain http is allowed only for a server on the local "
+                "Docker network (a name without dots, such as http://ntfy)"
+            )
+        if parts.username or parts.password or parts.query or parts.fragment:
+            raise ValueError("must not contain a user name, password, query or fragment")
+        return value.rstrip("/")
+
+
+class EmailConfig(_Section):
+    """An SMTP server. The password comes from the environment (SMTP_PASSWORD)."""
+
+    host: str = ""
+    port: int = Field(default=587, ge=1, le=65535)
+    security: Literal["starttls", "ssl"] = "starttls"
+    username: str = ""
+    sender: str = ""
+    recipients: list[str] = Field(default_factory=list)
+
+    @field_validator("sender")
+    @classmethod
+    def _sender_is_an_address(cls, value: str) -> str:
+        if value and not _is_address(value):
+            raise ValueError("must be a plain e-mail address")
+        return value
+
+    @field_validator("recipients")
+    @classmethod
+    def _recipients_are_addresses(cls, value: list[str]) -> list[str]:
+        if not all(_is_address(item) for item in value):
+            raise ValueError("must be plain e-mail addresses")
+        return value
+
+
+class NotifyConfig(_Section):
+    """Alert and digest delivery.
+
+    ``channel`` is ``none`` (alerts and digests are kept but not sent),
+    ``ntfy``, ``discord`` or ``email``.
+    """
+
+    channel: Literal["none", "ntfy", "discord", "email"] = "none"
     digest_time: str = Field(default="08:00", pattern=rf"^{_CLOCK}$")
     quiet_hours: str = Field(default="23:00-07:00", pattern=rf"^{_CLOCK}-{_CLOCK}$")
     alert_cooldown_minutes: int = Field(default=60, ge=0)
+    alert_max_age_minutes: int = Field(default=60, ge=1)
+    analysis_wait_seconds: int = Field(default=60, ge=0)
+    ntfy: NtfyConfig = Field(default_factory=NtfyConfig)
+    email: EmailConfig = Field(default_factory=EmailConfig)
+
+    @field_validator("channel", mode="before")
+    @classmethod
+    def _placeholder_means_none(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip().lower()
+            return "none" if value in ("", "notify_channel") else value
+        return value
+
+
+class HealthConfig(_Section):
+    """Health check windows and thresholds."""
+
+    check_interval_seconds: int = Field(default=60, ge=5)
+    stale_after_minutes: int = Field(default=120, ge=0)
+    api_error_minutes: int = Field(default=5, ge=1)
+    ollama_down_minutes: int = Field(default=5, ge=1)
+    max_backlog_events: int = Field(default=20000, ge=1)
+    backlog_minutes: int = Field(default=15, ge=1)
+    max_disk_percent: int = Field(default=90, ge=1, le=100)
+    healthz_port: int = Field(default=8081, ge=1, le=65535)
 
 
 class RetentionConfig(_Section):
@@ -182,12 +286,26 @@ class Settings(BaseSettings):
     allowlist: list[AllowlistEntry] = Field(default_factory=list)
     llm: LlmConfig = Field(default_factory=LlmConfig)
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
+    health: HealthConfig = Field(default_factory=HealthConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     nextdns_write_enabled: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     nextdns_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices("NEXTDNS_API_KEY", "nextdns_api_key"),
+    )
+    ntfy_topic: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("NTFY_TOPIC", "ntfy_topic")
+    )
+    ntfy_token: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("NTFY_TOKEN", "ntfy_token")
+    )
+    discord_webhook_url: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DISCORD_WEBHOOK_URL", "discord_webhook_url"),
+    )
+    smtp_password: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("SMTP_PASSWORD", "smtp_password")
     )
 
     @field_validator("timezone")
@@ -199,7 +317,14 @@ class Settings(BaseSettings):
             raise ValueError(f"unknown IANA time zone: {value!r}") from exc
         return value
 
-    @field_validator("nextdns_api_key", mode="before")
+    @field_validator(
+        "nextdns_api_key",
+        "ntfy_topic",
+        "ntfy_token",
+        "discord_webhook_url",
+        "smtp_password",
+        mode="before",
+    )
     @classmethod
     def _blank_key_is_unset(cls, value: object) -> object:
         if isinstance(value, str):
@@ -216,6 +341,40 @@ class Settings(BaseSettings):
                     raise ValueError(f"duplicate profile {attr}: {value!r}")
                 seen.add(value)
         return self
+
+    @model_validator(mode="after")
+    def _channel_is_complete(self) -> Self:
+        channel = self.notify.channel
+        if channel == "ntfy":
+            if self.ntfy_topic is None:
+                raise ValueError("notify.channel is ntfy but NTFY_TOPIC is not set")
+            if not _NTFY_TOPIC.match(self.ntfy_topic.get_secret_value()):
+                raise ValueError("NTFY_TOPIC may contain only letters, digits, - and _ (max 64)")
+        elif channel == "discord":
+            if self.discord_webhook_url is None:
+                raise ValueError("notify.channel is discord but DISCORD_WEBHOOK_URL is not set")
+            if not _DISCORD_WEBHOOK.match(self.discord_webhook_url.get_secret_value()):
+                raise ValueError("DISCORD_WEBHOOK_URL is not a Discord webhook URL")
+        elif channel == "email":
+            email = self.notify.email
+            if not (email.host and email.sender and email.recipients):
+                raise ValueError(
+                    "notify.channel is email but notify.email.host, sender or recipients is empty"
+                )
+            if email.username and self.smtp_password is None:
+                raise ValueError("notify.email.username is set but SMTP_PASSWORD is not")
+        return self
+
+    def secret_values(self) -> list[str]:
+        """Every secret that is set, for scrubbing from logs."""
+        secrets = (
+            self.nextdns_api_key,
+            self.ntfy_topic,
+            self.ntfy_token,
+            self.discord_webhook_url,
+            self.smtp_password,
+        )
+        return [secret.get_secret_value() for secret in secrets if secret is not None]
 
     @property
     def enabled_profiles(self) -> list[ProfileConfig]:

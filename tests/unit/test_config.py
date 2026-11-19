@@ -47,7 +47,7 @@ def test_example_config_file_loads(repo_root: Path) -> None:
         ("PHONE_PROFILE_ID", "phone", False),
     ]
     assert [p.label for p in settings.enabled_profiles] == ["router"]
-    assert settings.notify.channel == "NOTIFY_CHANNEL"
+    assert settings.notify.channel == "none", "the example ships with no channel chosen"
 
 
 def test_yaml_values_replace_defaults(tmp_path: Path) -> None:

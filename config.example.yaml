@@ -1,7 +1,8 @@
 # Copy to config.yaml and edit. config.yaml is git-ignored.
 # Every value can be overridden by an environment variable: prefix SENTINEL_,
 # with "__" between nesting levels, e.g. SENTINEL_LLM__MODEL=qwen3:8b.
-# Secrets (NEXTDNS_API_KEY) never go in this file: see .env.example.
+# Secrets (NEXTDNS_API_KEY and the notification secrets) never go in this file:
+# see .env.example.
 
 profiles:              # IDs are on each profile's Setup page in the NextDNS dashboard
   - id: "ROUTER_PROFILE_ID"
@@ -10,6 +11,9 @@ profiles:              # IDs are on each profile's Setup page in the NextDNS das
   - id: "PC_PROFILE_ID"
     label: "pc"
     enabled: false       # enable once the router profile is collecting cleanly
+    # Optional, per profile: silence is normal for a laptop that is often off.
+    # stale_after_minutes: 0         # 0 switches the "no events" check off
+    # quiet_hours: "23:00-07:00"     # silence in these hours is not counted
   - id: "PHONE_PROFILE_ID"
     label: "phone"
     enabled: false
@@ -52,10 +56,30 @@ llm:
   max_findings_per_batch: 20
   cache_ttl_hours: 168
 notify:
-  channel: "NOTIFY_CHANNEL"   # not chosen yet: ntfy, discord or email
-  digest_time: "08:00"
-  quiet_hours: "23:00-07:00"
-  alert_cooldown_minutes: 60
+  channel: "none"            # none | ntfy | discord | email (each needs its secret in .env)
+  digest_time: "08:00"       # local time of the daily digest
+  quiet_hours: "23:00-07:00" # high alerts wait until these end; critical ones never wait
+  alert_cooldown_minutes: 60 # no repeat alert about the same thing within this time
+  alert_max_age_minutes: 60  # older findings go to the digest only
+  analysis_wait_seconds: 60  # how long an alert waits for the local model's explanation
+  ntfy:
+    url: "https://ntfy.sh"   # or a self-hosted server; topic in NTFY_TOPIC
+  email:
+    host: ""                 # e.g. smtp.gmail.com
+    port: 587
+    security: "starttls"     # starttls (port 587) or ssl (port 465); never unencrypted
+    username: ""             # password in SMTP_PASSWORD
+    sender: ""
+    recipients: []
+health:
+  check_interval_seconds: 60
+  stale_after_minutes: 120   # alert when a profile sends no events for this long
+  api_error_minutes: 5       # alert when NextDNS keeps failing for this long
+  ollama_down_minutes: 5     # alert when the local model is unreachable for this long
+  max_backlog_events: 20000
+  backlog_minutes: 15
+  max_disk_percent: 90
+  healthz_port: 8081         # /healthz on 127.0.0.1 inside the container
 retention:
   events_days: 30
   findings_days: 180

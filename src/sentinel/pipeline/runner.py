@@ -39,6 +39,7 @@ from sentinel.pipeline.collector import ProfileCollector
 from sentinel.pipeline.notifier import AlertWorker, DeliveryWorker, DigestScheduler
 from sentinel.pipeline.processor import Batch, EnricherWorker, RuleWorker
 from sentinel.pipeline.queue import MemoryQueue
+from sentinel.pipeline.retention import RetentionWorker
 from sentinel.rules.allowlist import Allowlist
 from sentinel.rules.engine import RuleEngine
 from sentinel.rules.loader import load_rules
@@ -270,6 +271,11 @@ class Pipeline:
                     tz=tz,
                 ).run(),
                 monitor.run(),
+                RetentionWorker(
+                    store.engine,
+                    events_days=settings.retention.events_days,
+                    findings_days=settings.retention.findings_days,
+                ).run(),
             ]
             dashboard = _dashboard(settings, store, specs, tz)
             async with asyncio.TaskGroup() as group:

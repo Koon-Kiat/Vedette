@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo
@@ -22,10 +22,12 @@ from sentinel.notify.render import render_test
 from sentinel.pipeline.runner import run_until_signalled
 from sentinel.rules.loader import load_rules
 from sentinel.rules.model import Severity
-from sentinel.sources.base import DnsEvent
+from sentinel.sources.base import DnsEvent, SourceError
+from sentinel.sources.nextdns import NextDnsSource
 from sentinel.sources.nextdns_export import ExportFormatError, read_export
 from sentinel.storage.analysis import AnalysisStore
 from sentinel.storage.migrate import run_migrations
+from sentinel.storage.retention import Purged, private_umask, purge_all, purge_expired
 from sentinel.storage.store import Store, StoredFinding
 from sentinel.storage.triage import DOMAIN_RULES, TriageStore
 
@@ -71,6 +73,7 @@ def main(
     ] = False,
 ) -> None:
     """NextDNS Sentinel: watch NextDNS logs for suspicious DNS activity."""
+    private_umask()  # the database and everything else written stays owner-only
 
 
 @app.command()
@@ -492,3 +495,154 @@ def benign(
         raise typer.Exit(code=1)
     asyncio.run(_mark_benign(database_url, finding_id))
     typer.echo(f"Marked benign: {what}.")
+
+
+async def _backfill(
+    settings: Settings, api_key: str, profile_ids: list[str], since: datetime
+) -> dict[str, tuple[int, int]]:
+    """Read history for each profile and store it. Returns (read, new) per profile."""
+    source = NextDnsSource(
+        api_key,
+        raw=settings.ingest.raw,
+        page_size=settings.ingest.page_size,
+    )
+    store = Store.open(settings.storage.database_url)
+    counts: dict[str, tuple[int, int]] = {}
+    try:
+        for profile_id in profile_ids:
+            read = new = 0
+            async for page in source.backfill(profile_id, since):
+                read += len(page.events)
+                new += await store.save_events(page.events)
+            counts[profile_id] = (read, new)
+    finally:
+        await store.close()
+        await source.aclose()
+    return counts
+
+
+@app.command()
+def backfill(
+    profile: Annotated[
+        str | None,
+        typer.Option("--profile", "-p", help="Profile label or id. Default: every enabled one."),
+    ] = None,
+    days: Annotated[
+        int | None,
+        typer.Option(
+            "--days",
+            min=1,
+            help="How many days back to read. Default: ingest.backfill_days.",
+        ),
+    ] = None,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Read a period of history from the NextDNS API and store it.
+
+    Events already stored are recognised and not stored twice, and the live
+    stream's position is not touched. The pipeline evaluates the new events in
+    the background. Reading many days makes many API requests.
+    """
+    settings = _load_or_exit(config)
+    configure_logging(settings.log_level, secrets=_secret_values(settings))
+    api_key = settings.nextdns_api_key
+    if api_key is None:
+        typer.echo("NEXTDNS_API_KEY is not set.", err=True)
+        raise typer.Exit(code=2)
+    wanted = _resolve_profile(settings, profile)
+    profile_ids = [wanted] if wanted is not None else [p.id for p in settings.enabled_profiles]
+    if not profile_ids:
+        typer.echo("No profile is enabled.", err=True)
+        raise typer.Exit(code=2)
+    span = days if days is not None else settings.ingest.backfill_days
+    if span > settings.retention.events_days:
+        typer.echo(
+            f"--days {span} is longer than the retention of {settings.retention.events_days} "
+            "days; the scheduled purge would delete the older events again.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    run_migrations(settings.storage.database_url)
+    since = datetime.now(UTC) - timedelta(days=span)
+    try:
+        counts = asyncio.run(_backfill(settings, api_key.get_secret_value(), profile_ids, since))
+    except SourceError as exc:
+        typer.echo(f"NextDNS: {clean_text(str(exc), limit=200)}", err=True)
+        raise typer.Exit(code=1) from None
+    labels = {p.id: p.label for p in settings.profiles}
+    for profile_id, (read, new) in counts.items():
+        label = clean_text(labels.get(profile_id, profile_id), limit=64)
+        typer.echo(f"{label}: read {read} events, {new} new.")
+
+
+async def _purge(database_url: str, settings: Settings, *, everything: bool) -> Purged:
+    store = Store.open(database_url)
+    try:
+        if everything:
+            return await purge_all(store.engine)
+        return await purge_expired(
+            store.engine,
+            now=datetime.now(UTC),
+            events_days=settings.retention.events_days,
+            findings_days=settings.retention.findings_days,
+        )
+    finally:
+        await store.close()
+
+
+@app.command()
+def purge(
+    everything: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Delete all local data: events, findings, digests, decisions, caches.",
+        ),
+    ] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Delete data older than the retention settings now, or everything with --all.
+
+    The pipeline also purges old data on its own every hour. Stop the service
+    before --all (docker compose stop sentinel); on its next start the
+    collector reads the backfill window from NextDNS again.
+    """
+    settings = _load_or_exit(config)
+    database_url = settings.storage.database_url
+    if _database_missing(database_url) is not None:
+        typer.echo("No local data to purge.")
+        return
+    if everything:
+        question = (
+            "Delete ALL local data (events, findings, digests, decisions)? This cannot be undone."
+        )
+    else:
+        retention = settings.retention
+        question = (
+            f"Delete events older than {retention.events_days} days and findings older than "
+            f"{retention.findings_days} days?"
+        )
+    if not yes and not typer.confirm(question, default=False):
+        raise typer.Exit(code=1)
+    run_migrations(database_url)
+    purged = asyncio.run(_purge(database_url, settings, everything=everything))
+    if not purged.total:
+        typer.echo("Nothing to delete.")
+        return
+    details = ", ".join(f"{count} {table}" for table, count in sorted(purged.counts.items()))
+    typer.echo(f"Deleted {purged.total} rows: {details}.")

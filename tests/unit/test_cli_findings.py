@@ -278,3 +278,53 @@ def test_json_output_includes_the_analysis(database: str) -> None:
     assert item["analysis"]["priority"] == "high"
     assert item["analysis"]["source"] == "llm"
     assert item["analysis"]["confidence"] == 0.62
+
+
+def test_benign_marks_a_finding_and_allowlists_its_domain(database: str) -> None:
+    seed(database, SAMPLE)
+
+    async def target_id() -> int:
+        store = Store.open(database)
+        try:
+            (item,) = await store.list_findings(rule_id="young-domain")
+            return item.id
+        finally:
+            await store.close()
+
+    fid = asyncio.run(target_id())
+
+    declined = runner.invoke(app, ["benign", str(fid)], input="n\n")
+    accepted = runner.invoke(app, ["benign", str(fid)], input="y\n")
+
+    assert declined.exit_code == 1
+    assert "fresh-site[.]example" in declined.output
+    assert "fresh-site.example" not in declined.output
+    assert accepted.exit_code == 0, accepted.output
+    assert "Marked benign" in accepted.output
+
+    async def status() -> str:
+        store = Store.open(database)
+        try:
+            (item,) = await store.list_findings(rule_id="young-domain")
+            return item.status
+        finally:
+            await store.close()
+
+    assert asyncio.run(status()) == "benign"
+
+
+def test_benign_with_yes_skips_the_question(database: str) -> None:
+    seed(database, SAMPLE)
+
+    result = runner.invoke(app, ["benign", "1", "--yes"])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_benign_on_an_unknown_finding_is_an_error(database: str) -> None:
+    seed(database, SAMPLE)
+
+    result = runner.invoke(app, ["benign", "99999", "--yes"])
+
+    assert result.exit_code == 2
+    assert "No finding 99999" in result.output

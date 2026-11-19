@@ -27,6 +27,7 @@ from sentinel.sources.nextdns_export import ExportFormatError, read_export
 from sentinel.storage.analysis import AnalysisStore
 from sentinel.storage.migrate import run_migrations
 from sentinel.storage.store import Store, StoredFinding
+from sentinel.storage.triage import DOMAIN_RULES, TriageStore
 
 app = typer.Typer(
     name="sentinel",
@@ -429,3 +430,65 @@ def digest(
     run_migrations(database_url)
     title, body = asyncio.run(_build_digest(settings, period_end))
     typer.echo(f"{title}\n\n{body}")
+
+
+async def _find(database_url: str, finding_id: int) -> StoredFinding | None:
+    store = Store.open(database_url)
+    try:
+        return await store.finding(finding_id)
+    finally:
+        await store.close()
+
+
+async def _mark_benign(database_url: str, finding_id: int) -> StoredFinding | None:
+    store = Store.open(database_url)
+    try:
+        return await TriageStore(store.engine).mark_benign(
+            finding_id, actor="cli", now=datetime.now(UTC)
+        )
+    finally:
+        await store.close()
+
+
+@app.command()
+def benign(
+    finding_id: Annotated[
+        int, typer.Argument(help="Finding number, as shown by 'sentinel findings'.")
+    ],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
+    config: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="YAML config file. Defaults to the SENTINEL_CONFIG_FILE environment variable.",
+        ),
+    ] = None,
+) -> None:
+    """Mark a finding benign. For a domain finding, the rules stop flagging that domain.
+
+    The domain is allowlisted for the finding's profile; reopen the finding in
+    the dashboard to undo it.
+    """
+    settings = _load_or_exit(config)
+    database_url = settings.storage.database_url
+    missing = _database_missing(database_url)
+    if missing is not None:
+        typer.echo(f"No database yet at {missing}: start the pipeline with 'sentinel run' first.")
+        raise typer.Exit(code=2)
+    run_migrations(database_url)
+    finding = asyncio.run(_find(database_url, finding_id))
+    if finding is None:
+        typer.echo(f"No finding {finding_id}.", err=True)
+        raise typer.Exit(code=2)
+    labels = {profile.id: profile.label for profile in settings.profiles}
+    profile = clean_text(labels.get(finding.profile_id, finding.profile_id), limit=64)
+    what = f"{finding.rule_id}: {_safe(finding.target)} on {profile}"
+    if finding.rule_id in DOMAIN_RULES:
+        question = f"Mark {what} benign, and stop flagging {_safe(finding.target)} on {profile}?"
+    else:
+        question = f"Mark {what} benign?"
+    if not yes and not typer.confirm(question, default=False):
+        raise typer.Exit(code=1)
+    asyncio.run(_mark_benign(database_url, finding_id))
+    typer.echo(f"Marked benign: {what}.")

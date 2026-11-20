@@ -678,12 +678,16 @@ test checks each file's SHA-256, as for htmx.
     took 48 to 60 seconds (load 23 to 35 s, a 460-token prompt 16 s, the
     answer at 14 tokens a second); since findings are rare, nearly every real
     call was such a call. With `CUDA_CACHE_PATH` in the volume (about 24 MB,
-    1 GiB allowed), the same call takes 4.2 seconds (load 2.1 s, prompt
-    0.2 s, 73 tokens a second), and a warm one 1.7 seconds. The model, its
-    weights and its answers are unchanged; only compiled GPU code is kept. A
-    high or critical alert now gets its explanation well inside the 60 seconds
-    it waits for one. `keep_alive` stays at 5 minutes, since a cold call is
-    now cheap and the GPU memory is free between findings.
+    1 GiB allowed), the same call takes 4.2 seconds while the model file is
+    still in the operating system's memory (load 2.1 s, prompt 0.2 s, 73
+    tokens a second), and a warm one 1.7 seconds. After hours idle, the first
+    real call took 17 seconds: the load took 14 s, almost all of it reading
+    the 5.2 GB weights back from disk, which no cache setting avoids; the
+    prompt still took 0.3 s and the answer ran at 76 tokens a second. The
+    model, its weights and its answers are unchanged; only compiled GPU code
+    is kept. A high or critical alert now gets its explanation well inside the
+    60 seconds it waits for one. `keep_alive` stays at 5 minutes, since even a
+    cold call is cheap enough and the GPU memory is free between findings.
 81. **Calls to the model are sized to its context window.** Measured on
     `qwen3:8b`: about 3 payload characters per token and about 130 answer
     tokens per finding, so a full batch of 20 ordinary findings uses about

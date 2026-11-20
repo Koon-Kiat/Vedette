@@ -4,10 +4,11 @@
 
 ### Performance
 
-- The local model answers a call after idling in about 4 seconds instead of
-  48 to 60: CUDA's compiled-kernel cache now lives in the model volume, since
-  the read-only root filesystem had made Ollama recompile its GPU kernels on
-  every load. The model and its answers are unchanged.
+- The local model's first call after it unloads takes about 4 seconds instead
+  of 48 to 60, or about 17 after hours idle, when its weights must be read
+  from disk again. CUDA's compiled-kernel cache now lives in the model volume,
+  since the read-only root filesystem had made Ollama recompile its GPU
+  kernels on every load. The model and its answers are unchanged.
 - Calls to the model are sized so the prompt and every answer fit its context
   window, so a batch with long evidence is split instead of being cut short.
 - Measured and left as they are: dashboard pages and endpoints answer in 9 to

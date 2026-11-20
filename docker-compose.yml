@@ -83,6 +83,11 @@ services:
     environment:
       HOME: /home/ollama     # models and keys live in the volume below
       OLLAMA_NO_CLOUD: "1"   # this server has no internet route; do not call ollama.com
+      # The root filesystem is read-only, so CUDA's default kernel cache
+      # (~/.nv) cannot be written and the GPU kernels were compiled again on
+      # every model load. Keep that cache in the model volume instead.
+      CUDA_CACHE_PATH: /home/ollama/.ollama/cuda-cache
+      CUDA_CACHE_MAXSIZE: "1073741824"  # 1 GiB; the default 256 MiB can evict
     volumes:
       - ollama-models:/home/ollama/.ollama
     depends_on:

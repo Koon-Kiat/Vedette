@@ -10,8 +10,10 @@ import pytest
 import respx
 from sqlalchemy import text
 
+from sentinel.llm import analyst as analyst_module
 from sentinel.llm.analyst import Analyst
 from sentinel.llm.ollama import OllamaClient, OllamaUnavailable
+from sentinel.llm.prompts import SYSTEM_PROMPT, build_payload
 from sentinel.llm.schema import Analysis
 from sentinel.rules.loader import load_rules
 from sentinel.rules.model import Finding, Severity
@@ -254,6 +256,45 @@ async def test_large_sets_are_split_into_batches(
         2,
         1,
     ]
+
+
+async def test_calls_are_sized_to_the_context_window(
+    store: Store,
+    analysis_store: AnalysisStore,
+    client: OllamaClient,
+    clock: Clock,
+    ollama: FakeOllama,
+) -> None:
+    long = {"fqdn": "x" * 200, "sample": ["y" * 200] * 10}
+    findings = await seed(store, analysis_store, 5, evidence=long)
+    specs = load_rules()
+    share = (
+        len(build_payload([findings[0]], {s.id: s for s in specs})) / analyst_module.CHARS_PER_TOKEN
+        + analyst_module.ANSWER_TOKENS
+    )
+    window = 4096
+    budget = (
+        window * analyst_module.CONTEXT_USE - len(SYSTEM_PROMPT) / analyst_module.CHARS_PER_TOKEN
+    )
+    per_call = int(budget // share)
+    assert 1 <= per_call < 5  # the window, not max_batch, is what limits the calls here
+    analyst = Analyst(
+        client,
+        analysis_store,
+        specs,
+        max_batch=20,
+        cache_ttl=timedelta(0),
+        context_tokens=window,
+        clock=clock,
+    )
+    for start in range(0, 5, per_call):
+        ollama.say(*(verdict(f.id) for f in findings[start : start + per_call]))
+
+    results = await analyst.analyse(findings)
+
+    assert_usable(results, findings)
+    sizes = [len(json.loads(r["messages"][1]["content"])["findings"]) for r in ollama.requests]
+    assert sizes == [min(per_call, 5 - start) for start in range(0, 5, per_call)]
 
 
 # --- retry and fallback -------------------------------------------------------------------

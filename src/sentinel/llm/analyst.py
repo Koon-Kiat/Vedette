@@ -13,7 +13,7 @@ exists; rules did that before it ran.
 """
 
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from itertools import batched
 from typing import Literal
@@ -35,6 +35,14 @@ log = structlog.get_logger(__name__)
 
 MAX_ATTEMPTS = 2  # the first try plus one retry
 
+# Sizing a call to the model's context window. Measured on qwen3:8b: the JSON
+# payload ran about 3 characters per token and each answer about 130 tokens.
+# The allowances below are looser (names that tokenise badly, longer answers),
+# and a tenth of the window stays free, so a call is never cut short.
+CHARS_PER_TOKEN = 2.5
+ANSWER_TOKENS = 200
+CONTEXT_USE = 0.9
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
@@ -51,6 +59,7 @@ class Analyst:
         *,
         max_batch: int,
         cache_ttl: timedelta,
+        context_tokens: int | None = None,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         """Create an analyst.
@@ -61,6 +70,9 @@ class Analyst:
             specs: Rule definitions (trusted descriptions for the prompt).
             max_batch: Most findings sent to the model in one call.
             cache_ttl: How long a model verdict is reused; zero disables the cache.
+            context_tokens: The model's context window (``num_ctx``). Calls are
+                then also sized so the prompt and the answers fit in it; with
+                None, only ``max_batch`` limits a call.
             clock: Returns the current time (UTC).
         """
         self._client = client
@@ -68,7 +80,31 @@ class Analyst:
         self._specs = {spec.id: spec for spec in specs}
         self._max_batch = max_batch
         self._cache_ttl = cache_ttl
+        self._context_tokens = context_tokens
         self._clock = clock
+
+    def _batches(self, pending: Sequence[StoredFinding]) -> Iterator[list[StoredFinding]]:
+        """Split findings into calls of at most ``max_batch`` that fit the context window.
+
+        A finding's share is its serialised length in tokens plus room for its
+        answer. One finding too large for any call still goes alone; its
+        evidence is capped by ``build_payload`` anyway.
+        """
+        if self._context_tokens is None:
+            yield from (list(batch) for batch in batched(pending, self._max_batch, strict=False))
+            return
+        budget = self._context_tokens * CONTEXT_USE - len(SYSTEM_PROMPT) / CHARS_PER_TOKEN
+        batch: list[StoredFinding] = []
+        used = 0.0
+        for finding in pending:
+            cost = len(build_payload([finding], self._specs)) / CHARS_PER_TOKEN + ANSWER_TOKENS
+            if batch and (len(batch) >= self._max_batch or used + cost > budget):
+                yield batch
+                batch, used = [], 0.0
+            batch.append(finding)
+            used += cost
+        if batch:
+            yield batch
 
     def _finish(
         self, finding: StoredFinding, verdict: Verdict, source: Literal["llm", "cache"]
@@ -160,7 +196,7 @@ class Analyst:
             else:
                 pending.append(finding)
 
-        for batch in batched(pending, self._max_batch, strict=False):
+        for batch in self._batches(pending):
             verdicts = await self._ask(batch)
             for finding in batch:
                 verdict = verdicts.get(finding.id)

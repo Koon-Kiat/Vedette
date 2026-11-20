@@ -202,6 +202,7 @@ class Pipeline:
                 specs,
                 max_batch=llm.max_findings_per_batch,
                 cache_ttl=timedelta(hours=llm.cache_ttl_hours),
+                context_tokens=llm.num_ctx,
             )
             queue: MemoryQueue[Batch] = MemoryQueue()
             tz = ZoneInfo(settings.timezone)

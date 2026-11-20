@@ -173,9 +173,11 @@ with what happened to it (`pending`, `sent`, `failed`, `skipped`,
    once. With no channel configured, entries are marked `skipped`.
 3. **Digest scheduler** (every minute). At the configured local time it builds
    the digest for the previous 24 hours, archives it (text and JSON) and
-   queues it, in one transaction. The first digest comes at the first digest
-   time after the service starts; if digests were missed while it was down,
-   only the most recent is produced, late.
+   queues it, in one transaction. If digests were missed while it was down,
+   only the most recent is produced, late. That includes the very first one
+   whenever there is data from before it, so a computer that is always off at
+   the digest time still gets its digest; on an empty install the first one
+   comes at the first digest time after start-up.
 
 ### Health monitor
 
@@ -185,6 +187,13 @@ NextDNS errors (the collector reports every success and failure; an open
 stream that is simply quiet is not an error). Then: the local model (Ollama's
 model list, and that the configured model is downloaded), the backlog of
 events waiting for the rules, and disk space where the database lives.
+
+After a start-up, a profile whose newest stored event predates the start is
+not judged for silence until its collector has caught up (a finished
+backfill, an idle stream, or a streamed event under 5 minutes old), or for at
+most 10 minutes. Until then the check reads "Catching up after start-up" and
+neither raises nor resolves an alert: the stored events end when Sentinel
+stopped, so their age says nothing about the profile.
 
 A check that goes bad raises a health alert at once. It counts as recovered
 after two good checks in a row, and then a "Resolved" message is sent. What
@@ -698,6 +707,19 @@ test checks each file's SHA-256, as for htmx.
     of the window spare) fits. Ordinary batches are unaffected. The
     evaluation suite keeps its fixed batches, so its injection results stay
     comparable.
+82. **The first digest no longer needs the service running at the digest
+    time.** It used to come only at the first digest time after start-up.
+    The owner's computer is off overnight and starts after 08:00, so after
+    nine days of data no digest had been made. Now, while none exists, the
+    latest one is produced late when stored events reach back before it.
+83. **Silence is not judged while a profile catches up after start-up.**
+    Twice in one week a morning start raised "No events from router for
+    13 h" and its "Resolved" two minutes later: the first check ran before
+    the collector had read the night's events. With a channel set, that is
+    two false messages per profile on most mornings. The collector now
+    reports when it has caught up; the check waits for that for at most 10
+    minutes, and a problem announced before the restart is neither repeated
+    nor resolved meanwhile.
 
 ## Verified facts the design relies on
 

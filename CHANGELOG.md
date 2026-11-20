@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixes
+
+- The daily digest arrives even when the computer is off at the digest time:
+  while no digest exists yet, the latest one is produced late at start-up,
+  as later missed ones already were. Before, none was ever made.
+- No more "No events from router" followed by "Resolved" after the computer
+  has been off for a while: a profile's silence is judged only once its
+  collector has caught up after start-up, or after 10 minutes.
+
 ### Performance
 
 - The local model's first call after it unloads takes about 4 seconds instead

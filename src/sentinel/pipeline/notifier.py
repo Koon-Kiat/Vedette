@@ -265,6 +265,7 @@ class DigestScheduler:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         started_at: datetime | None = None,
         poll_seconds: float = 60.0,
+        oldest_data: Callable[[], Awaitable[datetime | None]] | None = None,
     ) -> None:
         """Create the scheduler.
 
@@ -276,8 +277,10 @@ class DigestScheduler:
             clock: Returns the current time (UTC).
             sleep: Awaitable used between checks.
             started_at: When the service started. The very first digest is
-                produced at the first digest time after this.
+                produced at the first digest time after this, or late, at
+                start-up, when there is data from before the latest one.
             poll_seconds: How often to check whether a digest is due.
+            oldest_data: Returns the time of the oldest stored event, if any.
         """
         self._store = store
         self._builder = builder
@@ -287,6 +290,7 @@ class DigestScheduler:
         self._sleep = sleep
         self._started_at = started_at or clock()
         self._poll = poll_seconds
+        self._oldest_data = oldest_data
 
     async def run(self) -> None:
         """Run forever. Cancel the task to stop."""
@@ -297,16 +301,25 @@ class DigestScheduler:
                 log.exception("digest_unexpected_error")
             await self._sleep(self._poll)
 
+    async def _has_data_before(self, moment: datetime) -> bool:
+        if self._oldest_data is None:
+            return False
+        oldest = await self._oldest_data()
+        return oldest is not None and oldest < moment
+
     async def run_once(self) -> bool:
         """Produce the digest if one is due; return whether one was produced.
 
         If digests were missed while the service was down, only the most
-        recent one is produced, late.
+        recent one is produced, late. That includes the very first: a
+        computer that is always off at the digest time still gets one.
         """
         now = self._clock()
         due = latest_occurrence(self._digest_time, now, self._tz)
         last = await self._store.last_digest_end()
-        if (last is None and due <= self._started_at) or (last is not None and due <= last):
+        if last is not None and due <= last:
+            return False
+        if last is None and due <= self._started_at and not await self._has_data_before(due):
             return False
         digest = await self._builder.build(due)
         title, body = render_digest(digest)

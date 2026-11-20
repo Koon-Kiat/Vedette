@@ -10,7 +10,8 @@ import contextlib
 import signal
 import socket
 from collections.abc import Iterator, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -270,6 +271,7 @@ class Pipeline:
                     DigestBuilder(store.engine, profiles=profiles, tz=tz, specs=specs),
                     digest_time=parse_clock(notify.digest_time),
                     tz=tz,
+                    oldest_data=partial(_oldest_event, store, [p.id for p in profiles]),
                 ).run(),
                 monitor.run(),
                 RetentionWorker(
@@ -357,6 +359,12 @@ def _dashboard(
     )
     log.info("dashboard_listening", host=config.host, port=config.port)
     return server, sock
+
+
+async def _oldest_event(store: Store, profile_ids: Sequence[str]) -> datetime | None:
+    """Time of the oldest stored event across the given profiles, if any."""
+    times = [await store.earliest_event_ts(profile_id) for profile_id in profile_ids]
+    return min((t for t in times if t is not None), default=None)
 
 
 def _data_dir(database_url: str) -> Path | None:

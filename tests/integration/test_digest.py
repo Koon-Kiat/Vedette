@@ -8,6 +8,7 @@ import pytest
 
 from sentinel.notify.digest import DigestBuilder, render_digest
 from sentinel.pipeline.notifier import DigestScheduler
+from sentinel.sources.nextdns import parse_log_entry
 from sentinel.storage.notifications import NotificationStore
 from sentinel.storage.store import Store
 from tests.digest_fixture import PERIOD_END, PERIOD_START, PROFILES, TZ, build_fixture
@@ -206,6 +207,39 @@ async def test_starting_after_the_digest_time_waits_for_the_next_day(
     assert await digests.run_once() is False
     clock.now = local(16, 8, 0)
     assert await digests.run_once() is True
+
+
+async def test_a_first_digest_missed_while_the_computer_was_off_comes_late(
+    store: Store, builder: DigestBuilder
+) -> None:
+    profile = PROFILES[0].id
+    await store.save_events(
+        [
+            parse_log_entry(
+                profile,
+                {
+                    "timestamp": local(14, 21).isoformat(),
+                    "domain": "a.example",
+                    "status": "default",
+                },
+            )
+        ]
+    )
+    clock = Clock(local(15, 10, 30))  # switched on after the 08:00 digest time
+    digests = DigestScheduler(
+        NotificationStore(store.engine),
+        builder,
+        digest_time=time(8, 0),
+        tz=TZ,
+        clock=clock,
+        started_at=clock.now,
+        oldest_data=lambda: store.earliest_event_ts(profile),
+    )
+
+    assert await digests.run_once() is True
+    assert await digests.run_once() is False
+    (stored,) = await NotificationStore(store.engine).digests(limit=10)
+    assert (stored.period_start, stored.period_end) == (local(14, 8), local(15, 8))
 
 
 async def test_a_missed_digest_is_sent_late_but_only_once(

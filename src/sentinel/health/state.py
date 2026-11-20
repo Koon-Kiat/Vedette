@@ -17,6 +17,19 @@ class HealthState:
     def __init__(self) -> None:
         """Start with nothing reported."""
         self._sources: dict[str, _SourceStatus] = {}
+        self._caught_up: set[str] = set()
+
+    def caught_up(self, profile_id: str) -> None:
+        """Record that the profile's collector has read everything up to about now.
+
+        After a start-up the stored events end when Sentinel stopped, so until
+        this is reported their age says nothing about the profile itself.
+        """
+        self._caught_up.add(profile_id)
+
+    def is_caught_up(self, profile_id: str) -> bool:
+        """Whether the profile's collector has caught up since this start."""
+        return profile_id in self._caught_up
 
     def source_ok(self, profile_id: str, *, now: datetime) -> None:
         """Record that the profile's source answered normally."""

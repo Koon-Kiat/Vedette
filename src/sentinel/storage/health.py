@@ -13,12 +13,17 @@ from sentinel.storage.models import health_checks
 
 @dataclass(frozen=True, slots=True)
 class HealthCheck:
-    """The outcome of one check. ``detail`` is our own wording, never log data."""
+    """The outcome of one check. ``detail`` is our own wording, never log data.
+
+    A ``pending`` check cannot be judged yet; it is shown as OK and neither
+    raises nor resolves an alert.
+    """
 
     key: str
     label: str
     ok: bool
     detail: str
+    pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)

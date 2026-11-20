@@ -41,6 +41,10 @@ UNEXPECTED_RETRY_SECONDS = 30.0
 STALLED_AFTER_INTERVALS = 3
 RESOLVE_AFTER_CHECKS = 2
 PROBLEM_PREFIX = "Health problem: "
+# After a start-up, a profile's silence is not judged until its collector has
+# caught up, or until this long has passed if it never reports that.
+CATCH_UP_GRACE = timedelta(minutes=10)
+CATCHING_UP = "Catching up after start-up"
 
 
 def _utc_now() -> datetime:
@@ -204,6 +208,15 @@ class HealthMonitor:
         silence = now - since - (quiet.overlap(since, now, self._tz) if quiet else timedelta(0))
         if silence < timedelta(minutes=window):
             return HealthCheck(key, label, True, OK)
+        if (
+            last is not None
+            and last < self._started_at
+            and not self._state.is_caught_up(profile.id)
+            and now - self._started_at < CATCH_UP_GRACE
+        ):
+            # The silence began while Sentinel itself was off; the collector is
+            # still reading what the profile sent meanwhile.
+            return HealthCheck(key, label, True, CATCHING_UP, pending=True)
         if last is None:
             return HealthCheck(key, label, False, f"No events received from {profile.label} yet")
         return HealthCheck(
@@ -280,6 +293,8 @@ class HealthMonitor:
 
     async def _alert_changes(self, checks: Sequence[HealthCheck], now: datetime) -> None:
         for check in checks:
+            if check.pending:
+                continue
             await self._recall(check.key)
             told = self._problems.get(check.key)
             if not check.ok:

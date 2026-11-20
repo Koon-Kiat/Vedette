@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -124,3 +124,56 @@ async def test_a_timeout_before_the_stream_opens_is_a_real_failure(
         ]
 
     assert opened == []
+
+
+# --- catching up after a start-up ---------------------------------------------------------
+
+
+async def test_finishing_the_backfill_reports_the_profile_caught_up(
+    server: FakeNextDns, source: NextDnsSource, store: Store, sleeps: SleepRecorder
+) -> None:
+    server.add_entries(5)
+    server.hold_stream_open = True
+    state = HealthState()
+    assert not state.is_caught_up("abc123")
+
+    async def caught_up() -> bool:
+        return state.is_caught_up("abc123")
+
+    await run_while(collector(source, store, sleeps, state), caught_up)
+
+
+async def test_a_stream_is_caught_up_once_it_delivers_a_recent_event(
+    server: FakeNextDns, source: NextDnsSource, store: Store, sleeps: SleepRecorder
+) -> None:
+    server.add_entries(6)
+    server.hold_stream_open = True
+    await store.complete_backfill("abc123", stream_cursor="s2", synced_through=T0)
+
+    def worker(now: datetime, state: HealthState) -> ProfileCollector:
+        return ProfileCollector(
+            "abc123",
+            source,
+            store,
+            backfill_days=7,
+            clock=lambda: now,
+            sleep=sleeps,
+            rng=lambda: 1.0,
+            health=state,
+        )
+
+    stale = HealthState()  # an hour later, the replayed events are old news
+
+    async def replayed() -> bool:
+        return await store.latest_event_ts("abc123") == T0 + timedelta(seconds=5)
+
+    await run_while(worker(T0 + timedelta(hours=1), stale), replayed)
+    assert not stale.is_caught_up("abc123")
+
+    live = HealthState()  # within minutes of the newest event, the stream is live
+
+    async def caught_up() -> bool:
+        return live.is_caught_up("abc123")
+
+    server.add_entries(1)
+    await run_while(worker(T0 + timedelta(minutes=2), live), caught_up)

@@ -36,6 +36,9 @@ from sentinel.storage.store import CollectorState, Store
 log = structlog.get_logger(__name__)
 
 GAP_OVERLAP = timedelta(minutes=5)
+# A streamed event this recent means the stream has replayed whatever arrived
+# while Sentinel was off and is now live.
+CAUGHT_UP_LAG = timedelta(minutes=5)
 AUTH_RETRY_SECONDS = 300.0
 ERROR_RETRY_SECONDS = 300.0
 UNEXPECTED_RETRY_SECONDS = 30.0
@@ -93,6 +96,10 @@ class ProfileCollector:
         if self._health is not None:
             self._health.source_ok(self._profile_id, now=self._clock())
 
+    def _caught_up(self) -> None:
+        if self._health is not None:
+            self._health.caught_up(self._profile_id)
+
     def _source_failed(self, reason: str) -> None:
         if self._health is not None:
             self._health.source_failed(self._profile_id, reason, now=self._clock())
@@ -104,6 +111,7 @@ class ProfileCollector:
         except StreamIdle:
             self._log.info("collector_stream_idle")
             self._source_ok()
+            self._caught_up()
         except StreamCursorRejected as exc:
             await self._store.clear_stream_cursor(self._profile_id)
             self._log.warning("collector_stream_cursor_rejected", reason=str(exc))
@@ -147,6 +155,8 @@ class ProfileCollector:
                 self._profile_id, [item.event], stream_cursor=item.cursor
             )
             self._failures = 0
+            if item.event.ts >= self._clock() - CAUGHT_UP_LAG:
+                self._caught_up()
         self._log.info("collector_stream_closed")
 
     async def _backfill(self, state: CollectorState | None) -> None:
@@ -176,4 +186,5 @@ class ProfileCollector:
             self._profile_id, stream_cursor=stream_cursor, synced_through=newest
         )
         self._source_ok()
+        self._caught_up()
         self._log.info("collector_backfill_completed", kind=kind, pages=pages, events_stored=stored)

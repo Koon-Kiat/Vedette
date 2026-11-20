@@ -78,7 +78,11 @@ class Kit(NamedTuple):
 
 @pytest.fixture
 def kit_factory(store: Store, tmp_path: Path) -> Any:
-    def make(profiles: list[ProfileConfig] | None = None, **config: Any) -> Kit:
+    def make(
+        profiles: list[ProfileConfig] | None = None,
+        started_at: datetime = T0 - timedelta(days=1),
+        **config: Any,
+    ) -> Kit:
         clock, state, probe, disk = Clock(), HealthState(), FakeProbe(), Disk()
         outbox = NotificationStore(store.engine)
         monitor = HealthMonitor(
@@ -93,7 +97,7 @@ def kit_factory(store: Store, tmp_path: Path) -> Any:
             tz=SGT,
             clock=clock,
             disk_usage=disk,
-            started_at=T0 - timedelta(days=1),
+            started_at=started_at,
         )
         return Kit(monitor, clock, state, probe, disk, outbox)
 
@@ -193,6 +197,77 @@ async def test_a_profile_with_no_events_at_all_counts_from_service_start(
     check = by_key(await kit.monitor.run_once())["events:abc123"]
 
     assert (check.ok, check.detail) == (False, "No events received from router yet")
+
+
+# --- after a start-up --------------------------------------------------------------------
+
+
+async def test_silence_from_while_sentinel_was_off_is_not_reported(
+    store: Store, kit_factory: Any
+) -> None:
+    kit = kit_factory(started_at=T0)
+    await add_event(store, T0 - timedelta(hours=13))  # stored before Sentinel stopped
+
+    check = by_key(await kit.monitor.run_once())["events:abc123"]
+    assert (check.ok, check.detail, check.pending) == (True, "Catching up after start-up", True)
+
+    await add_event(store, T0 + timedelta(minutes=1), n=1)  # the collector catches up
+    kit.state.caught_up("abc123")
+    for minutes in (1, 2, 3):
+        kit.clock.now = T0 + timedelta(minutes=minutes)
+        check = by_key(await kit.monitor.run_once())["events:abc123"]
+        assert (check.ok, check.detail) == (True, "OK")
+
+    assert await health_messages(kit.outbox) == []
+
+
+async def test_a_profile_still_silent_after_catching_up_is_reported(
+    store: Store, kit_factory: Any
+) -> None:
+    kit = kit_factory(started_at=T0)
+    await add_event(store, T0 - timedelta(hours=13))
+    await kit.monitor.run_once()
+
+    kit.state.caught_up("abc123")  # caught up, and nothing new arrived
+    kit.clock.now = T0 + timedelta(minutes=1)
+    await kit.monitor.run_once()
+
+    assert await health_messages(kit.outbox) == [
+        "Health problem: No events from router for 13 h 1 min"
+    ]
+
+
+async def test_a_collector_that_never_catches_up_is_judged_after_the_grace(
+    store: Store, kit_factory: Any
+) -> None:
+    kit = kit_factory(started_at=T0)
+    await add_event(store, T0 - timedelta(hours=13))
+
+    kit.clock.now = T0 + timedelta(minutes=9)
+    assert by_key(await kit.monitor.run_once())["events:abc123"].pending
+    kit.clock.now = T0 + timedelta(minutes=10)
+    assert not by_key(await kit.monitor.run_once())["events:abc123"].ok
+
+    assert await health_messages(kit.outbox) == [
+        "Health problem: No events from router for 13 h 10 min"
+    ]
+
+
+async def test_a_problem_told_before_a_restart_is_not_resolved_by_the_catch_up(
+    store: Store, kit_factory: Any
+) -> None:
+    first = kit_factory(started_at=T0 - timedelta(days=1))
+    await add_event(store, T0 - timedelta(hours=13))
+    await first.monitor.run_once()  # queued, so it is on its way to the user
+
+    restarted = kit_factory(started_at=T0 + timedelta(hours=1))
+    for minutes in (60, 61, 62):
+        restarted.clock.now = T0 + timedelta(minutes=minutes)
+        await restarted.monitor.run_once()
+
+    assert await health_messages(restarted.outbox) == [
+        "Health problem: No events from router for 13 h 0 min"
+    ], "a pending check neither repeats nor resolves the problem"
 
 
 async def test_api_errors_alert_only_once_they_have_lasted_the_window(

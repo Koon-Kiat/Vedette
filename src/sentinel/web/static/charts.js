@@ -29,7 +29,8 @@
 
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const number = new Intl.NumberFormat("en-US");
-  const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+  // Two decimals, so a tick at 1,250 reads "1.25K" rather than a rounded "1.3K".
+  const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 });
   const percent = new Intl.NumberFormat("en-US", {
     style: "percent",
     minimumFractionDigits: 1,
@@ -291,9 +292,12 @@
       return true;
     }
 
-    // About one bar per 6 pixels, so a wider chart gets finer bars.
+    // About one bar per 6 pixels, so a wider chart gets finer bars. The width
+    // comes from the plot's box, not the drawing, which keeps its old size
+    // while a resize is applied; less the axis and padding (about 64px).
     function wantedPoints() {
-      const width = (u ? u.over.clientWidth : section.clientWidth - 60) || 800;
+      const width = (plot.hidden ? section.clientWidth : plot.clientWidth) - 64;
+      if (!(width > 0)) return state.points || 240; // not laid out yet
       return Math.round(clamp(width / 6, 60, 480));
     }
 

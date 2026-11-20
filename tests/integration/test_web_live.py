@@ -135,5 +135,5 @@ async def test_the_overview_has_the_live_parts(filled: Store) -> None:
         page = await client.get("/")
 
     assert 'hx-trigger="sentinel:findings from:body"' in page.text
-    assert 'src="/static/live.js"' in page.text
+    assert 'src="/static/live.js?v=' in page.text  # versioned by its content
     assert "live-site[.]example" in page.text

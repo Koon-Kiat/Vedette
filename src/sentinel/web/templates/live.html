@@ -2,7 +2,7 @@
 {% from "_tchart.html" import tchart with context %}
 {% block styles %}<link rel="stylesheet" href="/static/vendor/uPlot-1.6.32.min.css">{% endblock %}
 {% block scripts %}<script src="/static/vendor/uPlot-1.6.32.iife.min.js" defer></script>
-<script src="/static/charts.js" defer></script>{% endblock %}
+<script src="/static/charts.js?v={{ version("charts.js") }}" defer></script>{% endblock %}
 {% block content %}
 {% set totals = stats.per_minute|map("sum")|list %}
 {% set peak = [totals|max, 1]|max %}

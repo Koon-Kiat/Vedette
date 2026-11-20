@@ -6,7 +6,7 @@
   <thead><tr><th>Domain</th><th class="num">Queries</th><th class="num">Top-sites rank</th><th class="num">Registered</th></tr></thead>
   <tbody>
     {% for row in rows %}
-    <tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.count|num }}</td><td class="num">{{ row.rank|num if row.rank else "–" }}</td><td class="num">{{ "%d days ago"|format(row.age_days) if row.age_days is not none else "unknown" }}</td></tr>
+    <tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.count|num }}</td><td class="num">{{ row.rank|num if row.rank else "–" }}</td><td class="num">{% if row.age_days is not none %}{{ "%d days ago"|format(row.age_days) }}{% else %}<span class="muted" title="Not looked up">–</span>{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -18,7 +18,7 @@
 {% block content %}
 <header class="page-head">
   <h1>Domains</h1>
-  <p class="lead">Ranks and registration dates come from the local caches; nothing is looked up from this page.</p>
+  <p class="lead">Ranks and registration dates come from the local caches; nothing is looked up from this page. Registration dates are looked up only for new, little-known domains, so most show a dash.</p>
   <nav class="segmented" aria-label="Period">
     <a href="/domains?period=24h"{% if period == "24h" %} aria-current="page"{% endif %}>24 hours</a>
     <a href="/domains?period=7d"{% if period == "7d" %} aria-current="page"{% endif %}>7 days</a>

@@ -83,6 +83,7 @@
   function row(item) {
     const li = el("li", `feed-row status-${item.status === "blocked" ? "blocked" : "allowed"} is-new`);
     li.dataset.id = item.id;
+    li.dataset.t = String(item.t);
     li.dataset.status = item.status;
     li.dataset.profile = item.profile;
     li.append(el("span", "feed-time", item.time));
@@ -119,6 +120,19 @@
     }, SETTLE_MS);
   }
 
+  // Rows stay newest first by event time: a query that reached the collector
+  // late goes where its time belongs, not on top of newer ones.
+  function place(feed, li, t) {
+    for (const other of feed.children) {
+      const shownAt = Number(other.dataset.t);
+      if (Number.isFinite(shownAt) && shownAt < t) {
+        feed.insertBefore(li, other);
+        return;
+      }
+    }
+    feed.append(li);
+  }
+
   function render(items) {
     for (const feed of feeds) {
       const limit = Number(feed.dataset.limit) || 50;
@@ -127,9 +141,13 @@
       if (!wanted.length) continue;
       const empty = $(".feed-empty", feed);
       if (empty) empty.remove();
-      const fragment = document.createDocumentFragment();
-      for (const item of wanted.reverse()) fragment.append(row(item));
-      feed.prepend(fragment);
+      const full = feed.children.length >= limit;
+      const oldest = full ? Number(feed.lastElementChild.dataset.t) : -Infinity;
+      for (const item of wanted) {
+        const t = Number(item.t);
+        if (full && t < oldest) continue; // older than every row the list keeps
+        place(feed, row(item), t);
+      }
       if (feed.children.length > limit) trim(feed, limit);
     }
   }
@@ -231,6 +249,7 @@
 
   function stats(data) {
     setText("last-minute", number(data.last_minute));
+    for (const node of live("queries-word")) node.textContent = data.last_minute === 1 ? "query" : "queries";
     setText("blocked-minute", number(data.blocked_last_minute));
     setText("open-findings", number(data.open_findings));
     setText("open-count", number(data.open_findings));
@@ -265,6 +284,39 @@
       }
     });
   }
+
+  // --- a triage decision: keep the keyboard's place and say what happened ----
+  //
+  // Acknowledge, Mark benign and Reopen replace their row. The new row takes
+  // the focus back (the button that was pressed is gone with the old row),
+  // and the decision is read out by the status region.
+
+  const DECIDED = { acknowledged: "acknowledged", benign: "marked benign", open: "reopened" };
+  let deciding = null;
+
+  document.body.addEventListener("htmx:beforeRequest", (event) => {
+    const form = event.detail && event.detail.elt;
+    const row = form instanceof Element ? form.closest("tr[id^='finding-']") : null;
+    deciding = row && form.matches("form[hx-post]")
+      ? { id: row.id, hadFocus: row.contains(document.activeElement) }
+      : null;
+  });
+
+  document.body.addEventListener("htmx:load", (event) => {
+    const row = event.target;
+    if (!deciding || !(row instanceof Element) || row.id !== deciding.id) return;
+    const { hadFocus } = deciding;
+    deciding = null;
+    if (hadFocus) {
+      const first = row.querySelector(".actions button");
+      if (first) first.focus();
+    }
+    const state = (row.className.match(/\bstatus-(\w+)/) || [])[1];
+    const number = row.id.replace("finding-", "").padStart(4, "0");
+    for (const node of live("announce")) {
+      node.textContent = `Finding ${number} ${DECIDED[state] || state || "updated"}.`;
+    }
+  });
 
   // --- the stream -------------------------------------------------------------
 

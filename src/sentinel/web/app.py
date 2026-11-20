@@ -13,11 +13,15 @@ Security, because the pages show attacker-controlled text:
 """
 
 import asyncio
+import functools
+import hashlib
 import hmac
+import importlib.resources
 import json
+import re
 import secrets
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
@@ -37,6 +41,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from sentinel.config import ProfileConfig
 from sentinel.health.monitor import duration
+from sentinel.notify.defang import clean_text, defang_names
 from sentinel.notify.digest import DigestBuilder
 from sentinel.notify.render import prose, safe
 from sentinel.rules.model import RuleSpec, Severity
@@ -58,6 +63,7 @@ CSP = (
     "object-src 'none'"
 )
 PERIODS = {"24h": timedelta(hours=24), "7d": timedelta(days=7)}
+FINDING_PATH = re.compile(r"/findings/(\d{1,9})")
 
 
 def _local(moment: datetime | None, tz: ZoneInfo) -> str:
@@ -77,6 +83,86 @@ def _since(moment: datetime | None, now: datetime) -> str:
     return f"{duration(elapsed)} ago"
 
 
+def _status_word(value: object) -> str:
+    """NextDNS calls a query it let through "default"; the dashboard says "allowed"."""
+    return "allowed" if value == "default" else safe(value, limit=40)
+
+
+def _detail(value: object) -> str:
+    """A message the pipeline wrote: names defanged, numbers left as numbers."""
+    return defang_names(clean_text(str(value), limit=300))
+
+
+#: Evidence fields in the order a finding's page lists them, in plain words.
+EVIDENCE_LABELS = {
+    "fqdn": "Name queried",
+    "sample_fqdn": "Example name",
+    "root": "Domain",
+    "status": "NextDNS status",
+    "domain_age_days": "Domain age, days",
+    "popularity_rank": "Top-sites rank",
+    "threat_feeds": "Threat feeds",
+    "threat_match": "Matched on",
+    "label": "Leftmost label",
+    "label_length": "Label length",
+    "entropy": "Entropy, bits per character",
+    "digit_ratio": "Share of digits",
+    "unique_subdomains": "Distinct subdomains",
+    "blocked_in_window": "Blocked in the window",
+    "window_minutes": "Window, minutes",
+    "queries_this_hour": "Queries this hour",
+    "baseline_per_hour": "Usual queries per hour",
+    "factor": "Times the usual",
+    "category": "Category",
+    "category_name": "Category name",
+    "device_id": "Device",
+    "device_name": "Device name",
+    "client_ip": "Client address",
+    "attribution": "Device attribution",
+    "instruction_tokens": "Instruction-like words",
+}
+
+
+def _evidence_value(key: str, value: Any) -> str:
+    if key == "status":
+        return _status_word(value)
+    if value is None:  # only the rank is kept when empty: no rank made the rule fire
+        return "not ranked"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        return f"{value:,.2f}".rstrip("0").rstrip(".")
+    return safe(value, limit=300)
+
+
+def _evidence(evidence: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """A finding's evidence as (label, value) rows, every string cleaned and defanged."""
+    order = {key: index for index, key in enumerate(EVIDENCE_LABELS)}
+    rows = []
+    for key in sorted(evidence, key=lambda name: (order.get(name, len(order)), name)):
+        value = evidence[key]
+        if value is None and key != "popularity_rank":
+            continue
+        words = key.replace("_", " ")
+        label = EVIDENCE_LABELS.get(key) or safe(words[:1].upper() + words[1:], limit=60)
+        rows.append((label, _evidence_value(key, value)))
+    return rows
+
+
+@functools.cache
+def _version(path: str) -> str:
+    """A short hash of one of our static files, for its URL (``?v=``).
+
+    A changed file gets a new URL, so after an upgrade no browser can pair new
+    pages with an old stylesheet or script from its cache. Vendored files carry
+    their version in the file name instead.
+    """
+    content = (importlib.resources.files("sentinel.web") / "static" / path).read_bytes()
+    return hashlib.sha256(content).hexdigest()[:12]
+
+
 TEMPLATE_ENV = jinja2.Environment(
     loader=jinja2.PackageLoader("sentinel.web", "templates"),
     autoescape=True,
@@ -89,6 +175,9 @@ TEMPLATE_ENV.filters.update(
         "domain": lambda value: safe(value, limit=255),
         "text": lambda value: safe(value, limit=300),
         "prose": lambda value: prose(value, limit=600),
+        "detail": _detail,
+        "status_word": _status_word,
+        "evidence": _evidence,
         "local": _local,
         "clock": _clock,
         "since": _since,
@@ -100,6 +189,7 @@ TEMPLATE_ENV.filters.update(
         "avg": lambda value: "n/a" if value is None else f"{value:,.1f}".removesuffix(".0"),
     }
 )
+TEMPLATE_ENV.globals["version"] = _version
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +211,8 @@ class DashboardContext:
     live_stats_seconds: float = 5.0
     live_max_seconds: float = 900.0
     live_max_streams: int = 8
+    #: When the daily digest is produced (HH:MM, local), for the Digests page.
+    digest_time: str | None = None
 
 
 class LoginRequired(Exception):
@@ -150,8 +242,10 @@ class SecurityHeaders:
                 headers["Referrer-Policy"] = "no-referrer"
                 headers["Cross-Origin-Opener-Policy"] = "same-origin"
                 headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-                if not static:
-                    headers["Cache-Control"] = "no-store"
+                # Pages are never stored. Static files may be kept, but the browser
+                # asks again each time (a cheap 304 on this machine), so after an
+                # upgrade new pages never meet a stale stylesheet or script.
+                headers["Cache-Control"] = "no-cache" if static else "no-store"
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
@@ -219,16 +313,26 @@ def create_app(ctx: DashboardContext) -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def error_page(request: Request, exc: HTTPException) -> Response:
-        message = exc.detail if exc.status_code in (400, 403, 422) else "Not found."
+        message = exc.detail if exc.status_code in (400, 403, 422) else "That page does not exist."
         if exc.status_code == 405:
             message = "That is not allowed here."
-        return render(
-            "error.html",
-            status=exc.status_code,
-            code=exc.status_code,
-            message=message,
-            title=str(exc.status_code),
-        )
+        elif exc.status_code == 404 and (found := FINDING_PATH.fullmatch(request.url.path)):
+            message = (
+                f"There is no finding {int(found[1]):04d}. Findings are deleted once they are "
+                "older than the retention period, so a link from an old digest or alert "
+                "can outlive its finding."
+            )
+        values: dict[str, Any] = {
+            "status": exc.status_code,
+            "code": exc.status_code,
+            "message": message,
+            "title": str(exc.status_code),
+        }
+        # A logged-in owner keeps the menu, so the error is not a dead end.
+        session = sessions.get(request.cookies.get(SESSION_COOKIE))
+        if session is not None and not _is_htmx(request):
+            return await page("error.html", csrf=session.csrf, **values)
+        return render("error.html", **values)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> Response:
@@ -263,7 +367,11 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         if not (isinstance(token, str) and hmac.compare_digest(token.encode(), ctx.token.encode())):
             limiter.failed()
             log.warning("dashboard_login_failed")
-            return login_page(status=401, error="That token is not right.")
+            return login_page(
+                status=401,
+                error="That token is not right. It must match DASHBOARD_TOKEN in your .env "
+                "file exactly, capital letters included.",
+            )
         session = sessions.create()
         response = RedirectResponse("/", status_code=303)
         response.set_cookie(
@@ -604,6 +712,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             title="Digests",
             csrf=session.csrf,
             digests=await queries.digests(),
+            digest_time=ctx.digest_time,
         )
 
     @app.get("/digests/{digest_id}")

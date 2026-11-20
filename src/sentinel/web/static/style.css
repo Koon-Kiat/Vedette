@@ -155,6 +155,24 @@ p { text-wrap: pretty; }
   white-space: nowrap;
 }
 
+/* The first stop for the keyboard: hidden until focused, then a pill at the
+   top left that jumps past the menu to the page's content. */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 620;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+.skip-link:focus-visible { transform: none; outline-offset: 3px; }
+main:focus { outline: none; }
+
 /* Names from outside: sloped. */
 .name {
   font-family: var(--mono);
@@ -350,15 +368,19 @@ body.bare main {
   font-weight: 400;
 }
 .page-head .lead .count { display: inline-block; margin-right: 2px; font-size: 13px; vertical-align: 1px; }
+/* The head's right-hand item (the live pill, a period switch, a run time)
+   sits on the title's centre line, so it shares a line with something
+   instead of floating between the title and the lead. */
 .page-head .stamp,
 .page-head .segmented,
 .page-head .live-line {
   grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: end;
+  grid-row: 1;
+  align-self: center;
   justify-self: end;
   margin: 0;
 }
+.page-head h1 { align-self: center; }
 .page-head .stamp { color: var(--ink-3); font-size: 12px; }
 
 .back { margin: 0 0 12px; }
@@ -376,12 +398,16 @@ body.bare main {
   line-height: 1.3;
   letter-spacing: -0.005em;
 }
+/* A heading with a link or note on its right; when both do not fit, the
+   note drops under the heading instead of squeezing it into two columns. */
 .block-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
+  gap: 0 16px;
 }
+.block-head > .hint { margin-bottom: 14px; }
 
 .panel {
   padding: 18px 20px;
@@ -390,6 +416,9 @@ body.bare main {
   background: var(--surface);
   box-shadow: 0 12px 32px -20px rgb(0 0 0 / 0.65);
 }
+/* A panel holding a wide table scrolls it sideways on a phone instead of
+   letting the last columns run past the edge. */
+.table-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 .panel h3 {
   margin: 22px 0 10px;
   font-size: 16px;
@@ -681,11 +710,13 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
 
 /* --- Live ---------------------------------------------------------------------- */
 
+/* Two parts: the connection state (dot and word) and the figures, split by a
+   hairline so the space between them reads as a seam, not a stray gap. */
 .live-line {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 7px;
+  padding: 8px 14px 8px 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
@@ -694,6 +725,11 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
   white-space: nowrap;
 }
 .live-state { color: var(--ink); font-weight: 620; }
+.live-figures {
+  margin-left: 4px;
+  padding-left: 11px;
+  border-left: 1px solid var(--line-strong);
+}
 .live-figures strong { color: var(--ink); font-weight: 620; }
 
 .ticked { animation: tick 700ms var(--ease-out); }
@@ -832,16 +868,25 @@ svg.hourly { display: block; width: 100%; height: auto; }
   font-weight: 700;
 }
 
-.legend { margin: 12px 0 0; color: var(--ink-2); font-size: 12px; }
+/* Each key stays with its label: a narrow chart wraps between items, never
+   inside one. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.legend-item { display: inline-flex; align-items: center; white-space: nowrap; }
 .key {
   display: inline-block;
+  flex: none;
   width: 10px;
   height: 10px;
-  margin: 0 6px 0 14px;
+  margin-right: 6px;
   border-radius: 3px;
-  vertical-align: -1px;
 }
-.key:first-child { margin-left: 0; }
 .key-allowed { background: var(--allowed); }
 .key-blocked { background: var(--blocked); }
 .key-usual { background: var(--tint); box-shadow: inset 0 3px 0 var(--low); }
@@ -1055,12 +1100,14 @@ dialog.tchart-dialog[open] { animation: dialog-in 220ms var(--ease-out); }
 .facts dd { margin: 0; }
 .facts-list { max-width: 75ch; }
 
+/* Evidence labels are words, set like the Facts labels; the values stay data. */
 .kv th {
   width: 14rem;
   background: none;
   color: var(--ink-3);
-  font-family: var(--mono);
-  font-weight: 400;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 560;
   white-space: normal;
 }
 .kv td { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
@@ -1234,19 +1281,28 @@ pre.digest {
 
 /* --- Narrow screens ----------------------------------------------------------- */
 
-/* Laptop widths: the secondary columns fold into one line under the domain,
-   so the decision buttons stay in view without scrolling the table. */
-@media (min-width: 641px) and (max-width: 1180px) {
-  table.findings .col-wide { display: none; }
-  .about-meta {
-    display: block;
-    margin-top: 5px;
-    color: var(--ink-3);
-    font-size: 12px;
+/* Whenever the findings table itself is too narrow for every column (laptops
+   up to about 1,450px, narrower board columns), the secondary columns fold
+   into one line under the domain, so the decision buttons stay in view
+   without scrolling the table. Phones get the card layout below instead. */
+.findings-wrap { container: findings / inline-size; }
+@media (min-width: 641px) {
+  @container findings (max-width: 1199px) {
+    table.findings .col-wide { display: none; }
+    .about-meta {
+      display: block;
+      margin-top: 5px;
+      color: var(--ink-3);
+      font-size: 12px;
+    }
+    .about-meta a { color: var(--ink-2); text-decoration: none; }
+    .about-meta a:hover { text-decoration: underline; }
+    .findings td.about { max-width: none; }
   }
-  .about-meta a { color: var(--ink-2); text-decoration: none; }
-  .about-meta a:hover { text-decoration: underline; }
-  .findings td.about { max-width: none; }
+}
+
+/* Laptop widths: a narrower rail and gutters. */
+@media (min-width: 641px) and (max-width: 1180px) {
   body.app { grid-template-columns: 212px minmax(0, 1fr); }
   .brand { white-space: nowrap; font-stretch: 100%; }
   main { padding-left: 28px; padding-right: 28px; }
@@ -1334,8 +1390,20 @@ pre.digest {
   table.findings td.seen { grid-column: 1 / -1; max-width: none; min-width: 0; }
   table.findings td.events { grid-column: 1 / -1; text-align: left; color: var(--ink-2); font-size: 12px; }
   table.findings td.events::before { content: "Events: "; }
-  table.findings td.decision { grid-column: 1 / 3; }
-  table.findings td.actions { grid-column: 3; }
+  /* The status needs little room; the buttons get the rest of the line and
+     wrap, still right-aligned, if even that is too narrow. */
+  table.findings td.decision { grid-column: 1; }
+  table.findings td.actions {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    white-space: normal;
+  }
+  table.findings .actions form + form { margin-left: 0; }
+  /* A finding about a whole profile already names it; the card skips the repeat. */
+  table.findings tr.about-profile td.where { display: none; }
   .feed-controls { width: 100%; }
   .tchart-plot { height: 220px; }
   .tchart-short .tchart-plot { height: 180px; }

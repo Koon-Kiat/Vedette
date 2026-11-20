@@ -141,8 +141,9 @@ async def test_every_response_carries_the_security_headers(filled: Store, path: 
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["referrer-policy"] == "no-referrer"
-    if not path.startswith("/static/"):
-        assert response.headers["cache-control"] == "no-store"
+    # Static files are revalidated on every load, so an upgrade never meets stale CSS.
+    expected = "no-cache" if path.startswith("/static/") else "no-store"
+    assert response.headers["cache-control"] == expected
 
 
 async def test_an_unexpected_host_name_is_refused(filled: Store) -> None:

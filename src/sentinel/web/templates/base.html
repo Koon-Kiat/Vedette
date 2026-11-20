@@ -10,13 +10,14 @@
 <title>{{ title }} · NextDNS Sentinel</title>
 <link rel="preload" href="/static/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
 {% block styles %}{% endblock %}
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={{ version("style.css") }}">
 <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
-{% if csrf is defined %}<script src="/static/live.js" defer></script>{% endif %}
+{% if csrf is defined %}<script src="/static/live.js?v={{ version("live.js") }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </head>
 {% if csrf is defined %}
 <body class="app" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+<a class="skip-link" href="#main">Skip to the content</a>
 <header class="rail">
   <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>NextDNS <strong>Sentinel</strong></span></a>
   <nav aria-label="Pages">
@@ -39,8 +40,9 @@
 {% else %}
 <body class="bare">
 {% endif %}
-<main>
+<main id="main" tabindex="-1">
 {% block content %}{% endblock %}
+{% if csrf is defined %}<p class="visually-hidden" role="status" data-live="announce"></p>{% endif %}
 </main>
 </body>
 </html>

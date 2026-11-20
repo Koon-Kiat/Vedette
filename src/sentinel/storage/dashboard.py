@@ -147,6 +147,7 @@ class ProfileDevices:
     attribution: bool
     devices: list[DeviceRow]
     client_ips: int
+    queries_7d: int = 0  # with none, the missing devices say nothing about attribution
 
 
 @dataclass(frozen=True, slots=True)
@@ -585,15 +586,13 @@ class DashboardQueries:
                         )
                     ).all()
                 )
-                ips = int(
-                    (
-                        await connection.execute(
-                            select(func.count(func.distinct(events.c.client_ip))).where(
-                                events.c.profile_id == profile.id, events.c.ts >= now - 7 * DAY
-                            )
+                ips, queries_7d = (
+                    await connection.execute(
+                        select(func.count(func.distinct(events.c.client_ip)), func.count()).where(
+                            events.c.profile_id == profile.id, events.c.ts >= now - 7 * DAY
                         )
-                    ).scalar_one()
-                )
+                    )
+                ).one()
                 devices = [
                     DeviceRow(
                         device_id=str(row[0]),
@@ -611,7 +610,8 @@ class DashboardQueries:
                         label=profile.label,
                         attribution=bool(devices),
                         devices=devices,
-                        client_ips=ips,
+                        client_ips=int(ips),
+                        queries_7d=int(queries_7d),
                     )
                 )
         return result

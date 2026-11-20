@@ -2,11 +2,11 @@
 {% from "_tchart.html" import tchart with context %}
 {% block styles %}<link rel="stylesheet" href="/static/vendor/uPlot-1.6.32.min.css">{% endblock %}
 {% block scripts %}<script src="/static/vendor/uPlot-1.6.32.iife.min.js" defer></script>
-<script src="/static/charts.js" defer></script>{% endblock %}
+<script src="/static/charts.js?v={{ version("charts.js") }}" defer></script>{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>Overview</h1>
-  <p class="lead">{% if alerts %}<span class="count">{{ alerts|length }}</span> high or critical finding{{ "" if alerts|length == 1 else "s" }} need{{ "s" if alerts|length == 1 else "" }} a decision.{% else %}Nothing high or critical is waiting for a decision.{% endif %} Last 24 hours, compared with the 7-day average.</p>
+  <p class="lead">{% if alerts %}<span class="count">{{ alerts|length }}</span> high or critical finding{{ "" if alerts|length == 1 else "s" }} need{{ "s" if alerts|length == 1 else "" }} a decision.{% else %}Nothing high or critical is waiting for a decision.{% endif %}</p>
   {% include "_live_line.html" %}
 </header>
 
@@ -61,8 +61,8 @@
 </section>
 
 <section class="block board-span" aria-labelledby="today-title">
-  <div class="block-head"><h2 id="today-title">Today against the usual week</h2></div>
-  <div class="panel">
+  <div class="block-head"><h2 id="today-title">Today against the usual week</h2><span class="hint">Last 24 hours, compared with the 7-day average</span></div>
+  <div class="panel table-scroll">
     <table class="compact">
       <thead><tr><th>Profile</th><th class="num">Queries</th><th class="num">Usual queries</th><th class="num">Blocked</th><th class="num">Usual blocked</th></tr></thead>
       <tbody>

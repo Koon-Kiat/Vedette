@@ -25,4 +25,4 @@
   </g>
   {% endfor %}
 </svg>
-<p class="legend"><span class="key key-allowed"></span>allowed <span class="key key-blocked"></span>blocked{% if chart.usual is not none %} <span class="key key-usual"></span>usual hourly level, 7-day average ({{ chart.usual|avg }}){% endif %}{% if chart.markers %} <span class="key key-marker"></span>open finding, by number{% endif %}</p>
+<p class="legend"><span class="legend-item"><span class="key key-allowed"></span>allowed</span> <span class="legend-item"><span class="key key-blocked"></span>blocked</span>{% if chart.usual is not none %} <span class="legend-item"><span class="key key-usual"></span>usual hourly level, 7-day average ({{ chart.usual|avg }})</span>{% endif %}{% if chart.markers %} <span class="legend-item"><span class="key key-marker"></span>open finding, by number</span>{% endif %}</p>

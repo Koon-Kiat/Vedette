@@ -12,7 +12,7 @@
     <thead><tr><th>Check</th><th>State</th><th>Detail</th><th>Since</th></tr></thead>
     <tbody>
       {% for check in health.checks %}
-      <tr class="{{ "ok" if check.ok else "problem" }}"><td>{{ check.label|text }}</td><td><span class="state">{{ "OK" if check.ok else "Problem" }}</span></td><td>{{ check.detail|text }}</td><td class="when">{{ check.since|local(tz) }}</td></tr>
+      <tr class="{{ "ok" if check.ok else "problem" }}"><td>{{ check.label|text }}</td><td><span class="state">{{ "OK" if check.ok else "Problem" }}</span></td><td>{{ check.detail|detail }}{% if not check.ok and check.key.startswith("events:") %}<span class="note">If this profile is often off, give it <code>stale_after_minutes</code> or <code>quiet_hours</code> in config.yaml; 0 switches this check off.</span>{% endif %}</td><td class="when">{{ check.since|local(tz) }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

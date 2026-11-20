@@ -16,6 +16,6 @@
 </table>
 </div>
 {% else %}
-<p class="empty">No digest yet. The first one is produced at the next digest time.</p>
+<p class="empty">No digest yet. {% if digest_time %}The first one is produced at {{ digest_time }} ({{ tz.key }}).{% else %}The first one is produced at the next digest time.{% endif %}</p>
 {% endif %}
 {% endblock %}

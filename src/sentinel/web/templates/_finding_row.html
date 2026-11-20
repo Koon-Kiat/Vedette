@@ -1,7 +1,7 @@
 {% set f = row.finding %}
 {% set level = row.priority.value %}
 {% set seen = f|span(tz) %}
-<tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ level }}">
+<tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ level }}{% if f.target == f.profile_id %} about-profile{% endif %}">
   <td class="no col-wide"><a href="/findings/{{ f.id }}" aria-label="Finding {{ f.id }}">{{ "%04d"|format(f.id) }}</a></td>
   <td class="pri">{% include "_badge.html" %}</td>
   <td class="rule col-wide"><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>

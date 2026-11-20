@@ -104,7 +104,7 @@ async def test_finding_detail_shows_evidence_enrichment_explanation_and_queries(
 
     html = page.text
     assert page.status_code == 200
-    assert "domain_age_days" in html
+    assert "<th>Domain age, days</th>" in html  # evidence, in words
     assert "The laptop visited fresh-site[.]example" in html
     assert "Registered 5 days ago" in html
     assert "Not on the top-sites list" in html

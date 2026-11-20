@@ -7,7 +7,9 @@
 {% for profile in profiles %}
 <section class="block" aria-labelledby="profile-{{ loop.index }}">
   <h2 id="profile-{{ loop.index }}">{{ profile.label }}</h2>
-  {% if not profile.attribution %}
+  {% if not profile.queries_7d %}
+  <p class="empty">No queries from this profile in the last 7 days, so there are no devices to show.</p>
+  {% elif not profile.attribution %}
   <p class="panel notice">Device attribution unavailable on this profile: NextDNS reports no devices for it, so per-device rules count the whole profile. {{ profile.client_ips|num }} client address{{ "" if profile.client_ips == 1 else "es" }} seen.</p>
   {% elif profile.devices %}
   <div class="table-wrap">

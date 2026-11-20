@@ -330,6 +330,7 @@ def _dashboard(
             specs=specs,
             session_lifetime=timedelta(hours=config.session_hours),
             allowed_hosts=config.allowed_hosts,
+            digest_time=settings.notify.digest_time,
         )
     )
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

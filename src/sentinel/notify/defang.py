@@ -12,6 +12,7 @@ import unicodedata
 _SCHEME = re.compile(r"h(?:tt|xx)p(s?)://", re.IGNORECASE)
 _WHITESPACE = re.compile(r"\s+")
 _INNER_DOT = re.compile(r"(?<=[^\s.])\.(?=[^\s.])")
+_NAME_DOT = re.compile(r"(?<=([^\s.]))\.(?=([^\s.]))")
 
 
 def _strip_control(text: str, *, keep_whitespace: bool) -> str:
@@ -43,6 +44,20 @@ def defang_text(value: str) -> str:
     """
     text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", value)
     return _INNER_DOT.sub("[.]", text.replace("[.]", "."))
+
+
+def defang_names(value: str) -> str:
+    """Defang the names in a sentence the pipeline wrote, leaving numbers alone.
+
+    Like :func:`defang_text`, except that a dot between two digits stays a dot,
+    so ``935.5 GB`` reads as a number. Only for text Sentinel writes itself
+    (health details), where a dotted number is far likelier than an address.
+    """
+    text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", value)
+    return _NAME_DOT.sub(
+        lambda match: "." if match[1].isdigit() and match[2].isdigit() else "[.]",
+        text.replace("[.]", "."),
+    )
 
 
 def clean_text(value: str, *, limit: int) -> str:

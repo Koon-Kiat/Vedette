@@ -175,6 +175,6 @@ async def test_only_the_chart_pages_load_the_chart_code(charted: Store) -> None:
     for page in (overview, live):
         assert page.text.count("data-chart ") == 1
         assert 'src="/static/vendor/uPlot-1.6.32.iife.min.js"' in page.text
-        assert 'src="/static/charts.js"' in page.text
+        assert 'src="/static/charts.js?v=' in page.text
     assert "uPlot" not in findings.text
     assert "every 60s" not in overview.text  # the chart follows live instead of polling

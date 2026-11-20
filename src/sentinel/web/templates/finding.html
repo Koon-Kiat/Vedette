@@ -26,20 +26,24 @@
     </section>
 
     <section class="block detail-evidence" aria-labelledby="evidence-title">
-      <h2 id="evidence-title">Evidence</h2>
+      <h2 id="evidence-title">Evidence when it fired</h2>
       <div class="table-wrap">
       <table class="kv">
-        {% for key, value in f.evidence|dictsort %}{% if value is not none %}<tr><th>{{ key|text }}</th><td>{{ value|text }}</td></tr>{% endif %}{% endfor %}
+        {% for label, value in f.evidence|evidence %}<tr><th>{{ label }}</th><td>{{ value }}</td></tr>{% endfor %}
       </table>
       </div>
     </section>
 
     {% if enrichment %}
     <section class="block detail-cache" aria-labelledby="cache-title">
-      <h2 id="cache-title">What the local caches know</h2>
+      <h2 id="cache-title">What the local caches know now</h2>
+      {# Where today's facts differ from the evidence, say so: the list and the
+         domain's age move on after a finding fires. #}
+      {% set then_rank = f.evidence.get("popularity_rank") %}
+      {% set then_age = f.evidence.get("domain_age_days") %}
       <ul class="plain facts-list">
-        <li>{% if enrichment.rank %}On the top-sites list at rank {{ enrichment.rank|num }}{% elif enrichment.popularity_known %}Not on the top-sites list{% else %}Top-sites list not downloaded yet{% endif %}{% if enrichment.platform_rank %}; hosted under a site ranked {{ enrichment.platform_rank|num }}{% endif %}</li>
-        <li>{% if enrichment.age_days is not none %}Registered {{ enrichment.age_days }} days ago{% elif enrichment.age_status %}Registration date unknown (registry answered: {{ enrichment.age_status }}){% else %}Registration date not looked up{% endif %}</li>
+        <li>{% if enrichment.rank %}On the top-sites list at rank {{ enrichment.rank|num }}{% if "popularity_rank" in f.evidence and then_rank is none %}; it was not on the list when the finding fired{% elif then_rank is not none and then_rank != enrichment.rank %} (rank {{ then_rank|num }} when the finding fired){% endif %}{% elif enrichment.popularity_known %}Not on the top-sites list{% else %}Top-sites list not downloaded yet{% endif %}{% if enrichment.platform_rank %}; hosted under a site ranked {{ enrichment.platform_rank|num }}{% endif %}</li>
+        <li>{% if enrichment.age_days is not none %}Registered {{ enrichment.age_days }} days ago{% if then_age is not none and then_age != enrichment.age_days %} ({{ then_age }} days old when the finding fired){% endif %}{% elif enrichment.age_status %}Registration date unknown (registry answered: {{ enrichment.age_status }}){% else %}Registration date not looked up{% endif %}</li>
         <li>{% if enrichment.threat_feeds %}Listed by: {{ enrichment.threat_feeds|join(", ") }}{% else %}Not on any threat feed{% endif %}</li>
         <li>First seen on this profile: {{ enrichment.first_seen|local(tz) }}</li>
         {% if enrichment.lexical %}<li>Leftmost label <span class="name">{{ enrichment.lexical.label|text }}</span>: {{ enrichment.lexical.label_length }} characters, entropy {{ "%.2f"|format(enrichment.lexical.entropy) }} bits per character</li>{% endif %}
@@ -54,7 +58,7 @@
       <table>
         <thead><tr><th>Time</th><th>Name</th><th>Status</th><th>Device</th></tr></thead>
         <tbody>
-          {% for q in queries %}<tr><td class="when">{{ q.ts|local(tz) }}</td><td class="name">{{ q.fqdn|domain }}</td><td>{{ q.status }}</td><td>{% if q.device_id %}<span class="device">{{ q.device_id|text }}</span>{% if q.device_name %} (<span class="device">{{ q.device_name|text }}</span>){% endif %}{% else %}<span class="muted">unavailable</span>{% endif %}</td></tr>{% endfor %}
+          {% for q in queries %}<tr><td class="when">{{ q.ts|local(tz) }}</td><td class="name">{{ q.fqdn|domain }}</td><td>{{ q.status|status_word }}</td><td>{% if q.device_id %}<span class="device">{{ q.device_id|text }}</span>{% if q.device_name %} (<span class="device">{{ q.device_name|text }}</span>){% endif %}{% else %}<span class="muted">unavailable</span>{% endif %}</td></tr>{% endfor %}
         </tbody>
       </table>
       </div>

@@ -8,6 +8,7 @@ own static files, no element has an event-handler attribute, no URL uses the
 text shows up escaped.
 """
 
+import re
 from datetime import timedelta
 from html.parser import HTMLParser
 from typing import Any
@@ -38,6 +39,7 @@ PAYLOADS = [
 ]
 HOSTILE = " ".join(PAYLOADS)
 URL_ATTRIBUTES = {"href", "src", "action", "formaction", "xlink:href", "hx-get", "hx-post"}
+IN_PAGE = re.compile(r"#[A-Za-z][\w-]*")  # a jump within the page, such as the skip link
 FORBIDDEN_TAGS = {"img", "iframe", "object", "embed", "frame", "base", "meta-refresh"}
 
 
@@ -66,9 +68,9 @@ class Audit(HTMLParser):
                 lowered = value.strip().lower()
                 if lowered.startswith("javascript:") or lowered.startswith("data:"):
                     self.problems.append(f"{name}={value!r}")
-                if name in {"href", "action", "hx-get", "hx-post"} and not (
-                    value.startswith("/") and not value.startswith("//")
-                ):
+                inside = value.startswith("/") and not value.startswith("//")
+                same_page = name == "href" and IN_PAGE.fullmatch(value) is not None
+                if name in {"href", "action", "hx-get", "hx-post"} and not (inside or same_page):
                     self.problems.append(f"link leaves the dashboard: {name}={value!r}")
 
     def handle_endtag(self, tag: str) -> None:
@@ -222,6 +224,7 @@ async def test_the_row_returned_after_an_action_is_safe_too(planted: Store) -> N
         '<img src="x" onerror="alert(1)">',
         '<a href="javascript:alert(1)">x</a>',
         '<a href="https://evil.example/">x</a>',
+        '<a href="#x:alert(1)">x</a>',
         '<form action="//evil.example/"></form>',
         '<svg onload="alert(1)"></svg>',
         '<svg class="charted"></svg>',
@@ -235,7 +238,8 @@ def test_the_checker_itself_catches_unsafe_html(bad: str) -> None:
 def test_the_checker_accepts_our_own_markup() -> None:
     good = (
         '<script src="/static/vendor/htmx-2.0.11.min.js" defer></script>'
-        '<a href="/findings/3">x</a><form method="post" action="/logout"></form>'
+        '<a href="#main">skip</a><a href="/findings/3">x</a>'
+        '<form method="post" action="/logout"></form>'
         '<svg class="chart"><rect class="bar-allowed"/></svg>'
         '<svg class="chart span-bar"><rect class="span-seen"/></svg>'
     )

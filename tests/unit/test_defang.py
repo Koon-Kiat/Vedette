@@ -1,6 +1,15 @@
 import pytest
 
-from sentinel.notify.defang import clean_text, defang
+from sentinel.notify.defang import clean_text, defang, defang_names
+
+
+def test_our_own_messages_keep_numbers_but_lose_links() -> None:
+    assert (
+        defang_names("Disk 2% full (935.5 GB free) at api.nextdns.io.")
+        == "Disk 2% full (935.5 GB free) at api[.]nextdns[.]io."
+    )
+    assert defang_names("see http://evil.example") == "see hxxp://evil[.]example"
+    assert defang_names(defang_names("a.b 1.5")) == "a[.]b 1.5"
 
 
 def test_dots_in_a_domain_are_bracketed() -> None:

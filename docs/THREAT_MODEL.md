@@ -238,7 +238,9 @@ Mitigations:
   capabilities dropped, `no-new-privileges`.
 - **Ollama container.** Non-root (uid 10002), read-only root filesystem, all
   capabilities dropped, `no-new-privileges`, on an internal network with no
-  internet route.
+  internet route. CUDA's compiled-kernel cache is kept in the model volume,
+  writable only by that same user, so it is trusted exactly as far as the
+  model files beside it.
 - **Volume ownership.** A one-shot helper changes the model volume's ownership
   using only `CHOWN` and `DAC_READ_SEARCH`, with no network.
 - **Pinning.** Dependencies are pinned with hashes and checked by pip-audit.

@@ -119,8 +119,10 @@ quiet for the first `rules.learning_days` (3) after a profile's oldest event.
 ## How findings get explained
 
 The analyst worker polls for findings without an analysis, most severe first,
-and handles up to `llm.max_findings_per_batch` (20) at a time. Each finding
-always ends with a valid analysis, from the first of these that applies:
+and handles up to `llm.max_findings_per_batch` (20) at a time. A call to the
+model is also sized so its prompt and every answer fit `num_ctx`, so a batch
+with long evidence is split rather than cut short. Each finding always ends
+with a valid analysis, from the first of these that applies:
 
 1. **Cache.** A fresh verdict for an equivalent earlier finding. The key is the
    prompt version, model, rule, target, attribution mode and a hash of coarse
@@ -669,6 +671,29 @@ test checks each file's SHA-256, as for htmx.
     owner's real data, read-only, with triage actions tried on synthetic data.
     The findings and what was fixed are in `docs/ux/evaluation-dashboard.md`;
     the project context and the decisions made along the way sit beside it.
+80. **CUDA's kernel cache lives in the model volume.** Measured on the owner's
+    RTX 4070 Ti: with the root filesystem read-only (decision 64), CUDA could
+    not write its default cache in `~/.nv`, so the GPU kernels were compiled
+    again every time the model loaded. A call to a model that had unloaded
+    took 48 to 60 seconds (load 23 to 35 s, a 460-token prompt 16 s, the
+    answer at 14 tokens a second); since findings are rare, nearly every real
+    call was such a call. With `CUDA_CACHE_PATH` in the volume (about 24 MB,
+    1 GiB allowed), the same call takes 4.2 seconds (load 2.1 s, prompt
+    0.2 s, 73 tokens a second), and a warm one 1.7 seconds. The model, its
+    weights and its answers are unchanged; only compiled GPU code is kept. A
+    high or critical alert now gets its explanation well inside the 60 seconds
+    it waits for one. `keep_alive` stays at 5 minutes, since a cold call is
+    now cheap and the GPU memory is free between findings.
+81. **Calls to the model are sized to its context window.** Measured on
+    `qwen3:8b`: about 3 payload characters per token and about 130 answer
+    tokens per finding, so a full batch of 20 ordinary findings uses about
+    6,900 of 8,192 tokens. Long evidence (up to 20 keys, lists of ten
+    200-character strings, 256-character names) could pass the window, and
+    Ollama would then cut the prompt. Each call is now filled while an
+    estimate (2.5 characters a token, 200 answer tokens per finding, a tenth
+    of the window spare) fits. Ordinary batches are unaffected. The
+    evaluation suite keeps its fixed batches, so its injection results stay
+    comparable.
 
 ## Verified facts the design relies on
 

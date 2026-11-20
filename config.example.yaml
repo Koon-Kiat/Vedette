@@ -51,7 +51,7 @@ llm:
   model: "qwen3:8b"
   think: false
   temperature: 0.1
-  num_ctx: 8192
+  num_ctx: 8192              # each call is sized so its prompt and answers fit this
   keep_alive: "5m"
   max_findings_per_batch: 20
   cache_ttl_hours: 168

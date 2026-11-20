@@ -324,7 +324,7 @@ One ramp, tinted from the navy.
 
 ## Layout
 
-A two-column shell: a sticky full-height rail (240px) and a main column that fills the screen up to 3200px (a 3440px ultrawide), with 32px top, 72px bottom and 36 to 64px side padding that grows with the window. Pages never stretch one column across a wide screen; they recompose into more columns (see Responsive behaviour). Page heads are a two-column grid: title and lead on the left, a stamp, segmented control or the live pill on the right, 32px above the first block. Blocks stack 40px apart; headings sit 14px above their content. Composite rows use a 24px gutter (32px between board columns): even halves, a finding's main column beside a 360px sticky side column (32px gap).
+A two-column shell: a sticky full-height rail (240px) and a main column that fills the screen up to 3200px (a 3440px ultrawide), with 32px top, 72px bottom and 36 to 64px side padding that grows with the window. Pages never stretch one column across a wide screen; they recompose into more columns (see Responsive behaviour). Page heads are a two-column grid: title and lead on the left, a stamp, segmented control or the live pill on the right, centred on the title line, 32px above the first block. Section heads wrap their note or link under the heading when both do not fit. Blocks stack 40px apart; headings sit 14px above their content. Composite rows use a 24px gutter (32px between board columns): even halves, a finding's main column beside a 360px sticky side column (32px gap).
 
 **Overview order:** the title with the live pill; Needs a decision (the open high and critical findings, refreshed live); Queries over time, full width; Right now (the last eight queries, a fixed-height feed) beside New devices and findings; Today against the usual week. On an ultrawide screen the page becomes a board of two columns (2 to 1, the side at least 440px): Needs a decision and Queries over time on the left; Right now, New devices and findings, and Today against the usual week stacked on the right, both columns starting on one line.
 
@@ -336,10 +336,11 @@ Responsive behaviour:
 - **Ultrawide, 2240px and wider:** the Overview and Live boards above; Domains sets its four tables in one row; a finding's page puts the explanation and the cached domain facts beside the evidence, with recent queries across both, next to a 400px side column.
 - **Wide, 1800px and wider:** the findings table gives its spare width to the About column (38%), so the domain and why it fired wrap less instead of every column drifting apart.
 - **Time charts** ask the server for about one bar per 6px of plot width (60 to 480 bars), so a wider chart shows finer bars, and fetch again when a resize changes that by more than a fifth.
-- **Laptop fold, 641 to 1180px:** the findings table hides its wide columns (number, rule, profile and device, last seen, events) and folds them into one meta line under the domain, so the decision buttons stay in view; the rail narrows to 212px and main side padding drops to 28px.
+- **Table fold, any findings table under 1200px wide:** a container query on the table, not the window, hides its wide columns (number, rule, profile and device, last seen, events) and folds them into one meta line under the domain, so the decision buttons stay in view on a 1280px laptop and in narrower board columns.
+- **Laptop, 641 to 1180px:** the rail narrows to 212px and main side padding drops to 28px.
 - **1180px and below:** the Overview's side panels and the finding detail collapse to one column; the side column stops sticking.
 - **860px and below:** the rail becomes a top bar: brand and log-out on one line, pipeline state below, then the navigation as a horizontally scrolling row that fades out at its right edge instead of drawing a scrollbar. Main padding drops to 22px/16px; feed rows move profile and device onto a second line.
-- **640px and below (phone):** each findings row becomes a stacked notice card (14px/16px padding, 12px corners, 10px apart) with the decision and actions on its last line, in thumb reach; time charts drop to 220px (180px short); the enlarged chart fills the screen less 8px.
+- **640px and below (phone):** each findings row becomes a stacked notice card (14px/16px padding, 12px corners, 10px apart) with the decision and actions on its last line, in thumb reach: the status keeps only the room it needs, the buttons take the rest and wrap, right-aligned, if even that is too narrow; a finding about a whole profile skips the repeated profile line. A wide table in a plain panel (Today against the usual week) scrolls sideways inside it. Time charts drop to 220px (180px short); the enlarged chart fills the screen less 8px.
 - **Pointer-less devices:** the chart hint switches to the touch wording.
 
 ## Elevation & Depth
@@ -390,13 +391,15 @@ Wrapped in a 12px bordered panel that scrolls sideways when it must. Headers are
 ### Navigation
 - **Rail:** rail navy, 240px, sticky, a 1px line on its right. Brand in 16px Mona Sans at 110% width, "Sentinel" at 700. Links are 14px/480 second ink at 8px 10px with 8px corners; hover takes surface and ink, the current page surface-2 at 600. Live carries the live dot; Findings carries the magenta open count (a dark surface-3 pill when nothing is open). Pipeline health sits at the foot under a line: a dot and state in pass green or coral, then 12px third-ink "Newest event" meta.
 - **Segmented control:** a pill on surface; segments 6px 14px; the current segment fills surface-3 at 600.
+- **Skip link:** the first stop for the keyboard, hidden until focused, then a pale chart blue pill (on-primary text, 620) fixed 12px from the top left, jumping to the page's content past the rail.
+- **Decisions announced:** after Acknowledge, Mark benign or Reopen, focus returns to the new row's first action and a polite status line reads "Finding 0003 acknowledged." (or marked benign, reopened).
 - **Mobile:** see Layout.
 
 ### Live Signals (signature)
-- **Live pill:** a surface pill (8px 14px) with the live dot, the state at 620 and the last minute's queries and blocked count as ink figures in 12px second ink.
+- **Live pill:** a surface pill (8px 14px 8px 12px) in two parts: the live dot and the state at 620, 7px apart; then a hairline (strong line, 11px inset) and the last minute's queries and blocked count as ink figures in 12px second ink, the noun following the count ("1 query"). In a page head it sits on the title's centre line.
 - **Live dot:** 8px; pass green when open, signal amber while connecting, third ink when paused or closed. When queries arrive it rings: a 2px green ring scales out and fades (900ms), at most once every 4 seconds and never while paused.
 - **Tick:** a changed live figure flashes from the lit blue back to its colour (700ms).
-- **Feed row:** time (mono, third ink), the domain (outside name), profile and device (12px second ink), and a blocked chip. A new row first opens its own height (340ms, standard curve) while fading and sliding 4px in from a surface-3 glow (560ms, ease-out); rows past the limit are removed 600ms later, once the new ones have opened. Blocked rows set the domain in second ink. The Right now feed is eight 37px rows at a fixed height, so the panel never grows.
+- **Feed row:** time (mono, third ink), the domain (outside name), profile and device (12px second ink), and a blocked chip. A new row first opens its own height (340ms, standard curve) while fading and sliding 4px in from a surface-3 glow (560ms, ease-out); rows past the limit are removed 600ms later, once the new ones have opened. Blocked rows set the domain in second ink. Rows stay newest first by the query's own time, so one that reached the collector late opens where its time belongs, not on top. The Right now feed is eight 37px rows at a fixed height, so the panel never grows.
 - **Fresh finding:** a finding that arrives in Needs a decision is washed in magenta-wash, holds for a quarter of the time, then settles to nothing over 2400ms.
 
 ### Time Chart (signature)

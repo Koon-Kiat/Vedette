@@ -203,6 +203,9 @@ Mitigations:
 - **Audit.** Every triage action is written to an audit log in the same
   transaction as the change.
 - **Tests.** An XSS suite plants payloads in every field that reaches a page.
+- **Health details.** These are Sentinel's own wording, so there a dot between
+  two digits stays a dot (`935.5 GB`); every other dot is still bracketed and
+  every value is still escaped. Names from DNS traffic keep full defanging.
 - **Live feed.** The event stream needs the same session and stops when the
   session ends. At most 8 streams may be open at once, and each lasts 15
   minutes before the browser reconnects. Every string is cleaned and defanged

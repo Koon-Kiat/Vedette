@@ -624,10 +624,13 @@ test checks each file's SHA-256, as for htmx.
 71. **The live feed follows event time.** A short overlap window plus a record
     of ids already sent is simpler and more robust than a write-order cursor;
     the feed is for what is happening now, not for history.
-72. **At laptop widths the findings tables fold.** Between 641 and 1,180
-    pixels, the number, rule, device, last-seen time and event count move into
-    one line under the domain, so the decision buttons stay in view. Phones
-    show each finding as a card.
+72. **Narrow findings tables fold.** When the table itself is under 1,200
+    pixels wide (a container query, so it covers 1,280-pixel laptops and
+    narrower board columns as well as small windows), the number, rule,
+    device, last-seen time and event count move into one line under the
+    domain, so the decision buttons stay in view. Phones show each finding as
+    a card. (At first the fold followed the window, from 641 to 1,180 pixels,
+    and a 1,280-pixel laptop pushed the buttons out of view.)
 73. **uPlot for the interactive charts.** The owner asked for charts that zoom,
     move through time, enlarge and click through, and approved the download.
     uPlot is about 51 KB, has no dependencies, draws on a canvas so thousands
@@ -655,6 +658,17 @@ test checks each file's SHA-256, as for htmx.
     finding's page splits its main column. The breakpoint is where the
     findings table still shows every column in two thirds of the width;
     below it the layouts are as before.
+78. **Our static files are versioned by content.** `style.css`, `live.js` and
+    `charts.js` are linked as `?v=` plus the first 12 hex digits of their
+    SHA-256, and every static response says `Cache-Control: no-cache`, so the
+    browser checks it on each load (a 304 on this machine). Without it, a
+    browser reused a day-old stylesheet with new pages after an upgrade and
+    the layout broke; a hard reload did not clear it. Vendored files already
+    carry their version in the file name.
+79. **The dashboard was evaluated against usability heuristics** on the
+    owner's real data, read-only, with triage actions tried on synthetic data.
+    The findings and what was fixed are in `docs/ux/evaluation-dashboard.md`;
+    the project context and the decisions made along the way sit beside it.
 
 ## Verified facts the design relies on
 

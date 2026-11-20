@@ -27,6 +27,43 @@
 - `docs/THREAT_MODEL.md`: STRIDE over the data flow, with the mitigation in
   the code and the residual risk for each threat.
 
+### Dashboard evaluation fixes
+
+An evaluation against usability heuristics, recorded in
+`docs/ux/evaluation-dashboard.md`, found these, now fixed:
+
+- Findings tables fold their secondary columns whenever the table, not the
+  window, is too narrow, so the decision buttons stay in view on a
+  1,280-pixel laptop.
+- After a decision, keyboard focus stays in the row and the decision is
+  announced to screen readers.
+- A finding's page separates the evidence from when it fired from what the
+  caches know now, and says where they differ (rank, domain age). Evidence
+  fields are labelled in words, and NextDNS's "default" reads "allowed".
+- Devices says a profile sent no queries in 7 days instead of claiming it
+  reports no devices.
+- Health shows numbers as numbers ("935.5 GB", not "935[.]5 GB"), and a
+  failing silence check names the profile settings that quiet it.
+- Error pages keep the menu for a logged-in owner and name a missing
+  finding; the login error is tied to its field and says the token must match
+  exactly.
+- A skip link jumps past the menu.
+- Static files are versioned by content and revalidated, so an upgrade never
+  meets a stale stylesheet.
+- Smaller fixes: the Overview lead, the Domains registration column, the
+  digest time on the empty Digests page, a plural on Evaluation, and charts
+  that keep coarse bars after widening.
+- From a second pass on real data:
+  - The live feed keeps rows in time order when a query reaches the
+    collector late, instead of putting it on top.
+  - The live pill sits on the title's line, and a hairline now separates
+    "Live" from the figures; it says "1 query" for one.
+  - On a phone, a finding card's buttons stay inside the card, the Today
+    table scrolls inside its panel, and section notes drop under their
+    heading.
+  - Chart legends wrap between items, never inside one; the y-axis shows
+    1,250 as "1.25K"; evidence labels use the label type.
+
 ### Interactive charts
 
 - The "Queries over time" charts on the Overview and the Live page are

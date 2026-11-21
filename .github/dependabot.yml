@@ -2,6 +2,10 @@
 # project's rule for new dependencies; security updates are not delayed.
 # Minor and patch updates are grouped into one pull request per ecosystem;
 # a major update gets its own.
+#
+# Docker images are pinned by digest; Dependabot updates the tag and the
+# digest together. The gitleaks image runs from a `docker run` line in ci.yml
+# and .githooks/pre-commit, which Dependabot does not read: bump it by hand.
 version: 2
 updates:
   - package-ecosystem: uv            # pyproject.toml and uv.lock

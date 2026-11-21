@@ -59,7 +59,7 @@ services:
   # One-shot: hands the model volume to the unprivileged Ollama user (uid 10002)
   # before Ollama starts. It may only change file owners and has no network.
   ollama-volume-owner:
-    image: ollama/ollama:0.40.16
+    image: ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
     user: "0:0"
     entrypoint: ["chown", "-R", "10002:10002", "/home/ollama/.ollama"]
     restart: "no"
@@ -76,7 +76,7 @@ services:
       - DAC_READ_SEARCH
 
   ollama:
-    image: ollama/ollama:0.40.16
+    image: ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
     restart: unless-stopped
     user: "10002:10002"
     read_only: true
@@ -113,7 +113,7 @@ services:
   # access, so this helper pulls into the shared volume and exits:
   #   docker compose --profile setup run --rm ollama-pull
   ollama-pull:
-    image: ollama/ollama:0.40.16
+    image: ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
     profiles: [setup]
     user: "10002:10002"
     read_only: true

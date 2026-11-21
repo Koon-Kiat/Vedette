@@ -440,7 +440,7 @@ repository. Each decision that departs from it says so.
 13. **Base images are pinned by version tag**, not by digest
     (`python:3.14-slim`, `ollama/ollama:0.40.16`, `ghcr.io/astral-sh/uv:0.13.7`,
     `ghcr.io/gitleaks/gitleaks:v8.30.1`). Digest pinning is listed under future
-    work.
+    work. (Decision 93 replaces this.)
 
 14. **The events table is the hand-off from the collector.** The collector
     stores events; the enricher reads unprocessed ones from storage in
@@ -821,8 +821,8 @@ repository. Each decision that departs from it says so.
     comment, the release (`actions/checkout` v7.0.1,
     `astral-sh/setup-uv` v10.3.3). The first run on GitHub failed to start
     because `setup-uv@v10` named a tag that does not exist: setup-uv
-    publishes exact releases only. Base images are still pinned by tag
-    (decision 13). With the pinned actions, CI passed on GitHub on
+    publishes exact releases only. Base images are
+    pinned by digest too (decision 93). With the pinned actions, CI passed on GitHub on
     2026-11-21: lint, types and tests on Python 3.14 and 3.15, pip-audit
     and gitleaks.
 89. **CI also runs weekly and builds the image.** A new advisory for a locked
@@ -867,6 +867,13 @@ repository. Each decision that departs from it says so.
       (`py/bad-tag-filter`, twice). It now uses an HTML parser.
     - **A test that logs a fake secret on purpose**, to prove the redactor
       removes it (`py/clear-text-logging-sensitive-data`): a false positive.
+93. **Every image is pinned to a digest.** `python:3.14-slim`, the `uv`
+    image, the Dockerfile frontend, `ollama/ollama` and the gitleaks image
+    name their tag and their `@sha256` digest, so a tag that a registry
+    moves cannot change what is
+    built or run. Dependabot proposes the tag and digest together (decision
+    90), which is what made this cheap. The gitleaks image runs from a
+    `docker run` line that Dependabot does not read and is bumped by hand.
 
 ## Verified facts the design relies on
 
@@ -1002,7 +1009,6 @@ no name from your history or the feeds appears in it.
 
 ## Future work
 
-- Pin base images by digest and automate updates.
 - Run device names through the instruction-word pre-filter too.
 - Measure young-domain recall in the evaluation, with registration dates
   cached ahead of time for a fixed test set.

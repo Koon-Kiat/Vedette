@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Maintenance
+
+- Every image is pinned to its digest as well as its tag: the Python and uv
+  images, the Dockerfile frontend, Ollama and gitleaks. Dependabot proposes
+  new digests.
+
 ## 0.1.0 - 2026-11-21
 
 ### Releases and dependency updates

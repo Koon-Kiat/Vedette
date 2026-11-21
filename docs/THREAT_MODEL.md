@@ -253,7 +253,8 @@ Residual risk:
 - The first-seen index, the reference caches and stored allowlist entries are
   kept until `purge --all`. They record which roots and devices were seen, but
   not when you visited them.
-- Base images are pinned by tag, not by digest.
+- Images are pinned by digest, but a new digest is trusted as the registry
+  serves it when Dependabot proposes it and the pull request is merged.
 - The model weights are trusted as downloaded from the Ollama registry.
 
 ## Assumptions

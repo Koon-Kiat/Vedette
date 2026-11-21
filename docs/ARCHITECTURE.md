@@ -816,6 +816,15 @@ repository. Each decision that departs from it says so.
 87. **The design tools' briefs stay local.** `PRODUCT.md` and `DESIGN.md` are
     read by the Impeccable and Intent design tools and are git-ignored, at
     the owner's request.
+88. **CI actions are pinned to a release's commit.** A tag can be moved to
+    other code; a commit cannot. Each `uses:` line names the commit and, in a
+    comment, the release (`actions/checkout` v7.0.1,
+    `astral-sh/setup-uv` v10.3.3). The first run on GitHub failed to start
+    because `setup-uv@v10` named a tag that does not exist: setup-uv
+    publishes exact releases only. Base images are still pinned by tag
+    (decision 13). With the pinned actions, CI passed on GitHub on
+    2026-11-21: lint, types and tests on Python 3.14 and 3.15, pip-audit
+    and gitleaks.
 
 ## Verified facts the design relies on
 
@@ -944,7 +953,6 @@ no name from your history or the feeds appears in it.
 - The owner's install sends to Discord, where digests have been delivered;
   ntfy has been proven only against a local ntfy server, and e-mail only in
   tests.
-- No Git remote exists yet, so the CI workflow has not run on GitHub.
 - Whether to pace history requests to stay under the undocumented rate limit,
   for example when several profiles backfill at once.
 

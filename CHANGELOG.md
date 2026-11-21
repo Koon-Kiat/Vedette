@@ -27,6 +27,8 @@ and the repository was audited before going public.
   device names, domains, keys and the owner's address found nothing to remove.
 - `PRODUCT.md` and `DESIGN.md`, the briefs the design tools read, are
   git-ignored and kept only on the owner's machine.
+- CI's actions are pinned to release commits. The first run on GitHub could
+  not start: `astral-sh/setup-uv` publishes exact releases but no `v10` tag.
 
 ### Dashboard: triage polish
 

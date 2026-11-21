@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_titleblock.html" import titleblock with context %}
 {% block content %}
-{% call titleblock("Health", "7 of 8", scoped=False) %}
+{% call titleblock("Health", "8 of 9", scoped=False) %}
   <p class="lead">{% if health.checks %}Checked {{ health.checks[0].updated_at|local(tz) }}.{% else %}The health monitor has not run yet.{% endif %}</p>
 {% endcall %}
 <section class="block" aria-labelledby="checks-title">

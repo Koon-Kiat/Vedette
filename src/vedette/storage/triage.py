@@ -19,6 +19,8 @@ from vedette.storage.store import StoredFinding, finding_from_row
 # Rules whose target is a domain root; marking these benign allowlists the root.
 DOMAIN_RULES = frozenset({"young-domain", "threat-intel-allowed", "dga-like", "tunnel-like"})
 STATUSES = ("open", "acknowledged", "benign")
+# Audit actions that change a finding's status; other entries only add history.
+_DECISIONS = frozenset({"acknowledge", "mark_benign", "reopen"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +32,19 @@ class AuditEntry:
     action: str
     finding_id: int | None
     detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class StoredAllowlistEntry:
+    """An allowlist entry made from a triage decision. ``root`` is a raw domain name."""
+
+    id: int
+    root: str
+    profile_id: str | None
+    device_id: str | None
+    finding_id: int | None
+    created_at: datetime
+    created_by: str
 
 
 class TriageStore:
@@ -147,6 +162,58 @@ class TriageStore:
             )
             return await self._load(connection, finding_id)
 
+    async def stored_allowlist(self) -> list[StoredAllowlistEntry]:
+        """Every stored allowlist entry with where it came from, newest first."""
+        statement = select(allowlist).order_by(allowlist.c.id.desc())
+        async with self._engine.connect() as connection:
+            rows = (await connection.execute(statement)).all()
+        return [
+            StoredAllowlistEntry(
+                id=row.id,
+                root=row.root,
+                profile_id=row.profile_id,
+                device_id=row.device_id,
+                finding_id=row.finding_id,
+                created_at=row.created_at,
+                created_by=row.created_by,
+            )
+            for row in rows
+        ]
+
+    async def remove_allowlist_entry(
+        self, entry_id: int, *, actor: str, now: datetime
+    ) -> StoredAllowlistEntry | None:
+        """Take back one stored entry, so the rules flag its root again.
+
+        The finding that made it stays benign; its history records the removal.
+        Returns the entry, or ``None`` if there is no such entry.
+        """
+        async with self._engine.begin() as connection:
+            row = (
+                await connection.execute(select(allowlist).where(allowlist.c.id == entry_id))
+            ).one_or_none()
+            if row is None:
+                return None
+            await connection.execute(delete(allowlist).where(allowlist.c.id == entry_id))
+            if row.finding_id is not None:
+                await self._audit(
+                    connection,
+                    actor=actor,
+                    action="allowlist_removed",
+                    finding_id=row.finding_id,
+                    detail=f"{row.root} removed from the allowlist; the rules flag it again",
+                    now=now,
+                )
+        return StoredAllowlistEntry(
+            id=row.id,
+            root=row.root,
+            profile_id=row.profile_id,
+            device_id=row.device_id,
+            finding_id=row.finding_id,
+            created_at=row.created_at,
+            created_by=row.created_by,
+        )
+
     async def allowlist_entries(self) -> list[AllowlistEntry]:
         """Every stored allowlist entry."""
         async with self._engine.connect() as connection:
@@ -157,10 +224,10 @@ class TriageStore:
         ]
 
     async def latest_for(self, finding_ids: Sequence[int]) -> dict[int, AuditEntry]:
-        """The most recent audit entry of each finding that has one."""
+        """The most recent decision (acknowledge, mark benign, reopen) of each finding."""
         latest: dict[int, AuditEntry] = {}
         for entry in await self.audit_for(finding_ids):
-            if entry.finding_id is not None:
+            if entry.finding_id is not None and entry.action in _DECISIONS:
                 latest[entry.finding_id] = entry
         return latest
 

@@ -2,7 +2,7 @@
 {% from "_titleblock.html" import titleblock with context %}
 {% macro pct(value) %}{{ "n/a" if value is none else value|pct }}{% endmacro %}
 {% block content %}
-{% call titleblock("Evaluation", "8 of 8", scoped=False) %}
+{% call titleblock("Evaluation", "9 of 9", scoped=False) %}
   <p class="lead">How well the rules and the local model hold up against known-good, known-bad and hostile names.</p>
   {% if run %}<p class="stamp">Run {{ run.finished_at|local(tz) }}</p>{% endif %}
 {% endcall %}

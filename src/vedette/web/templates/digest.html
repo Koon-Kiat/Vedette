@@ -2,7 +2,7 @@
 {% from "_titleblock.html" import titleblock with context %}
 {% block content %}
 <nav class="sheet-nav" aria-label="Digests"><a class="back" href="/digests">All digests</a></nav>
-{% call titleblock(digest.title, "6 of 8", scoped=False) %}
+{% call titleblock(digest.title, "7 of 9", scoped=False) %}
   <p class="lead">Period ending {{ digest.period_end|local(tz) }}. Delivery: {{ digest.delivery or "unknown" }}.</p>
 {% endcall %}
 <pre class="digest">{{ digest.body }}</pre>

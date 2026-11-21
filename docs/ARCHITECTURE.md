@@ -928,6 +928,16 @@ repository. Each decision that departs from it says so.
     in one (`ignore`, `instruction`, `disregard`, `override`, `jailbreak`,
     `benign`, `whitelist`, `allowlist`), each at the start of a whole word.
     A hit raises the finding one step, as for a domain.
+98. **An Allowlist page.** Until now a stored entry could be taken back only
+    by reopening the finding that made it, and nothing showed what the rules
+    were skipping. The page lists the stored entries (root, profile, device,
+    when, and the finding they came from) next to the read-only entries from
+    `config.yaml`. Remove deletes one entry and records it in its finding's
+    history as `allowlist_removed`, leaving the finding benign; the rule
+    worker picks the change up within 30 seconds (decision 56). Only status
+    changes count as a finding's latest decision, so a removal does not
+    change the time the tables show. It is the ninth sheet, between Devices
+    and Digests.
 
 ## Verified facts the design relies on
 
@@ -1069,5 +1079,3 @@ no name from your history or the feeds appears in it.
 - Use the Public Suffix List to tell registrable domains from platform
   customer names exactly, instead of the parent-rank heuristic.
 - Batch stream writes if catch-up after long outages needs to be faster.
-- A dashboard page to review and remove stored allowlist entries (today an
-  entry is removed by reopening the finding that made it).

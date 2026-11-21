@@ -19,6 +19,7 @@ from tests.digest_fixture import PERIOD_END, PERIOD_START, build_fixture
 from tests.integration.web_helpers import logged_in
 from vedette.llm.schema import Analysis
 from vedette.notify.channels import OutgoingMessage
+from vedette.rules.allowlist import AllowlistEntry
 from vedette.rules.model import Finding, Severity
 from vedette.sources.nextdns import parse_log_entry
 from vedette.storage.analysis import AnalysisStore
@@ -172,6 +173,7 @@ async def pages(store: Store) -> list[str]:
         *(f"/findings/{fid}" for fid in finding_ids),
         "/domains?period=7d",
         "/devices",
+        "/allowlist",
         "/digests",
         f"/digests/{digest.id}",
         "/health",
@@ -183,7 +185,8 @@ async def pages(store: Store) -> list[str]:
 
 
 async def test_no_page_lets_hostile_text_execute(planted: Store) -> None:
-    async with logged_in(planted) as (client, _):
+    configured = [AllowlistEntry(root=f"{PAYLOADS[0]}.evil.example", device=PAYLOADS[1])]
+    async with logged_in(planted, allowlist=configured) as (client, _):
         for path in await pages(planted):
             response = await client.get(path)
             assert response.status_code == 200, path

@@ -23,7 +23,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from vedette.web.dashboard import Dashboard, DashboardContext
-from vedette.web.routes import errors, findings, live, login, overview, pages, series
+from vedette.web.routes import allowlist, errors, findings, live, login, overview, pages, series
 from vedette.web.templating import TEMPLATE_ENV, _average
 
 __all__ = ["CSP", "HTMX_SHA256", "TEMPLATE_ENV", "DashboardContext", "_average", "create_app"]
@@ -76,6 +76,6 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     app.add_middleware(SecurityHeaders)
     app.mount("/static", StaticFiles(packages=[("vedette.web", "static")]), name="static")
     errors.install(app)
-    for module in (login, overview, series, live, findings, pages):
+    for module in (login, overview, series, live, findings, allowlist, pages):
         app.include_router(module.router)
     return app

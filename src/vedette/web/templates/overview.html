@@ -5,7 +5,7 @@
 {% block scripts %}<script src="/static/vendor/uPlot-1.6.32.iife.min.js" defer></script>
 <script src="/static/charts.js?v={{ version("charts.js") }}" defer></script>{% endblock %}
 {% block content %}
-{% call titleblock("Overview", "1 of 8", extra=[("Revisions today", revisions_today|num)]) %}
+{% call titleblock("Overview", "1 of 9", extra=[("Revisions today", revisions_today|num)]) %}
   <p class="lead">{% if alerts %}<span class="count">{{ alerts|length }}</span> high or critical finding{{ "" if alerts|length == 1 else "s" }} need{{ "s" if alerts|length == 1 else "" }} a decision.{% else %}Nothing high or critical is waiting for a decision.{% endif %}</p>
   {% include "_live_line.html" %}
 {% endcall %}

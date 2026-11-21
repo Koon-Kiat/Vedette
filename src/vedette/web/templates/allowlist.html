@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
+{% block content %}
+{% call titleblock("Allowlist", "6 of 9", scoped=False) %}
+  <p class="lead">Domains the rules skip, with their subdomains. Mark benign on a domain finding adds its root here for that profile; remove an entry and the rules flag it again within about 30 seconds.</p>
+{% endcall %}
+<section class="block" aria-labelledby="stored-title">
+  <h2 id="stored-title">From your decisions</h2>
+  {% if stored %}
+  <div class="table-wrap">
+  <table class="sortable" id="t-allowlist">
+    <thead><tr><th>Domain</th><th>Profile</th><th>Device</th><th data-first="descending" data-sorted="descending">Added</th><th>From</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
+    <tbody>
+      {% for entry in stored %}
+      <tr>
+        <td><span class="name">{{ entry.root|domain_wrap }}</span></td>
+        <td>{% if entry.profile_id %}<span class="layer-tag"><span class="layer-mark layer-mark-{{ layers.get(entry.profile_id, 0) }}" aria-hidden="true"></span>{{ labels.get(entry.profile_id, entry.profile_id)|text }}</span>{% else %}Every profile{% endif %}</td>
+        <td>{% if entry.device_id %}<span class="device">{{ entry.device_id|text }}</span>{% else %}Every device{% endif %}</td>
+        <td class="when" data-sort="{{ entry.created_at.timestamp()|int }}">{{ entry.created_at|local(tz) }}</td>
+        <td>{% if entry.finding_id in linked %}<a href="/findings/{{ entry.finding_id }}">Finding {{ "%04d"|format(entry.finding_id) }}</a>{% elif entry.finding_id %}Finding {{ "%04d"|format(entry.finding_id) }}, since purged{% else %}{{ entry.created_by|text }}{% endif %}</td>
+        <td class="actions">
+          <form method="post" action="/allowlist/{{ entry.id }}/remove" hx-post="/allowlist/{{ entry.id }}/remove" hx-confirm="Vedette flags {{ entry.root|domain }} again within about 30 seconds. The finding stays benign." data-confirm-title="Remove from the allowlist?">
+            <template class="confirm-body">Vedette flags <span class="name">{{ entry.root|domain }}</span> again within about 30 seconds. The finding stays benign.</template>
+            <input type="hidden" name="csrf_token" value="{{ csrf }}">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">Nothing is allowlisted from your decisions. Mark benign on a domain finding adds its root here.</p>
+  {% endif %}
+</section>
+<section class="block" aria-labelledby="config-title">
+  <h2 id="config-title">From config.yaml</h2>
+  {% if configured %}
+  <p class="note">These are set under <code>allowlist:</code> in config.yaml and changed there.</p>
+  <div class="table-wrap">
+  <table class="sortable" id="t-allowlist-config">
+    <thead><tr><th>Domain</th><th>Profile</th><th>Device</th></tr></thead>
+    <tbody>
+      {% for entry in configured %}
+      <tr><td><span class="name">{{ entry.root|domain_wrap }}</span></td><td>{{ (entry.profile|text) if entry.profile else "Every profile" }}</td><td>{% if entry.device %}<span class="device">{{ entry.device|text }}</span>{% else %}Every device{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty">No entries under <code>allowlist:</code> in config.yaml.</p>
+  {% endif %}
+</section>
+{% endblock %}

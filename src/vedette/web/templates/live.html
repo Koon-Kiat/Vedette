@@ -7,7 +7,7 @@
 {% block content %}
 {% set totals = stats.per_minute|map("sum")|list %}
 {% set peak = [totals|max, 1]|max %}
-{% call titleblock("Live", "2 of 8") %}
+{% call titleblock("Live", "2 of 9") %}
   <p class="lead">Every DNS query as it arrives, each inked by its profile. Domains are shown defanged and are never links.</p>
   {% include "_live_line.html" %}
 {% endcall %}

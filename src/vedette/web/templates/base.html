@@ -20,7 +20,7 @@
 <body class="app" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
 <a class="skip-link" href="#main">Skip to the content</a>
 <header class="rail">
-  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">NextDNS <strong>Vedette</strong></span></a>
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name"><strong>Vedette</strong></span></a>
   {% if switch is defined and switch %}
   <nav class="layers" aria-labelledby="layers-title">
     <p class="layers-title" id="layers-title">Profiles shown</p>
@@ -36,7 +36,7 @@
   </nav>
   {% endif %}
   <nav class="pages" aria-label="Pages">
-    {% for key, label, href in [("overview", "Overview", "/"), ("live", "Live", "/live"), ("findings", "Findings", "/findings"), ("domains", "Domains", "/domains"), ("devices", "Devices", "/devices"), ("digests", "Digests", "/digests"), ("health", "Health", "/health"), ("evaluation", "Evaluation", "/evaluation")] %}
+    {% for key, label, href in [("overview", "Overview", "/"), ("live", "Live", "/live"), ("findings", "Findings", "/findings"), ("domains", "Domains", "/domains"), ("devices", "Devices", "/devices"), ("allowlist", "Allowlist", "/allowlist"), ("digests", "Digests", "/digests"), ("health", "Health", "/health"), ("evaluation", "Evaluation", "/evaluation")] %}
     <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}><span class="page-name">{{ label }}</span>{% if key == "findings" and shell is defined %}<span class="count{% if not shell.open_findings %} count-zero{% endif %}" data-live="open-count" title="Open findings, every profile">{{ shell.open_findings|num }}</span>{% elif key == "live" %}<span class="live-dot" data-live="dot" aria-hidden="true"></span>{% endif %}</a>
     {% endfor %}
   </nav>

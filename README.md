@@ -308,6 +308,7 @@ each query joins its bar as it arrives. You can work with them directly:
 | Findings | Every finding, filtered by profile, device, rule, minimum priority, status and day, with the triage buttons; each one opens to its explanation, evidence, cached domain facts, recent queries and history |
 | Domains | Most allowed, most blocked, newly seen and recently registered domains, for 24 hours or 7 days |
 | Devices | Devices seen in the last 7 days, or a note that the profile reports none |
+| Allowlist | What the rules skip: the roots you marked benign, each with its finding and a Remove button, and the entries from `config.yaml` |
 | Digests | Every digest that was produced, as it was sent |
 | Health | Each health check, the newest event per profile, queue sizes, and the local model's calls, latency and cache hit rate |
 | Evaluation | Results of the last `vedette eval` run, or how to start one |
@@ -320,6 +321,8 @@ Triage:
   allowlisted for that profile, so those rules stop flagging it within about
   30 seconds. Findings already recorded are left as they are.
 - **Reopen:** undoes either, and removes the allowlist entry that Benign added.
+  To take back only the allowlist entry and leave the finding benign, use
+  Remove on the Allowlist page.
 
 Every action is recorded with its time in the finding's history. Mark a
 finding benign from the command line with
@@ -354,7 +357,8 @@ to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
 - Add known-good domains under `allowlist:` in `config.yaml`. An entry covers
   the root and its subdomains and may be limited to a `profile` or `device`.
 - Or mark a domain finding benign in the dashboard or with `vedette benign`,
-  which allowlists its root for that profile (see "Dashboard").
+  which allowlists its root for that profile (see "Dashboard"). The
+  dashboard's Allowlist page lists every entry and takes one back.
 - To change a threshold, copy the rule's `id` and the `params` to change into
   a YAML file, mount it into the container and set `rules.file` to its path.
   The defaults are in `src/vedette/rules/rules.yaml`.

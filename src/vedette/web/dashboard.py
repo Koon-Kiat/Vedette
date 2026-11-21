@@ -23,6 +23,7 @@ from starlette.exceptions import HTTPException
 
 from vedette.config import ProfileConfig
 from vedette.notify.render import safe
+from vedette.rules.allowlist import AllowlistEntry
 from vedette.rules.model import RuleSpec, Severity
 from vedette.storage.dashboard import DashboardQueries, FindingFilter
 from vedette.storage.live import LiveEvent, LiveQueries, LiveStats
@@ -68,6 +69,8 @@ class DashboardContext:
     live_max_streams: int = 8
     #: When the daily digest is produced (HH:MM, local), for the Digests page.
     digest_time: str | None = None
+    #: Allowlist entries from config.yaml, shown read-only on the Allowlist page.
+    allowlist: Sequence[AllowlistEntry] = ()
 
 
 class LoginRequired(Exception):

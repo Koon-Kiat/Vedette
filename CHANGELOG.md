@@ -14,6 +14,14 @@
   that. `vedette notify --test` is now recorded, so a good test after fixing
   the channel clears it.
 
+### Dashboard
+
+- A new Allowlist page lists what the rules skip: the roots you marked benign,
+  each with the finding it came from, and the entries from `config.yaml`.
+  Remove takes an entry back (the rules flag that root again within about 30
+  seconds) and leaves the finding benign; its history records the removal.
+- The menu's name reads "Vedette"; the rename had left "NextDNS" in front of it.
+
 ### Detection
 
 - Device names now go through the instruction-word pre-filter as well as

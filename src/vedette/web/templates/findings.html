@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_titleblock.html" import titleblock with context %}
 {% block content %}
-{% call titleblock("Findings", "3 of 8") %}
+{% call titleblock("Findings", "3 of 9") %}
   <p class="lead">Acknowledge what you have seen; mark benign what is not a problem. Every decision is entered on the record and never erased.</p>
 {% endcall %}
 {% set set_count = [wanted.status != "open", wanted.min_severity is not none, wanted.rule_id is not none, wanted.device is not none, wanted.day is not none]|select|list|length %}

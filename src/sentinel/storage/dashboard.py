@@ -23,9 +23,7 @@ from sentinel.sources.base import DnsEvent
 from sentinel.storage.analysis import AnalysisStore
 from sentinel.storage.health import HealthRow, HealthStore
 from sentinel.storage.models import (
-    digests as digest_table,
-)
-from sentinel.storage.models import (
+    audit_log,
     domain_age,
     events,
     finding_analysis,
@@ -35,6 +33,9 @@ from sentinel.storage.models import (
     notifications,
     popularity,
     threat_intel,
+)
+from sentinel.storage.models import (
+    digests as digest_table,
 )
 from sentinel.storage.store import StoredFinding, finding_from_row, to_event
 from sentinel.storage.triage import DOMAIN_RULES, AuditEntry, TriageStore
@@ -63,6 +64,7 @@ class FindingRow:
     finding: StoredFinding
     analysis: Analysis | None
     decision: AuditEntry | None = None
+    revisions: int = 0  # decisions entered on it so far; the latest is lettered by this
 
     @property
     def priority(self) -> Severity:
@@ -74,12 +76,17 @@ class FindingRow:
 
 @dataclass(frozen=True, slots=True)
 class Shell:
-    """What every page's navigation rail shows."""
+    """What every page's navigation rail shows.
+
+    ``open_by_profile`` maps each profile id to its open findings, for the
+    profile switch: a problem on a profile not shown is never invisible.
+    """
 
     open_findings: int
     checks_ok: int
     checks_total: int
     newest_event: datetime | None
+    open_by_profile: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,8 +241,28 @@ class DashboardQueries:
     async def _with_analyses(self, found: list[StoredFinding]) -> list[FindingRow]:
         ids = [item.id for item in found]
         analyses = await AnalysisStore(self._engine).analyses_for(ids)
-        decisions = await TriageStore(self._engine).latest_for(ids) if ids else {}
-        return [FindingRow(item, analyses.get(item.id), decisions.get(item.id)) for item in found]
+        entries = await TriageStore(self._engine).audit_for(ids) if ids else []
+        latest: dict[int, AuditEntry] = {}
+        count: dict[int, int] = {}
+        for entry in entries:  # oldest first
+            if entry.finding_id is not None:
+                latest[entry.finding_id] = entry
+                count[entry.finding_id] = count.get(entry.finding_id, 0) + 1
+        return [
+            FindingRow(item, analyses.get(item.id), latest.get(item.id), count.get(item.id, 0))
+            for item in found
+        ]
+
+    async def revisions_since(self, moment: datetime) -> int:
+        """Decisions entered on findings of these profiles since a moment."""
+        statement = (
+            select(func.count())
+            .select_from(audit_log)
+            .join(findings, findings.c.id == audit_log.c.finding_id)
+            .where(findings.c.profile_id.in_(self._ids), audit_log.c.at >= moment)
+        )
+        async with self._engine.connect() as connection:
+            return int((await connection.execute(statement)).scalar_one())
 
     async def findings(
         self, wanted: FindingFilter, *, tz: ZoneInfo, limit: int = 200
@@ -284,15 +311,16 @@ class DashboardQueries:
     async def shell(self) -> Shell:
         """Open findings, health check results and the newest event, for the rail."""
         async with self._engine.connect() as connection:
-            open_count = int(
-                (
-                    await connection.execute(
-                        select(func.count())
-                        .select_from(findings)
-                        .where(findings.c.profile_id.in_(self._ids), findings.c.status == "open")
-                    )
-                ).scalar_one()
-            )
+            by_profile = {pid: 0 for pid in self._ids}
+            for profile_id, count in (
+                await connection.execute(
+                    select(findings.c.profile_id, func.count())
+                    .where(findings.c.profile_id.in_(self._ids), findings.c.status == "open")
+                    .group_by(findings.c.profile_id)
+                )
+            ).all():
+                by_profile[str(profile_id)] = int(count)
+            open_count = sum(by_profile.values())
             newest = (
                 await connection.execute(
                     select(func.max(events.c.ts)).where(events.c.profile_id.in_(self._ids))
@@ -304,6 +332,39 @@ class DashboardQueries:
             checks_ok=sum(1 for check in checks if check.ok),
             checks_total=len(checks),
             newest_event=newest.replace(tzinfo=UTC) if newest is not None else None,
+            open_by_profile=by_profile,
+        )
+
+    async def finding_days(self, *, tz: ZoneInfo, limit: int = 60) -> list[tuple[date, int]]:
+        """Local days that have findings, newest first, with how many were last seen then."""
+        statement = select(findings.c.last_ts).where(findings.c.profile_id.in_(self._ids))
+        async with self._engine.connect() as connection:
+            moments = (await connection.execute(statement)).scalars().all()
+        days: dict[date, int] = {}
+        for moment in moments:
+            day = moment.replace(tzinfo=UTC).astimezone(tz).date()
+            days[day] = days.get(day, 0) + 1
+        return sorted(days.items(), reverse=True)[:limit]
+
+    async def neighbours(self, finding_id: int) -> tuple[int | None, int | None]:
+        """The open findings before and after this one, in the order triage takes them.
+
+        That order is the Findings list's: highest priority first, then most
+        recently seen. A finding that is not open has no place in it, so its
+        neighbours are the first open findings.
+        """
+        rows = await self.findings(FindingFilter(status="open"), tz=ZoneInfo("UTC"), limit=500)
+        ordered = [
+            row.finding.id
+            for row in sorted(
+                rows, key=lambda row: (-row.priority.rank, -row.finding.last_ts.timestamp())
+            )
+        ]
+        if finding_id not in ordered:
+            return None, ordered[0] if ordered else None
+        at = ordered.index(finding_id)
+        return (ordered[at - 1] if at else None), (
+            ordered[at + 1] if at + 1 < len(ordered) else None
         )
 
     async def enrichment(self, finding: StoredFinding, now: datetime) -> Enrichment | None:

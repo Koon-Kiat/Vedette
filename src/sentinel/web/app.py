@@ -13,6 +13,7 @@ Security, because the pages show attacker-controlled text:
 """
 
 import asyncio
+import dataclasses
 import functools
 import hashlib
 import hmac
@@ -24,6 +25,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
@@ -64,6 +66,9 @@ CSP = (
 )
 PERIODS = {"24h": timedelta(hours=24), "7d": timedelta(days=7)}
 FINDING_PATH = re.compile(r"/findings/(\d{1,9})")
+#: Which profiles the pages show: "all" or one profile id, remembered per browser.
+SCOPE_COOKIE = "sentinel_scope"
+ALL = "all"
 
 
 def _local(moment: datetime | None, tz: ZoneInfo) -> str:
@@ -219,6 +224,19 @@ class LoginRequired(Exception):
     """The request has no live session."""
 
 
+@dataclass(frozen=True, slots=True)
+class View:
+    """One request's session and the profiles it shows, with reads limited to them."""
+
+    session: Session
+    scope: str  # ALL or a profile id
+    profiles: tuple[ProfileConfig, ...]
+    queries: DashboardQueries
+    live: LiveQueries
+    series: SeriesQueries
+    here: str  # this page's path and query, to come back to
+
+
 class SecurityHeaders:
     """Adds the security headers to every response, errors included."""
 
@@ -272,6 +290,8 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     series = SeriesQueries(ctx.engine, profiles=ctx.profiles)
     triage = TriageStore(ctx.engine)
     labels = {profile.id: profile.label for profile in ctx.profiles}
+    #: Each profile's layer: its position picks its ink (``layer-1``, ``layer-2``...).
+    layers = {profile.id: index + 1 for index, profile in enumerate(ctx.profiles)}
     specs = {spec.id: spec for spec in ctx.specs}
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -280,13 +300,57 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     app.mount("/static", StaticFiles(packages=[("sentinel.web", "static")]), name="static")
 
     def render(name: str, *, status: int = 200, **values: Any) -> HTMLResponse:
-        context = {"tz": ctx.tz, "labels": labels, "nav": "", "domain_rules": DOMAIN_RULES}
+        context = {
+            "tz": ctx.tz,
+            "labels": labels,
+            "layers": layers,
+            "label_inks": {labels[pid]: ink for pid, ink in layers.items()},
+            "nav": "",
+            "domain_rules": DOMAIN_RULES,
+        }
         context.update(values)
         return HTMLResponse(TEMPLATE_ENV.get_template(name).render(**context), status_code=status)
 
-    async def page(name: str, **values: Any) -> HTMLResponse:
-        """A full page with the navigation rail's live status."""
-        return render(name, shell=await queries.shell(), now=ctx.clock(), **values)
+    def scope_of(request: Request) -> tuple[str, tuple[ProfileConfig, ...]]:
+        wanted = request.cookies.get(SCOPE_COOKIE, ALL)
+        chosen = tuple(profile for profile in ctx.profiles if profile.id == wanted)
+        return (wanted, chosen) if chosen else (ALL, tuple(ctx.profiles))
+
+    def here_of(request: Request) -> str:
+        return request.url.path + (f"?{request.url.query}" if request.url.query else "")
+
+    async def page(name: str, request: Request, **values: Any) -> HTMLResponse:
+        """A full page with the navigation rail: live status and the profile switch."""
+        shell = await queries.shell()
+        scope, _ = scope_of(request)
+        here = here_of(request)
+        switch = [
+            {
+                "id": ALL,
+                "label": "Both" if len(ctx.profiles) == 2 else "All profiles",
+                "open": shell.open_findings,
+                "current": scope == ALL,
+            }
+        ]
+        switch += [
+            {
+                "id": profile.id,
+                "label": profile.label,
+                "open": shell.open_by_profile.get(profile.id, 0),
+                "current": scope == profile.id,
+            }
+            for profile in ctx.profiles
+        ]
+        return render(
+            name,
+            shell=shell,
+            now=ctx.clock(),
+            scope=scope,
+            scope_label=next(item["label"] for item in switch if item["current"]),
+            switch=switch if len(ctx.profiles) > 1 else [],
+            here=here,
+            **values,
+        )
 
     def session_of(request: Request) -> Session:
         session = sessions.get(request.cookies.get(SESSION_COOKIE))
@@ -295,6 +359,20 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         return session
 
     SessionDep = Annotated[Session, Depends(session_of)]
+
+    def view_of(request: Request, session: SessionDep) -> View:
+        scope, chosen = scope_of(request)
+        return View(
+            session=session,
+            scope=scope,
+            profiles=chosen,
+            queries=queries if scope == ALL else DashboardQueries(ctx.engine, profiles=chosen),
+            live=live if scope == ALL else LiveQueries(ctx.engine, profiles=chosen),
+            series=series if scope == ALL else SeriesQueries(ctx.engine, profiles=chosen),
+            here=here_of(request),
+        )
+
+    ViewDep = Annotated[View, Depends(view_of)]
 
     async def checked_form(request: Request, session: Session) -> FormData:
         form = await request.form()
@@ -331,7 +409,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         # A logged-in owner keeps the menu, so the error is not a dead end.
         session = sessions.get(request.cookies.get(SESSION_COOKIE))
         if session is not None and not _is_htmx(request):
-            return await page("error.html", csrf=session.csrf, **values)
+            return await page("error.html", request, csrf=session.csrf, **values)
         return render("error.html", **values)
 
     @app.exception_handler(RequestValidationError)
@@ -396,14 +474,14 @@ def create_app(ctx: DashboardContext) -> FastAPI:
 
     # --- pages ------------------------------------------------------------------------
 
-    async def overview_chart(now: datetime, alerts: Sequence[Any]) -> Any:
+    async def overview_chart(view: View, now: datetime, alerts: Sequence[Any]) -> Any:
         digest = await DigestBuilder(
-            ctx.engine, profiles=ctx.profiles, tz=ctx.tz, specs=ctx.specs
+            ctx.engine, profiles=view.profiles, tz=ctx.tz, specs=ctx.specs
         ).build(now)
         averages = [v.avg_queries for v in digest.volumes if v.avg_queries is not None]
         usual = sum(averages) / 24 if averages else None
         chart = hourly_chart(
-            await queries.hourly_queries(now),
+            await view.queries.hourly_queries(now),
             ctx.tz,
             usual=usual,
             markers=[(row.finding.id, row.finding.last_ts) for row in alerts],
@@ -411,33 +489,55 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         return digest, chart
 
     @app.get("/")
-    async def overview(session: SessionDep) -> HTMLResponse:
+    async def overview(view: ViewDep, request: Request) -> HTMLResponse:
         now = ctx.clock()
-        alerts = await queries.open_alerts()
-        digest, chart = await overview_chart(now, alerts)
+        alerts = await view.queries.open_alerts()
+        digest, chart = await overview_chart(view, now, alerts)
         return await page(
             "overview.html",
+            request,
             nav="overview",
             title="Overview",
-            csrf=session.csrf,
+            csrf=view.session.csrf,
             digest=digest,
             levels=[level.value for level in sorted(Severity, key=lambda s: -s.rank)],
             chart=chart,
             alerts=alerts,
-            recent=[feed_item(item) for item in await live.recent(8)],
-            stats=await live.stats(now),
-            new_devices_avg=await queries.new_devices_per_day(now),
+            recent=[feed_item(item) for item in await view.live.recent(8)],
+            stats=await view.live.stats(now),
+            new_devices_avg=await view.queries.new_devices_per_day(now),
+            revisions_today=await view.queries.revisions_since(
+                datetime.combine(now.astimezone(ctx.tz).date(), dt_time(0), tzinfo=ctx.tz)
+            ),
             next_url="/",
         )
 
+    @app.get("/scope")
+    async def set_scope(session: SessionDep, request: Request) -> Response:
+        """Choose which profiles every page shows; remembered for this browser."""
+        wanted = request.query_params.get("to") or ALL
+        if wanted != ALL and wanted not in labels:
+            raise HTTPException(422, "There is no such profile.")
+        response = RedirectResponse(_safe_next(request.query_params.get("next") or "/"), 303)
+        response.set_cookie(
+            SCOPE_COOKIE,
+            wanted,
+            max_age=365 * 24 * 3600,
+            path="/",
+            httponly=True,
+            samesite="strict",
+        )
+        return response
+
     @app.get("/partials/decide")
-    async def decide_partial(session: SessionDep) -> HTMLResponse:
+    async def decide_partial(view: ViewDep) -> HTMLResponse:
         return render(
             "_findings_table.html",
-            rows=await queries.open_alerts(),
-            csrf=session.csrf,
+            rows=await view.queries.open_alerts(),
+            csrf=view.session.csrf,
             next_url="/",
             empty_text="No open high or critical findings.",
+            table_id="decide",
         )
 
     # --- interactive charts -----------------------------------------------------------
@@ -465,16 +565,18 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "rule": item.rule,
             "about": safe(about, limit=120),
             "status": item.status,
+            "profile": labels.get(item.profile_id, ""),
+            "ink": layers.get(item.profile_id, 0),
         }
 
     @app.get("/api/series")
-    async def series_api(session: SessionDep, request: Request) -> Response:
+    async def series_api(view: ViewDep, request: Request) -> Response:
         start, end = span_of(request, default=timedelta(hours=24))
         try:  # how many bars the chart's width suits; choose_step keeps it in range
             points = int(request.query_params.get("points") or MAX_POINTS)
         except ValueError:
             raise HTTPException(422, "The number of bars was not valid.") from None
-        result = await series.series(start, end, points=points)
+        result = await view.series.series(start, end, points=points)
         body = {
             "start": result.start,
             "end": result.end,
@@ -483,6 +585,16 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "allowed": result.allowed,
             "blocked": result.blocked,
             "usual": result.usual,
+            # Each profile drawn as its own layer; labels are our own config.
+            "layers": [
+                {
+                    "label": labels[layer.profile_id],
+                    "ink": layers[layer.profile_id],
+                    "allowed": layer.allowed,
+                    "blocked": layer.blocked,
+                }
+                for layer in result.layers
+            ],
             "findings": [finding_item(item) for item in result.findings],
             "now": int(ctx.clock().timestamp()),
         }
@@ -492,9 +604,9 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         )
 
     @app.get("/partials/window")
-    async def window_partial(session: SessionDep, request: Request) -> HTMLResponse:
+    async def window_partial(view: ViewDep, request: Request) -> HTMLResponse:
         start, end = span_of(request, default=timedelta(hours=1))
-        window = await series.window(start, end)
+        window = await view.series.window(start, end)
         return render(
             "_window.html",
             window=window,
@@ -511,6 +623,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "t": int(item.ts.timestamp()),
             "time": f"{item.ts.astimezone(ctx.tz):%H:%M:%S}",
             "profile": labels.get(item.profile_id, item.profile_id),
+            "ink": layers.get(item.profile_id, 0),
             "device": safe(item.device, limit=64) if item.device else None,
             "domain": safe(item.fqdn, limit=255),
             "status": "blocked" if item.status == "blocked" else "allowed",
@@ -532,21 +645,39 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         }
 
     @app.get("/live")
-    async def live_page(session: SessionDep) -> HTMLResponse:
+    async def live_page(view: ViewDep, request: Request) -> HTMLResponse:
         now = ctx.clock()
         return await page(
             "live.html",
+            request,
             nav="live",
             title="Live",
-            csrf=session.csrf,
-            recent=[feed_item(item) for item in await live.recent(60)],
-            stats=await live.stats(now),
+            csrf=view.session.csrf,
+            recent=[feed_item(item) for item in await view.live.recent(60)],
+            stats=await view.live.stats(now),
         )
 
     streams = {"open": 0}
 
+    async def scoped_stats(view: View, now: datetime) -> LiveStats:
+        """The view's traffic figures, with the open findings of every profile.
+
+        The open count feeds the rail, which always counts every profile, so a
+        finding on a profile not shown is never hidden.
+        """
+        stats = await view.live.stats(now)
+        if view.scope == ALL:
+            return stats
+        everything = await live.stats(now)
+        return dataclasses.replace(
+            stats,
+            open_findings=everything.open_findings,
+            newest_finding_id=everything.newest_finding_id,
+        )
+
     @app.get("/live/stream")
-    async def live_stream(session: SessionDep) -> Response:
+    async def live_stream(view: ViewDep) -> Response:
+        session = view.session
         if streams["open"] >= ctx.live_max_streams:
             raise HTTPException(429, "Too many live views are open. Close one and reload.")
 
@@ -559,7 +690,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             streams["open"] += 1
             try:
                 started = time.monotonic()
-                cursor = live.start(ctx.clock())
+                cursor = view.live.start(ctx.clock())
                 last_stats = 0.0
                 last_finding: int | None = None
                 last_open: int | None = None
@@ -569,13 +700,13 @@ def create_app(ctx: DashboardContext) -> FastAPI:
                     if sessions.get(session.id) is None:  # logged out or expired
                         yield message("bye", {"reason": "session ended"})
                         break
-                    fresh = await live.poll(cursor)
+                    fresh = await view.live.poll(cursor)
                     if fresh:
                         yield message("queries", [feed_item(item) for item in fresh])
                     if time.monotonic() - last_stats >= ctx.live_stats_seconds:
                         last_stats = time.monotonic()
                         now = ctx.clock()
-                        stats = await live.stats(now)
+                        stats = await scoped_stats(view, now)
                         yield message("stats", stats_item(stats, now))
                         if last_open is not None and (
                             stats.open_findings != last_open
@@ -620,23 +751,26 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         )
 
     @app.get("/findings")
-    async def findings_page(session: SessionDep, request: Request) -> HTMLResponse:
+    async def findings_page(view: ViewDep, request: Request) -> HTMLResponse:
         wanted = parse_filter(request)
-        rows = await queries.findings(wanted, tz=ctx.tz)
+        rows = await view.queries.findings(wanted, tz=ctx.tz)
         values: dict[str, Any] = {
-            "csrf": session.csrf,
+            "csrf": view.session.csrf,
             "rows": rows,
-            "next_url": str(request.url.path)
-            + (f"?{request.url.query}" if request.url.query else ""),
+            "next_url": view.here,
+            "table_id": "findings",
         }
         if _is_htmx(request):
             return render("_findings_table.html", **values)
         return await page(
             "findings.html",
+            request,
             nav="findings",
             title="Findings",
             wanted=wanted,
-            devices=await queries.devices_in_findings(),
+            devices=await view.queries.devices_in_findings(),
+            days=await view.queries.finding_days(tz=ctx.tz),
+            today=ctx.clock().astimezone(ctx.tz).date(),
             rules=sorted(specs),
             severities=[level.value for level in Severity],
             statuses=[*STATUSES, "all"],
@@ -644,21 +778,27 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         )
 
     @app.get("/findings/{finding_id}")
-    async def finding_page(session: SessionDep, finding_id: int) -> HTMLResponse:
+    async def finding_page(view: ViewDep, request: Request, finding_id: int) -> HTMLResponse:
+        # Looked up across every profile: a link from an alert or a digest works
+        # whichever profiles the pages are showing.
         row = await queries.finding(finding_id)
         if row is None:
             raise HTTPException(404)
         now = ctx.clock()
+        previous, following = await view.queries.neighbours(finding_id)
         return await page(
             "finding.html",
+            request,
             nav="findings",
-            title=f"Finding #{finding_id}",
-            csrf=session.csrf,
+            title=f"Finding {finding_id:04d}",
+            csrf=view.session.csrf,
             row=row,
             spec=specs.get(row.finding.rule_id),
             enrichment=await queries.enrichment(row.finding, now),
             queries=await queries.recent_queries(row.finding),
             audit=await triage.audit_for([finding_id]),
+            previous_id=previous,
+            next_id=following,
             next_url=f"/findings/{finding_id}",
         )
 
@@ -682,32 +822,35 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         return RedirectResponse(next_url, status_code=303)
 
     @app.get("/domains")
-    async def domains_page(session: SessionDep, period: str = "24h") -> HTMLResponse:
+    async def domains_page(view: ViewDep, request: Request, period: str = "24h") -> HTMLResponse:
         if period not in PERIODS:
             raise HTTPException(422, "Unknown period.")
         return await page(
             "domains.html",
+            request,
             nav="domains",
             title="Domains",
-            csrf=session.csrf,
+            csrf=view.session.csrf,
             period=period,
-            page=await queries.domains(ctx.clock(), PERIODS[period]),
+            page=await view.queries.domains(ctx.clock(), PERIODS[period]),
         )
 
     @app.get("/devices")
-    async def devices_page(session: SessionDep) -> HTMLResponse:
+    async def devices_page(view: ViewDep, request: Request) -> HTMLResponse:
         return await page(
             "devices.html",
+            request,
             nav="devices",
             title="Devices",
-            csrf=session.csrf,
-            profiles=await queries.devices(ctx.clock()),
+            csrf=view.session.csrf,
+            profiles=await view.queries.devices(ctx.clock()),
         )
 
     @app.get("/digests")
-    async def digests_page(session: SessionDep) -> HTMLResponse:
+    async def digests_page(session: SessionDep, request: Request) -> HTMLResponse:
         return await page(
             "digests.html",
+            request,
             nav="digests",
             title="Digests",
             csrf=session.csrf,
@@ -716,18 +859,24 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         )
 
     @app.get("/digests/{digest_id}")
-    async def digest_page(session: SessionDep, digest_id: int) -> HTMLResponse:
+    async def digest_page(session: SessionDep, request: Request, digest_id: int) -> HTMLResponse:
         digest = await queries.digest(digest_id)
         if digest is None:
             raise HTTPException(404)
         return await page(
-            "digest.html", nav="digests", title=digest.title, csrf=session.csrf, digest=digest
+            "digest.html",
+            request,
+            nav="digests",
+            title=digest.title,
+            csrf=session.csrf,
+            digest=digest,
         )
 
     @app.get("/health")
-    async def health_page(session: SessionDep) -> HTMLResponse:
+    async def health_page(session: SessionDep, request: Request) -> HTMLResponse:
         return await page(
             "health.html",
+            request,
             nav="health",
             title="Health",
             csrf=session.csrf,
@@ -735,9 +884,10 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         )
 
     @app.get("/evaluation")
-    async def evaluation_page(session: SessionDep) -> HTMLResponse:
+    async def evaluation_page(session: SessionDep, request: Request) -> HTMLResponse:
         return await page(
             "evaluation.html",
+            request,
             nav="evaluation",
             title="Evaluation",
             csrf=session.csrf,

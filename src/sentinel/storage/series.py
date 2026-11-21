@@ -46,8 +46,21 @@ class SeriesFinding:
 
 
 @dataclass(frozen=True, slots=True)
+class SeriesLayer:
+    """One profile's allowed and blocked queries per bucket."""
+
+    profile_id: str
+    allowed: list[int]
+    blocked: list[int]
+
+
+@dataclass(frozen=True, slots=True)
 class Series:
-    """Allowed and blocked queries per bucket, and the findings in the span."""
+    """Allowed and blocked queries per bucket, and the findings in the span.
+
+    ``allowed`` and ``blocked`` are the totals over the profiles; ``layers``
+    splits them per profile, in the order the profiles were given.
+    """
 
     start: int
     end: int
@@ -57,6 +70,7 @@ class Series:
     blocked: list[int]
     usual: float | None
     findings: list[SeriesFinding]
+    layers: list[SeriesLayer]
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,20 +168,19 @@ class SeriesQueries:
         blocked = func.sum(case((events.c.status == "blocked", 1), else_=0))
         aligned = datetime.fromtimestamp(first, UTC)
         async with self._engine.connect() as connection:
-            counts = {
-                int(row[0]): (int(row[1]), int(row[2] or 0))
-                for row in (
-                    await connection.execute(
-                        select(bucket, func.count(), blocked)
-                        .where(
-                            events.c.profile_id.in_(self._ids),
-                            events.c.ts >= aligned,
-                            events.c.ts < end,
-                        )
-                        .group_by(bucket)
+            counts: dict[str, dict[int, tuple[int, int]]] = {pid: {} for pid in self._ids}
+            for row in (
+                await connection.execute(
+                    select(bucket, events.c.profile_id, func.count(), blocked)
+                    .where(
+                        events.c.profile_id.in_(self._ids),
+                        events.c.ts >= aligned,
+                        events.c.ts < end,
                     )
-                ).all()
-            }
+                    .group_by(bucket, events.c.profile_id)
+                )
+            ).all():
+                counts[str(row[1])][int(row[0])] = (int(row[2]), int(row[3] or 0))
             week_start = end - USUAL_WINDOW
             week_count, oldest = (
                 await connection.execute(
@@ -182,12 +195,19 @@ class SeriesQueries:
         if week_count and oldest is not None:
             covered = (end - max(oldest, week_start)).total_seconds()
             usual = week_count * step / covered if covered >= step else None
-        t, allowed, blocked_counts = [], [], []
-        for moment in range(first, last + 1, step):
-            total, blocked_count = counts.get(moment, (0, 0))
-            t.append(moment)
-            allowed.append(total - blocked_count)
-            blocked_counts.append(blocked_count)
+        t = list(range(first, last + 1, step))
+        layers = []
+        for pid in self._ids:
+            pairs = [counts[pid].get(moment, (0, 0)) for moment in t]
+            layers.append(
+                SeriesLayer(
+                    profile_id=pid,
+                    allowed=[total - blocked_count for total, blocked_count in pairs],
+                    blocked=[blocked_count for _, blocked_count in pairs],
+                )
+            )
+        allowed = [sum(layer.allowed[i] for layer in layers) for i in range(len(t))]
+        blocked_counts = [sum(layer.blocked[i] for layer in layers) for i in range(len(t))]
         return Series(
             start=first,
             end=last,
@@ -197,6 +217,7 @@ class SeriesQueries:
             blocked=blocked_counts,
             usual=round(usual, 2) if usual is not None else None,
             findings=await self._findings(aligned, end, limit=500),
+            layers=layers,
         )
 
     async def window(self, start: datetime, end: datetime, *, top: int = 10) -> Window:

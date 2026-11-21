@@ -118,7 +118,12 @@ async def test_the_series_is_json_with_names_cleaned_and_markup_escaped(charted:
     assert (body["allowed"][:2], body["blocked"][:2]) == ([1, 2], [1, 0])
     (finding,) = body["findings"]
     assert finding["about"].endswith("evil[.]example")
-    assert set(finding) == {"id", "t", "priority", "rule", "about", "status"}
+    assert set(finding) == {"id", "t", "priority", "rule", "about", "status", "profile", "ink"}
+    router, pc = body["layers"]  # each profile drawn as its own layer, in config order
+    assert [(layer["label"], layer["ink"]) for layer in (router, pc)] == [("router", 1), ("pc", 2)]
+    assert (router["allowed"][:2], router["blocked"][:2]) == ([1, 1], [1, 0])
+    assert (pc["allowed"][:2], pc["blocked"][:2]) == ([0, 1], [0, 0])
+    assert [a + b for a, b in zip(router["allowed"], pc["allowed"], strict=True)] == body["allowed"]
 
 
 async def test_the_series_never_reaches_past_now(charted: Store) -> None:

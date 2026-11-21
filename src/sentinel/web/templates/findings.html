@@ -4,9 +4,12 @@
 {% call titleblock("Findings", "3 of 8") %}
   <p class="lead">Acknowledge what you have seen; mark benign what is not a problem. Every decision is entered on the record and never erased.</p>
 {% endcall %}
+{% set set_count = [wanted.status != "open", wanted.min_severity is not none, wanted.rule_id is not none, wanted.device is not none, wanted.day is not none]|select|list|length %}
+<details class="filters-fold" data-ui="filters-fold" open>
+<summary class="filters-summary"><span>Filters</span><span class="filters-count" data-filters-count>{% if set_count %}{{ set_count }} set{% endif %}</span></summary>
 <form class="filters" method="get" action="/findings" hx-get="/findings" hx-target="#findings-table" hx-push-url="true" hx-trigger="change, submit">
   <label class="field"><span class="field-label">Status</span>
-    <select name="status" data-ui="select">
+    <select name="status" data-ui="select" data-default="open">
       {% for status in statuses %}<option value="{{ status }}"{% if (wanted.status or "all") == status %} selected{% endif %}>{{ "Any status" if status == "all" else status|capitalize }}</option>{% endfor %}
     </select>
   </label>
@@ -19,7 +22,7 @@
   <label class="field"><span class="field-label">Rule</span>
     <select name="rule" data-ui="select">
       <option value="">Any rule</option>
-      {% for rule in rules %}<option value="{{ rule }}"{% if wanted.rule_id == rule %} selected{% endif %}>{{ rule }}</option>{% endfor %}
+      {% for rule in rules %}<option value="{{ rule }}"{% if wanted.rule_id == rule %} selected{% endif %}>{{ rule_names.get(rule, rule) }}</option>{% endfor %}
     </select>
   </label>
   <label class="field"><span class="field-label">Device</span>
@@ -38,6 +41,7 @@
   </label>
   <button type="submit" class="filters-apply">Filter</button>
 </form>
+</details>
 <div id="findings-table" class="block">
 {% include "_findings_table.html" %}
 </div>

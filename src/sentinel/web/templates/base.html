@@ -29,7 +29,7 @@
       <li><a class="layer-option{% if item.current %} is-current{% endif %}" href="/scope?to={{ item.id|urlencode }}&amp;next={{ here|urlencode }}"{% if item.current %} aria-current="true"{% endif %}>
         <span class="layer-mark {{ "layer-mark-all" if item.id == "all" else "layer-mark-%d"|format(layers[item.id]) }}" aria-hidden="true"></span>
         <span class="layer-name">{{ item.label }}</span>
-        <span class="layer-open{% if not item.open %} is-zero{% endif %}">{{ item.open|num }} open</span>
+        <span class="layer-open{% if not item.open %} is-zero{% endif %}" data-live="open-layer-{{ 0 if item.id == "all" else layers[item.id] }}">{{ item.open|num }} open</span>
       </a></li>
       {% endfor %}
     </ul>

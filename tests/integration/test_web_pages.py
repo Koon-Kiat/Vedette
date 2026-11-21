@@ -48,7 +48,7 @@ async def test_overview_compares_the_last_day_with_the_week(filled: Store) -> No
     assert 'sev-high">high</span></th><td class="num strong">2</td>' in html
     assert "D2" in html and "Kitchen tablet" in html
     assert html.count('class="bar-allowed"') == 24
-    assert "threat-intel-allowed" in html and "bad[.]example" in html
+    assert "Threat-feed domain allowed" in html and "bad[.]example" in html
     assert_no_raw_names(html)
 
 
@@ -125,7 +125,7 @@ async def test_domains_page_lists_allowed_blocked_new_and_young(filled: Store) -
     async with logged_in(filled) as (client, _):
         page = await client.get("/domains")
 
-    html = page.text
+    html = page.text.replace("<wbr>", "")  # names may break after their dots
     assert page.status_code == 200
     assert "site0[.]example" in html and ">50<" in html
     assert "ads[.]example" in html

@@ -15,10 +15,11 @@
 </nav>
 <header class="titleblock finding-head ink-{{ ink }}">
   <div class="tb-title">
-    <h1><span class="notice-no">{{ "%04d"|format(f.id) }}</span> {% include "_badge.html" %} <span class="rule-name">{{ f.rule_id }}</span></h1>
-    <p class="about">{% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}<span class="name">{{ f.target|domain }}</span>{% endif %}</p>
+    <h1><span class="notice-no">{{ "%04d"|format(f.id) }}</span> {% include "_badge.html" %} <span class="rule-name">{{ rule_names.get(f.rule_id, f.rule_id) }}</span></h1>
+    <p class="about">{% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}<span class="name">{{ f|about }}</span>{% if (f|about) != (f.target|domain) %} <span class="reason-id">{{ f.target|domain }}</span>{% endif %}{% endif %}</p>
   </div>
   <dl class="tb-fields">
+    <div class="tb-field"><dt>Rule</dt><dd class="figure">{{ f.rule_id }}</dd></div>
     <div class="tb-field"><dt>Profile</dt><dd><span class="layer-mark layer-mark-{{ ink }}" aria-hidden="true"></span>{{ labels[f.profile_id] }}{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %}</dd></div>
     <div class="tb-field"><dt>Last seen</dt><dd class="figure">{{ f.last_ts|local(tz) }}</dd></div>
     <div class="tb-field"><dt>Status</dt><dd>{% if f.status == "open" %}<span class="status-open">open</span>{% else %}<span class="corr"><svg class="chart rev-delta" viewBox="0 0 10 9" width="10" height="9" aria-hidden="true"><path d="M5 .6 9.4 8.4H.6Z"/></svg><s>open</s> {{ f.status }}</span>{% endif %}</dd></div>
@@ -55,15 +56,22 @@
       </dl>
       {% else %}
       <p class="explain-summary pending">Not analysed yet.</p>
-      {% if spec %}<p class="explain-rule">{{ spec.description|prose }}</p>{% endif %}
+      {% endif %}
+      {% if spec %}
+      <div class="explain-rule">
+        <h3>What the rule checks</h3>
+        <p>{{ spec.description|prose }}</p>
+      </div>
       {% endif %}
     </section>
+
+    {% with panel = "inline" %}{% include "_decision.html" %}{% endwith %}
 
     <section class="block detail-evidence" aria-labelledby="evidence-title">
       <h2 id="evidence-title">Evidence when it fired</h2>
       <div class="table-wrap">
       <table class="kv">
-        {% for label, value in f.evidence|evidence %}<tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>{% endfor %}
+        {% for label, value, outside in f.evidence|evidence %}<tr><th scope="row">{{ label }}</th><td>{% if outside %}<span class="name">{{ value }}</span>{% else %}{{ value }}{% endif %}</td></tr>{% endfor %}
       </table>
       </div>
     </section>
@@ -103,22 +111,7 @@
   </div>
 
   <aside class="detail-side">
-    <section class="panel decide" aria-labelledby="decide-title">
-      <h2 id="decide-title">Decision</h2>
-      <p class="decision">{% if f.status == "open" %}<span class="status-open">open</span>{% else %}<span class="corr"><svg class="chart rev-delta" viewBox="0 0 10 9" width="10" height="9" aria-hidden="true"><path d="M5 .6 9.4 8.4H.6Z"/></svg><s>open</s> {{ f.status }}{% if row.decision %} <span class="corr-time">{{ row.decision.at|clock(tz) }}</span>{% endif %}</span>{% endif %}</p>
-      <div class="actions-bar">
-        {% for action, label in [("acknowledge", "Acknowledge"), ("benign", "Mark benign"), ("reopen", "Reopen")] %}
-        {% if (action == "acknowledge" and f.status != "acknowledged") or (action == "benign" and f.status != "benign") or (action == "reopen" and f.status != "open") %}
-        <form method="post" action="/findings/{{ f.id }}/{{ action }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf }}">
-          <input type="hidden" name="next" value="{{ next_url }}">
-          <button type="submit"{% if action == "acknowledge" and f.status == "open" %} class="primary"{% elif action == "reopen" %} class="quiet"{% endif %}>{{ label }}</button>
-        </form>
-        {% endif %}
-        {% endfor %}
-      </div>
-      {% if f.rule_id in domain_rules and f.status != "benign" %}<p class="note">Marking it benign also stops the rules flagging <span class="name">{{ f.target|domain }}</span> on {{ labels[f.profile_id] }}.</p>{% endif %}
-    </section>
+    {% with panel = "side" %}{% include "_decision.html" %}{% endwith %}
 
     <section class="panel" aria-labelledby="facts-title">
       <h2 id="facts-title">Facts</h2>

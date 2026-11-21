@@ -277,9 +277,11 @@
     if (confirmDialog) return confirmDialog;
     const dialog = el("dialog", "confirm");
     dialog.setAttribute("aria-labelledby", "confirm-title");
-    const title = el("h2", "confirm-title", "Please confirm");
+    dialog.setAttribute("aria-describedby", "confirm-question");
+    const title = el("h2", "confirm-title", "Confirm this action?");
     title.id = "confirm-title";
     const question = el("p", "confirm-question");
+    question.id = "confirm-question";
     const bar = el("div", "confirm-actions");
     const cancel = el("button", "quiet", "Cancel");
     cancel.type = "button";
@@ -292,7 +294,7 @@
     document.body.append(dialog);
     cancel.addEventListener("click", () => dialog.close("cancel"));
     go.addEventListener("click", () => dialog.close("go"));
-    confirmDialog = { dialog, title, question, go };
+    confirmDialog = { dialog, title, question, cancel, go };
     return confirmDialog;
   }
 
@@ -300,10 +302,16 @@
     const asked = event.detail && event.detail.question;
     if (!asked || typeof HTMLDialogElement !== "function") return;
     event.preventDefault();
-    const { dialog, question, go } = confirmBox();
+    const { dialog, title, question, cancel, go } = confirmBox();
     const trigger = event.detail.elt;
     const submit = trigger && trigger.querySelector ? trigger.querySelector('button[type="submit"]') : null;
-    question.textContent = asked;
+    // The form may carry its own title and a body template drawn by the
+    // server (names already escaped and defanged there); the question text
+    // is the fallback.
+    title.textContent = (trigger && trigger.dataset && trigger.dataset.confirmTitle) || "Confirm this action?";
+    const body = trigger && trigger.querySelector ? trigger.querySelector("template.confirm-body") : null;
+    if (body) question.replaceChildren(body.content.cloneNode(true));
+    else question.textContent = asked;
     go.textContent = submit ? submit.textContent.trim() : "Confirm";
     dialog.returnValue = "";
     dialog.addEventListener(
@@ -315,7 +323,9 @@
       { once: true },
     );
     dialog.showModal();
-    go.focus();
+    // Start on Cancel: two presses of Enter must not confirm an action
+    // with a side effect.
+    cancel.focus();
   });
 
   // --- keys -----------------------------------------------------------------------
@@ -332,11 +342,43 @@
     }
   });
 
+  // --- folding filters --------------------------------------------------------------
+  //
+  // In a narrow window the Findings filters fold behind one "Filters" control
+  // that says how many are set. Without JavaScript they stay open.
+
+  const NARROW = window.matchMedia("(max-width: 860px)");
+
+  function enhanceFold(fold) {
+    if (fold.dataset.enhanced) return;
+    fold.dataset.enhanced = "true";
+    let chosen = false; // the owner opened or closed it by hand
+    const summary = fold.querySelector("summary");
+    if (summary) summary.addEventListener("click", () => { chosen = true; });
+    const place = () => {
+      if (!NARROW.matches) fold.open = true;
+      else if (!chosen) fold.open = false;
+    };
+    place();
+    NARROW.addEventListener("change", place);
+    const count = fold.querySelector("[data-filters-count]");
+    const form = fold.querySelector("form");
+    if (count && form) {
+      form.addEventListener("change", () => {
+        const set = Array.from(form.querySelectorAll("select")).filter(
+          (select) => select.value !== (select.dataset.default || ""),
+        ).length;
+        count.textContent = set ? `${set} set` : "";
+      });
+    }
+  }
+
   // --- wiring ---------------------------------------------------------------------
 
   function enhance(root) {
     root.querySelectorAll('select[data-ui="select"]').forEach(enhanceSelect);
     root.querySelectorAll("table.sortable").forEach(enhanceTable);
+    root.querySelectorAll('details[data-ui="filters-fold"]').forEach(enhanceFold);
   }
 
   enhance(document);

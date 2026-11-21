@@ -278,12 +278,17 @@ async def test_api_errors_alert_only_once_they_have_lasted_the_window(
     kit.state.source_failed("abc123", "NextDNS answered HTTP 503", now=T0)
 
     kit.clock.now = T0 + timedelta(minutes=4)
-    assert by_key(await kit.monitor.run_once())["api:abc123"].ok
+    retrying = by_key(await kit.monitor.run_once())["api:abc123"]
+    assert retrying.ok
+    assert retrying.detail.startswith("NextDNS answered with a server error since ")
+    assert retrying.detail.endswith(". Sentinel waits and tries again.")
 
     kit.clock.now = T0 + timedelta(minutes=5)
     check = by_key(await kit.monitor.run_once())["api:abc123"]
     assert not check.ok
-    assert check.detail == "NextDNS API failing for 5 min (router): NextDNS answered HTTP 503"
+    assert check.detail == (
+        "NextDNS API failing for 5 min (router): NextDNS answered with a server error (HTTP 503)"
+    )
 
     kit.state.source_ok("abc123", now=kit.clock.now)
     assert by_key(await kit.monitor.run_once())["api:abc123"].ok

@@ -1,0 +1,19 @@
+{# A finding's Decision panel. The page draws it twice: beside the record in a
+   wide window, and right after the explanation in a narrow one. Only one is
+   ever displayed, so the page carries one Decision panel at any width. #}
+<section class="panel decide decide-{{ panel }}" aria-labelledby="decide-title-{{ panel }}">
+  <h2 id="decide-title-{{ panel }}">Decision</h2>
+  <p class="decision">{% if f.status == "open" %}<span class="status-open">open</span>{% else %}<span class="corr"><svg class="chart rev-delta" viewBox="0 0 10 9" width="10" height="9" aria-hidden="true"><path d="M5 .6 9.4 8.4H.6Z"/></svg><s>open</s> {{ f.status }}{% if row.decision %} <span class="corr-time">{{ row.decision.at|clock(tz) }}</span>{% endif %}</span>{% endif %}</p>
+  <div class="actions-bar">
+    {% for action, label in [("acknowledge", "Acknowledge"), ("benign", "Mark benign"), ("reopen", "Reopen")] %}
+    {% if (action == "acknowledge" and f.status != "acknowledged") or (action == "benign" and f.status != "benign") or (action == "reopen" and f.status != "open") %}
+    <form method="post" action="/findings/{{ f.id }}/{{ action }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit"{% if action == "acknowledge" and f.status == "open" %} class="primary"{% elif action == "reopen" %} class="quiet"{% endif %}>{{ label }}</button>
+    </form>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% if f.rule_id in domain_rules and f.status != "benign" %}<p class="note">Marking it benign also stops the rules flagging <span class="name">{{ f.target|domain }}</span> on {{ labels[f.profile_id] }}. Reopen undoes it.</p>{% endif %}
+</section>

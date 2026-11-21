@@ -858,7 +858,7 @@ table.kv td { padding: 8px 14px; overflow-wrap: anywhere; }
   text-decoration: none;
 }
 .findings td.no a:hover { color: var(--ink); text-decoration: underline; }
-.findings td.rule { white-space: nowrap; }
+.findings td.rule { min-width: 150px; max-width: 180px; text-wrap: balance; }
 .findings td.rule a { color: var(--ink); text-decoration: none; font-weight: 550; }
 .findings td.rule a:hover { text-decoration: underline; }
 table.findings th,
@@ -952,6 +952,12 @@ tr.is-fresh > td { animation: fresh 2400ms var(--ease-out); }
 @media (min-width: 641px) {
   @container findings (max-width: 1179px) {
     table.findings .col-xwide { display: none; }
+  }
+  /* A decision changes no column's width: the status column fits the
+     longest revision, the actions column the widest pair of buttons. */
+  @container findings (min-width: 1000px) {
+    .findings td.decision { min-width: 140px; }
+    .findings td.actions { min-width: 210px; }
   }
   @container findings (max-width: 999px) {
     table.findings .col-wide { display: none; }
@@ -1299,6 +1305,16 @@ dialog.confirm[open] { animation: dialog-in 200ms var(--ease-out); }
 .detail-side { position: sticky; top: 20px; }
 .detail-side .panel { margin-top: 34px; }
 .detail-side .panel + .panel { margin-top: 14px; }
+/* The Decision panel is drawn twice; only one shows at a time. Beside the
+   record in a wide window, after the explanation in a narrow one. */
+.decide-inline { display: none; }
+
+/* Domains: names break after their defanged dots, not inside a label. */
+table.compact td.name { overflow-wrap: break-word; }
+
+/* The Findings filters fold behind one control in a narrow window. */
+.filters-summary { display: none; }
+.error-back { margin-top: 18px; }
 
 /* The explanation: the model's reading first, then cause and action side by
    side, then how far to trust it. */
@@ -1313,7 +1329,10 @@ dialog.confirm[open] { animation: dialog-in 200ms var(--ease-out); }
   text-wrap: pretty;
 }
 .explain-summary.pending { color: var(--ink-2); font-size: 15px; }
-.explain-rule { margin-top: 8px; max-width: 72ch; color: var(--ink-2); }
+.explain-rule { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); max-width: 72ch; }
+.explain-rule h3 { color: var(--ink-3); font-size: 12px; font-weight: 400; }
+.explain-rule p { margin-top: 4px; color: var(--ink-2); font-size: 13.5px; line-height: 1.55; text-wrap: pretty; }
+.finding-head .reason-id { margin-left: 8px; color: var(--ink-3); font: 12.5px var(--mono); }
 .explain-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1398,6 +1417,7 @@ dl.facts .span-bar { margin-top: 6px; }
 
 tr.ok .state { color: var(--ok); font-weight: 600; }
 tr.problem .state { color: var(--problem); font-weight: 600; }
+tr.watch .state { color: var(--warn); font-weight: 600; }
 tr.problem td:first-child { color: var(--ink); }
 
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; }
@@ -1542,6 +1562,9 @@ body.bare main { width: 100%; max-width: 440px; padding: 0; }
 @media (max-width: 1180px) {
   .board-side, .detail { grid-template-columns: minmax(0, 1fr); }
   .detail-side { position: static; }
+  .decide-inline { display: block; margin-top: 26px; }
+  .detail-side .decide-side { display: none; }
+  .detail-side .decide-side + .panel { margin-top: 34px; }
   .trio { grid-template-columns: minmax(0, 1fr); }
   .titleblock { grid-template-columns: minmax(0, 1fr); }
   .tb-fields { border-top: 1px solid var(--line-strong); border-left: 0; }
@@ -1619,6 +1642,41 @@ body.bare main { width: 100%; max-width: 440px; padding: 0; }
 }
 
 /* On a phone each finding becomes a stacked notice, actions in reach. */
+/* A narrow window: the filters fold behind one control, which says how many
+   are set; opened, the filters sit directly under it. */
+@media (max-width: 860px) {
+  .filters-fold { margin-top: 20px; }
+  .filters-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+    color: var(--ink);
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+  }
+  .filters-summary::-webkit-details-marker { display: none; }
+  .filters-summary:hover { background: var(--panel-3); }
+  .filters-count { color: var(--rev); font: 12px var(--mono); }
+  .filters-count:empty { display: none; }
+  .filters-summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin: -3px 2px 0 0;
+    border-right: 1.5px solid var(--ink-2);
+    border-bottom: 1.5px solid var(--ink-2);
+    transform: rotate(45deg);
+    transition: transform 160ms var(--ease-out);
+  }
+  .filters-fold[open] .filters-summary::after { margin-top: 3px; transform: rotate(-135deg); }
+  .filters-fold .filters { margin-top: 10px; }
+}
+
 @media (max-width: 640px) {
   .findings-wrap { overflow: visible; border: 0; background: none; }
   table.findings thead { display: none; }

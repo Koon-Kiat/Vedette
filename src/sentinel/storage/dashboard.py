@@ -267,7 +267,10 @@ class DashboardQueries:
     async def findings(
         self, wanted: FindingFilter, *, tz: ZoneInfo, limit: int = 200
     ) -> list[FindingRow]:
-        """Findings matching the filter, most recently seen first."""
+        """The ``limit`` most recently seen findings matching the filter, in triage order.
+
+        Highest priority first (the model's raise counts), then most recently seen.
+        """
         statement = (
             self._filtered(wanted, tz)
             .order_by(findings.c.last_ts.desc(), findings.c.id.desc())
@@ -275,7 +278,9 @@ class DashboardQueries:
         )
         async with self._engine.connect() as connection:
             rows = (await connection.execute(statement)).all()
-        return await self._with_analyses([finding_from_row(row) for row in rows])
+        found = await self._with_analyses([finding_from_row(row) for row in rows])
+        # Stable: within a priority the query's newest-first order stands.
+        return sorted(found, key=lambda row: -row.priority.rank)
 
     async def finding(self, finding_id: int) -> FindingRow | None:
         """One finding with its analysis."""

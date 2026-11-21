@@ -6,11 +6,11 @@
 <tr id="finding-{{ f.id }}" class="status-{{ f.status }} sev-{{ level }} ink-{{ ink }}{% if f.target == f.profile_id %} about-profile{% endif %}">
   <td class="no col-wide" data-sort="{{ f.id }}"><a href="/findings/{{ f.id }}" aria-label="Finding {{ f.id }}">{{ "%04d"|format(f.id) }}</a></td>
   <td class="pri" data-sort="{{ row.priority.rank }}">{% include "_badge.html" %}</td>
-  <td class="rule col-wide"><a href="/findings/{{ f.id }}">{{ f.rule_id }}</a></td>
+  <td class="rule col-wide"><a href="/findings/{{ f.id }}">{{ rule_names.get(f.rule_id, f.rule_id) }}</a></td>
   <td class="about">
-    {% if f.target == f.profile_id %}<span class="own">{{ labels[f.profile_id] }}</span>{% else %}<span class="name">{{ f.target|domain }}</span>{% endif %}
+    {% if f.target == f.profile_id %}<span class="own">{{ labels[f.profile_id] }}</span>{% else %}<span class="name">{{ f|about }}</span>{% endif %}
     {% if level in ("critical", "high") %}<span class="why">{% if row.analysis %}{{ row.analysis.summary|prose }}{% else %}Not analysed yet.{% endif %}</span>{% endif %}
-    <span class="about-meta"><a href="/findings/{{ f.id }}">{{ "%04d"|format(f.id) }} · {{ f.rule_id }}</a> · <span class="layer-tag"><span class="layer-mark layer-mark-{{ ink }}" aria-hidden="true"></span>{{ labels[f.profile_id] }}</span>{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %} · {{ f.last_ts|local(tz) }} · {{ f.event_count|num }} event{{ "" if f.event_count == 1 else "s" }}</span>
+    <span class="about-meta"><a href="/findings/{{ f.id }}">{{ "%04d"|format(f.id) }} · {{ rule_names.get(f.rule_id, f.rule_id) }}</a> · <span class="layer-tag"><span class="layer-mark layer-mark-{{ ink }}" aria-hidden="true"></span>{{ labels[f.profile_id] }}</span>{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %} · {{ f.last_ts|local(tz) }} · {{ f.event_count|num }} event{{ "" if f.event_count == 1 else "s" }}</span>
   </td>
   <td class="where col-wide" data-sort="{{ labels[f.profile_id] }}"><span class="layer-tag"><span class="layer-mark layer-mark-{{ ink }}" aria-hidden="true"></span>{{ labels[f.profile_id] }}</span>{% if f.device_mode %}<span class="device">{{ f.subject|text }}</span>{% endif %}</td>
   <td class="seen col-wide" data-sort="{{ f.last_ts.timestamp()|int }}">
@@ -35,7 +35,8 @@
     </form>
     {% endif %}
     {% if f.status != "benign" %}
-    <form method="post" action="/findings/{{ f.id }}/benign" hx-post="/findings/{{ f.id }}/benign" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML"{% if f.rule_id in domain_rules %} hx-confirm="Mark it benign and stop flagging {{ f.target|domain }} on {{ labels[f.profile_id] }}?"{% endif %}>
+    <form method="post" action="/findings/{{ f.id }}/benign" hx-post="/findings/{{ f.id }}/benign" hx-target="#finding-{{ f.id }}" hx-swap="outerHTML"{% if f.rule_id in domain_rules %} hx-confirm="Sentinel stops flagging {{ f.target|domain }} on {{ labels[f.profile_id] }}. Reopen the finding to undo this." data-confirm-title="Mark this finding benign?"{% endif %}>
+      {% if f.rule_id in domain_rules %}<template class="confirm-body">Sentinel stops flagging <span class="name">{{ f.target|domain }}</span> on {{ labels[f.profile_id] }}. Reopen the finding to undo this.</template>{% endif %}
       <input type="hidden" name="csrf_token" value="{{ csrf }}">
       <input type="hidden" name="next" value="{{ next_url }}">
       <button type="submit">Mark benign</button>

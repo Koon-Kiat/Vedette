@@ -1,5 +1,6 @@
-# Detection rules. Each rule has an id, a severity floor, a description of why
-# it matters, thresholds (params) and the evidence fields it records.
+# Detection rules. Each rule has an id, a plain name the dashboard shows, a
+# severity floor, a description of why it matters, thresholds (params) and the
+# evidence fields it records.
 #
 # The detector for each id is code; everything tunable is here. To change a
 # value without editing this file, point `rules.file` in config.yaml at a YAML
@@ -10,6 +11,7 @@
 
 rules:
   - id: new-device
+    name: New device
     severity: medium
     dedupe: once
     description: >-
@@ -20,6 +22,7 @@ rules:
     evidence: [device_id, device_name, client_ip, attribution]
 
   - id: young-domain
+    name: Newly registered domain
     severity: high
     dedupe: daily
     description: >-
@@ -31,6 +34,7 @@ rules:
     evidence: [fqdn, root, status, domain_age_days, popularity_rank]
 
   - id: threat-intel-allowed
+    name: Threat-feed domain allowed
     severity: critical
     dedupe: daily
     description: >-
@@ -42,6 +46,7 @@ rules:
     evidence: [fqdn, root, status, threat_feeds, threat_match, popularity_rank]
 
   - id: dga-like
+    name: Random-looking domain name
     severity: medium
     dedupe: daily
     description: >-
@@ -54,6 +59,7 @@ rules:
     evidence: [fqdn, root, status, label, label_length, entropy, digit_ratio]
 
   - id: tunnel-like
+    name: Possible DNS tunnelling
     severity: high
     dedupe: hourly
     description: >-
@@ -68,6 +74,7 @@ rules:
     evidence: [root, unique_subdomains, window_minutes, sample_fqdn]
 
   - id: volume-spike
+    name: Query volume spike
     severity: low
     dedupe: hourly
     description: >-
@@ -82,6 +89,7 @@ rules:
     evidence: [queries_this_hour, baseline_per_hour, factor]
 
   - id: blocked-burst
+    name: Burst of blocked queries
     severity: medium
     dedupe: hourly
     description: >-
@@ -94,6 +102,7 @@ rules:
     evidence: [blocked_in_window, window_minutes, sample_fqdn]
 
   - id: new-destination-category
+    name: New category or blocklist
     severity: low
     dedupe: once
     description: >-

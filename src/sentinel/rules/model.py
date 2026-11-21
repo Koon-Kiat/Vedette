@@ -29,6 +29,8 @@ class RuleSpec(BaseModel):
 
     Attributes:
         id: Stable identifier; selects the detector that implements the rule.
+        name: What the rule detects, in plain words; the dashboard titles its
+            findings with it. The id stands in when it is not set.
         severity: Severity floor of every finding the rule produces.
         description: Why the rule matters, shown to the user.
         enabled: Disabled rules never fire.
@@ -41,6 +43,7 @@ class RuleSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: str = Field(min_length=1)
+    name: str | None = Field(default=None, min_length=1)
     severity: Severity
     description: str = Field(min_length=1)
     enabled: bool = True

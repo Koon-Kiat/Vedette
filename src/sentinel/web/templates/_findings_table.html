@@ -2,8 +2,7 @@
 <div class="table-wrap findings-wrap">
 <table class="findings sortable"{% if table_id is defined %} id="t-{{ table_id }}"{% endif %}>
   <thead>
-    {% set decide = table_id is defined and table_id == "decide" %}
-    <tr><th class="col-wide" data-first="descending">No.</th><th data-first="descending" data-sorted="{{ "descending" if decide else "none" }}">Priority</th><th class="col-wide">Rule</th><th>About</th><th class="col-wide">Profile</th><th class="col-wide" data-first="descending" data-sorted="{{ "none" if decide else "descending" }}">Last seen</th><th class="num col-wide col-xwide">Events</th><th>Status</th><th data-sort="none"><span class="visually-hidden">Actions</span></th></tr>
+    <tr><th class="col-wide" data-first="descending">No.</th><th data-first="descending" data-sorted="descending">Priority</th><th class="col-wide">Rule</th><th>About</th><th class="col-wide">Profile</th><th class="col-wide" data-first="descending" data-sorted="none">Last seen</th><th class="num col-wide col-xwide">Events</th><th>Status</th><th data-sort="none"><span class="visually-hidden">Actions</span></th></tr>
   </thead>
   <tbody>
     {% for row in rows %}

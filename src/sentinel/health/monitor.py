@@ -16,6 +16,7 @@ Details are our own wording with numbers and profile labels, never log data.
 """
 
 import asyncio
+import re
 import shutil
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
@@ -61,6 +62,26 @@ def duration(span: timedelta) -> str:
     if hours:
         return f"{hours} h {mins} min"
     return f"{mins} min"
+
+
+_HTTP_STATUS = re.compile(r"HTTP (\d{3})")
+
+
+def api_problem(reason: str) -> tuple[str, int | None]:
+    """A NextDNS error in words, and its HTTP status when the reason names one.
+
+    A reason that is not a rate limit, a refused key or a server error is
+    returned as it was recorded.
+    """
+    found = _HTTP_STATUS.search(reason)
+    status = int(found[1]) if found else None
+    if status == 429:
+        return "NextDNS is rate-limiting Sentinel", status
+    if status in (401, 403):
+        return "NextDNS refused the API key", status
+    if status is not None and status >= 500:
+        return "NextDNS answered with a server error", status
+    return reason, status
 
 
 class Probe(Protocol):
@@ -229,13 +250,21 @@ class HealthMonitor:
         if failing is None:
             return HealthCheck(key, label, True, OK)
         since, reason = failing
+        phrase, status = api_problem(reason)
         if now - since < timedelta(minutes=self._config.api_error_minutes):
-            return HealthCheck(key, label, True, f"Recent errors: {reason}")
+            return HealthCheck(
+                key,
+                label,
+                True,
+                f"{phrase} since {since.astimezone(self._tz):%H:%M}. "
+                "Sentinel waits and tries again.",
+            )
+        code = f" (HTTP {status})" if status is not None and phrase != reason else ""
         return HealthCheck(
             key,
             label,
             False,
-            f"NextDNS API failing for {duration(now - since)} ({profile.label}): {reason}",
+            f"NextDNS API failing for {duration(now - since)} ({profile.label}): {phrase}{code}",
         )
 
     async def _ollama_check(self, now: datetime) -> HealthCheck:

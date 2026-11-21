@@ -18,7 +18,7 @@
     {% if scope == "all" %}
     <a href="/findings">All open findings <span data-live="open-count-text">({{ shell.open_findings|num }})</span></a>
     {% else %}
-    <a href="/findings">All open findings on {{ scope_label }} ({{ shell.open_by_profile.get(scope, 0)|num }})</a>
+    <a href="/findings">All open findings on {{ scope_label }} <span data-live="open-layer-text-{{ layers[scope] }}">({{ shell.open_by_profile.get(scope, 0)|num }})</span></a>
     {% endif %}
   </div>
   <div id="decide" data-live="decide" hx-get="/partials/decide" hx-trigger="sentinel:findings from:body" hx-swap="innerHTML">

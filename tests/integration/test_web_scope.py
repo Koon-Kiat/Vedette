@@ -49,7 +49,7 @@ async def test_the_rail_counts_every_profile_whatever_is_shown(filled: Store) ->
         f"/scope?to={PC}",
     ]
     assert [bool("aria-current" in rest) for _, rest in options] == [False, False, True]
-    counts = [int(n) for n in re.findall(r'class="layer-open[^"]*">(\d+) open', switch)]
+    counts = [int(n) for n in re.findall(r'class="layer-open[^"]*"[^>]*>(\d+) open', switch)]
     assert counts[0] == counts[1] + counts[2] and counts[1] > 0, "router's findings stay counted"
 
 

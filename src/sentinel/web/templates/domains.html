@@ -7,7 +7,7 @@
   <thead><tr><th>Domain</th><th class="num" data-sorted="descending">Queries</th><th class="num" data-first="ascending">Top-sites rank</th><th class="num" data-first="ascending">Registered</th></tr></thead>
   <tbody>
     {% for row in rows %}
-    <tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.count|num }}</td><td class="num" data-sort="{{ row.rank if row.rank else "" }}">{{ row.rank|num if row.rank else "–" }}</td><td class="num" data-sort="{{ row.age_days if row.age_days is not none else "" }}">{% if row.age_days is not none %}{{ "%d days ago"|format(row.age_days) }}{% else %}<span class="muted" title="Not looked up">–</span>{% endif %}</td></tr>
+    <tr><td class="name">{{ row.root|domain_wrap }}</td><td class="num">{{ row.count|num }}</td><td class="num" data-sort="{{ row.rank if row.rank else "" }}">{{ row.rank|num if row.rank else "–" }}</td><td class="num" data-sort="{{ row.age_days if row.age_days is not none else "" }}">{% if row.age_days is not none %}{{ "%d days ago"|format(row.age_days) }}{% else %}<span class="muted" title="Not looked up">–</span>{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>

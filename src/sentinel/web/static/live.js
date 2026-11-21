@@ -239,7 +239,31 @@
     }
   }
 
+  // Every open-findings count on the page: the switch's, keyed by layer ("0"
+  // for every profile), and the menu's. The live stats carry them, and so
+  // does the response to each decision, so they never disagree for long.
+  function openCounts(layers) {
+    if (!layers || typeof layers !== "object") return;
+    for (const [layer, count] of Object.entries(layers)) {
+      if (!/^\d$/.test(layer) || !Number.isInteger(count) || count < 0) continue;
+      setText(`open-layer-${layer}`, `${number(count)} open`);
+      setText(`open-layer-text-${layer}`, `(${number(count)})`);
+      for (const node of live(`open-layer-${layer}`)) node.classList.toggle("is-zero", count === 0);
+    }
+    const total = layers["0"];
+    if (Number.isInteger(total) && total >= 0) {
+      setText("open-count", number(total));
+      setText("open-count-text", `(${number(total)})`);
+      for (const pill of live("open-count")) pill.classList.toggle("count-zero", total === 0);
+    }
+  }
+
+  document.body.addEventListener("sentinel-counts", (event) => {
+    openCounts(event.detail && event.detail.layers);
+  });
+
   function stats(data) {
+    openCounts(data.open_by_layer);
     setText("last-minute", number(data.last_minute));
     for (const node of live("queries-word")) node.textContent = data.last_minute === 1 ? "query" : "queries";
     setText("blocked-minute", number(data.blocked_last_minute));

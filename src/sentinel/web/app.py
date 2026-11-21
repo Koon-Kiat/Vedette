@@ -35,6 +35,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from markupsafe import Markup, escape
 from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.datastructures import FormData, MutableHeaders
 from starlette.exceptions import HTTPException
@@ -42,7 +43,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from sentinel.config import ProfileConfig
-from sentinel.health.monitor import duration
+from sentinel.health.monitor import CATCHING_UP, OK, duration
 from sentinel.notify.defang import clean_text, defang_names
 from sentinel.notify.digest import DigestBuilder
 from sentinel.notify.render import prose, safe
@@ -66,6 +67,15 @@ CSP = (
 )
 PERIODS = {"24h": timedelta(hours=24), "7d": timedelta(days=7)}
 FINDING_PATH = re.compile(r"/findings/(\d{1,9})")
+#: Error pages are titled by what went wrong; the status code is a field below.
+ERROR_TITLES = {
+    400: "Request not valid",
+    403: "Page out of date",
+    404: "Page not found",
+    405: "Not allowed",
+    422: "Request not valid",
+    429: "Too many live views",
+}
 #: Which profiles the pages show: "all" or one profile id, remembered per browser.
 SCOPE_COOKIE = "sentinel_scope"
 ALL = "all"
@@ -142,8 +152,28 @@ def _evidence_value(key: str, value: Any) -> str:
     return safe(value, limit=300)
 
 
-def _evidence(evidence: Mapping[str, Any]) -> list[tuple[str, str]]:
-    """A finding's evidence as (label, value) rows, every string cleaned and defanged."""
+#: Evidence fields whose values came from outside: names from DNS traffic, the
+#: listed name a feed matched, device names, and NextDNS's reason ids and names.
+#: The page sets them as outside names.
+OUTSIDE_FIELDS = frozenset(
+    {
+        "fqdn",
+        "sample_fqdn",
+        "root",
+        "label",
+        "threat_match",
+        "device_name",
+        "category",
+        "category_name",
+    }
+)
+
+
+def _evidence(evidence: Mapping[str, Any]) -> list[tuple[str, str, bool]]:
+    """A finding's evidence as (label, value, from outside) rows.
+
+    Every string is cleaned and defanged.
+    """
     order = {key: index for index, key in enumerate(EVIDENCE_LABELS)}
     rows = []
     for key in sorted(evidence, key=lambda name: (order.get(name, len(order)), name)):
@@ -152,8 +182,51 @@ def _evidence(evidence: Mapping[str, Any]) -> list[tuple[str, str]]:
             continue
         words = key.replace("_", " ")
         label = EVIDENCE_LABELS.get(key) or safe(words[:1].upper() + words[1:], limit=60)
-        rows.append((label, _evidence_value(key, value)))
+        rows.append((label, _evidence_value(key, value), key in OUTSIDE_FIELDS))
     return rows
+
+
+def _about(finding: StoredFinding) -> str:
+    """What a finding is about, cleaned: a reason's name where NextDNS gave one, else its target."""
+    name = (
+        finding.evidence.get("category_name")
+        if finding.rule_id == "new-destination-category"
+        else None
+    )
+    return (
+        safe(name, limit=120)
+        if isinstance(name, str) and name.strip()
+        else safe(finding.target, limit=255)
+    )
+
+
+def _check_state(check: Any) -> tuple[str, str]:
+    """A health check's state as (style, word).
+
+    A passing check that is still working something out reads "Retrying" or
+    "Catching up", not "OK".
+    """
+    if not check.ok:
+        return "problem", "Problem"
+    if check.detail == CATCHING_UP:
+        return "watch", "Catching up"
+    if check.key.startswith("api:") and check.detail != OK:
+        return "watch", "Retrying"
+    return "ok", "OK"
+
+
+def _average(value: float | None) -> str:
+    """A daily or hourly average: tenths below 100, whole numbers above."""
+    if value is None:
+        return "n/a"
+    if abs(value) >= 100:
+        return f"{value:,.0f}"
+    return f"{value:,.1f}".removesuffix(".0")
+
+
+def _breakable(value: str) -> Markup:
+    """An already-cleaned name that may wrap only after its defanged dots."""
+    return Markup("[.]<wbr>").join(escape(part) for part in value.split("[.]"))
 
 
 @functools.cache
@@ -178,6 +251,9 @@ TEMPLATE_ENV = jinja2.Environment(
 TEMPLATE_ENV.filters.update(
     {
         "domain": lambda value: safe(value, limit=255),
+        "domain_wrap": lambda value: _breakable(safe(value, limit=255)),
+        "about": _about,
+        "check_state": _check_state,
         "text": lambda value: safe(value, limit=300),
         "prose": lambda value: prose(value, limit=600),
         "detail": _detail,
@@ -191,7 +267,7 @@ TEMPLATE_ENV.filters.update(
         "num": lambda value: f"{value:,}",
         "pct": lambda value: f"{value:.0%}",
         "secs": lambda value: f"{value / 1000:.1f} s",
-        "avg": lambda value: "n/a" if value is None else f"{value:,.1f}".removesuffix(".0"),
+        "avg": _average,
     }
 )
 TEMPLATE_ENV.globals["version"] = _version
@@ -293,6 +369,8 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     #: Each profile's layer: its position picks its ink (``layer-1``, ``layer-2``...).
     layers = {profile.id: index + 1 for index, profile in enumerate(ctx.profiles)}
     specs = {spec.id: spec for spec in ctx.specs}
+    #: Each rule's plain name; the id stands in for a rule without one.
+    rule_names = {spec.id: spec.name or spec.id for spec in ctx.specs}
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(ctx.allowed_hosts))
@@ -307,6 +385,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "label_inks": {labels[pid]: ink for pid, ink in layers.items()},
             "nav": "",
             "domain_rules": DOMAIN_RULES,
+            "rule_names": rule_names,
         }
         context.update(values)
         return HTMLResponse(TEMPLATE_ENV.get_template(name).render(**context), status_code=status)
@@ -391,10 +470,14 @@ def create_app(ctx: DashboardContext) -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def error_page(request: Request, exc: HTTPException) -> Response:
-        message = exc.detail if exc.status_code in (400, 403, 422) else "That page does not exist."
+        message = (
+            exc.detail if exc.status_code in (400, 403, 422, 429) else "That page does not exist."
+        )
+        heading = ERROR_TITLES.get(exc.status_code, "Something went wrong")
         if exc.status_code == 405:
             message = "That is not allowed here."
         elif exc.status_code == 404 and (found := FINDING_PATH.fullmatch(request.url.path)):
+            heading = f"Finding {int(found[1]):04d} not found"
             message = (
                 f"There is no finding {int(found[1]):04d}. Findings are deleted once they are "
                 "older than the retention period, so a link from an old digest or alert "
@@ -404,7 +487,8 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "status": exc.status_code,
             "code": exc.status_code,
             "message": message,
-            "title": str(exc.status_code),
+            "heading": heading,
+            "title": heading,
         }
         # A logged-in owner keeps the menu, so the error is not a dead end.
         session = sessions.get(request.cookies.get(SESSION_COOKIE))
@@ -415,7 +499,12 @@ def create_app(ctx: DashboardContext) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> Response:
         return render(
-            "error.html", status=422, code=422, message="That request was not valid.", title="422"
+            "error.html",
+            status=422,
+            code=422,
+            message="That request was not valid.",
+            heading=ERROR_TITLES[422],
+            title=ERROR_TITLES[422],
         )
 
     # --- login ------------------------------------------------------------------------
@@ -630,6 +719,16 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "reason": safe(item.reason, limit=80) if item.reason else None,
         }
 
+    def open_by_layer(by_profile: Mapping[str, int]) -> dict[str, int]:
+        """Open findings keyed by switch layer.
+
+        "0" counts every profile, then each profile has its layer number, so the
+        page never needs a profile id.
+        """
+        counts = {str(layers[pid]): by_profile.get(pid, 0) for pid in layers}
+        counts["0"] = sum(by_profile.get(pid, 0) for pid in layers)
+        return counts
+
     def stats_item(stats: LiveStats, now: datetime) -> dict[str, Any]:
         age = (now - stats.newest_event).total_seconds() if stats.newest_event else None
         return {
@@ -637,6 +736,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             "blocked_last_minute": stats.blocked_last_minute,
             "per_minute": stats.per_minute,
             "open_findings": stats.open_findings,
+            "open_by_layer": open_by_layer(stats.open_by_profile),
             "newest_finding_id": stats.newest_finding_id,
             "checks_ok": stats.checks_ok,
             "checks_total": stats.checks_total,
@@ -673,6 +773,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             stats,
             open_findings=everything.open_findings,
             newest_finding_id=everything.newest_finding_id,
+            open_by_profile=everything.open_by_profile,
         )
 
     @app.get("/live/stream")
@@ -771,7 +872,7 @@ def create_app(ctx: DashboardContext) -> FastAPI:
             devices=await view.queries.devices_in_findings(),
             days=await view.queries.finding_days(tz=ctx.tz),
             today=ctx.clock().astimezone(ctx.tz).date(),
-            rules=sorted(specs),
+            rules=sorted(specs, key=lambda rule_id: rule_names[rule_id].lower()),
             severities=[level.value for level in Severity],
             statuses=[*STATUSES, "all"],
             **values,
@@ -818,7 +919,13 @@ def create_app(ctx: DashboardContext) -> FastAPI:
         next_url = _safe_next(form.get("next"))
         if _is_htmx(request):
             row = await queries.finding(finding_id)
-            return render("_finding_row.html", row=row, csrf=session.csrf, next_url=next_url)
+            response = render("_finding_row.html", row=row, csrf=session.csrf, next_url=next_url)
+            # Every open count on the page follows the decision at once.
+            shell = await queries.shell()
+            response.headers["HX-Trigger"] = json.dumps(
+                {"sentinel-counts": {"layers": open_by_layer(shell.open_by_profile)}}
+            )
+            return response
         return RedirectResponse(next_url, status_code=303)
 
     @app.get("/domains")

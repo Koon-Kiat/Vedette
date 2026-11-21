@@ -51,6 +51,8 @@ class LiveStats:
     checks_ok: int
     checks_total: int
     newest_event: datetime | None
+    #: Open findings per profile id, every profile of the view listed.
+    open_by_profile: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -170,13 +172,18 @@ class LiveQueries:
                     )
                 )
             ).one()
-            open_count, newest_finding = (
+            by_profile = {pid: 0 for pid in self._ids}
+            newest_finding: int | None = None
+            for profile_id, count, newest in (
                 await connection.execute(
-                    select(func.count(), func.max(findings.c.id)).where(
-                        findings.c.profile_id.in_(self._ids), findings.c.status == "open"
-                    )
+                    select(findings.c.profile_id, func.count(), func.max(findings.c.id))
+                    .where(findings.c.profile_id.in_(self._ids), findings.c.status == "open")
+                    .group_by(findings.c.profile_id)
                 )
-            ).one()
+            ).all():
+                by_profile[str(profile_id)] = int(count)
+                if newest is not None and (newest_finding is None or int(newest) > newest_finding):
+                    newest_finding = int(newest)
             newest_event = (
                 await connection.execute(
                     select(func.max(events.c.ts)).where(events.c.profile_id.in_(self._ids))
@@ -192,9 +199,10 @@ class LiveQueries:
             last_minute=int(last_minute or 0),
             blocked_last_minute=int(blocked_last or 0),
             per_minute=per_minute,
-            open_findings=int(open_count or 0),
-            newest_finding_id=int(newest_finding) if newest_finding is not None else None,
+            open_findings=sum(by_profile.values()),
+            newest_finding_id=newest_finding,
             checks_ok=sum(1 for check in checks if check.ok),
             checks_total=len(checks),
             newest_event=newest_event,
+            open_by_profile=by_profile,
         )

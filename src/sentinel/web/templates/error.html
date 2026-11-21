@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
 {% block content %}
+{% if csrf is defined %}
+{% call titleblock(heading, "Not in the set", scoped=False, extra=[("Status", code)]) %}
+  <p class="lead">{{ message }}</p>
+{% endcall %}
+<p class="block error-back"><a href="/">Back to the overview</a></p>
+{% else %}
 <section class="login panel">
-  <h1>{{ code }}</h1>
+  <h1>{{ heading }}</h1>
   <p>{{ message }}</p>
   <p><a href="/">Back to the overview</a></p>
 </section>
+{% endif %}
 {% endblock %}

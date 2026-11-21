@@ -82,7 +82,9 @@ async def test_a_listed_domain_reaches_ntfy_as_a_critical_alert(
             # The fake server's events are months old, so the health monitor may
             # also (correctly) send a "no events" message; pick out the alert.
             sent = [json.loads(call.request.content) for call in ntfy.calls]
-            return [m for m in sent if m["title"].startswith("CRITICAL: threat-intel-allowed")]
+            return [
+                m for m in sent if m["title"].startswith("CRITICAL: Threat-feed domain allowed")
+            ]
 
         async def alerted() -> bool:
             return len(threat_alerts()) >= 1
@@ -103,5 +105,5 @@ async def test_a_listed_domain_reaches_ntfy_as_a_critical_alert(
     (sent,) = threat_alerts()
     assert sent["topic"] == "pipeline-test"
     assert sent["priority"] == 5
-    assert sent["title"].startswith("CRITICAL: threat-intel-allowed, site3[.]example")
+    assert sent["title"].startswith("CRITICAL: Threat-feed domain allowed, site3[.]example")
     assert "site3.example" not in sent["message"]

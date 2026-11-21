@@ -46,7 +46,7 @@ from sentinel.config import ProfileConfig
 from sentinel.health.monitor import CATCHING_UP, OK, duration
 from sentinel.notify.defang import clean_text, defang_names
 from sentinel.notify.digest import DigestBuilder
-from sentinel.notify.render import prose, safe
+from sentinel.notify.render import about_text, prose, safe
 from sentinel.rules.model import RuleSpec, Severity
 from sentinel.storage.dashboard import DashboardQueries, FindingFilter
 from sentinel.storage.evaluation import EvalStore
@@ -188,16 +188,7 @@ def _evidence(evidence: Mapping[str, Any]) -> list[tuple[str, str, bool]]:
 
 def _about(finding: StoredFinding) -> str:
     """What a finding is about, cleaned: a reason's name where NextDNS gave one, else its target."""
-    name = (
-        finding.evidence.get("category_name")
-        if finding.rule_id == "new-destination-category"
-        else None
-    )
-    return (
-        safe(name, limit=120)
-        if isinstance(name, str) and name.strip()
-        else safe(finding.target, limit=255)
-    )
+    return about_text(finding.rule_id, finding.target, finding.evidence, limit=255)
 
 
 def _check_state(check: Any) -> tuple[str, str]:

@@ -150,7 +150,7 @@ async def test_a_fresh_critical_finding_is_queued_once(
     (item,) = await outbox.recent(limit=10)
     assert (item.kind, item.status, item.finding_id) == ("alert", "pending", finding_id)
     assert item.priority is Severity.CRITICAL
-    assert item.title.startswith("CRITICAL: threat-intel-allowed, bad[.]example")
+    assert item.title.startswith("CRITICAL: Threat-feed domain allowed, bad[.]example")
     assert "The model's summary." in item.body
 
 

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from sentinel.config import ProfileConfig
 from sentinel.notify.defang import clean_text
-from sentinel.notify.render import local_time, prose, safe
+from sentinel.notify.render import local_time, prose, reason_name, rule_name, safe
 from sentinel.rules.loader import load_rules
 from sentinel.rules.model import RuleSpec, Severity
 from sentinel.storage.health import HealthStore
@@ -35,6 +35,8 @@ class FindingGroup(BaseModel):
 
     priority: Severity
     rule_id: str
+    #: The rule's plain name; empty in digests stored before rules had names.
+    rule_name: str = ""
     profile_id: str
     profile: str
     target: str
@@ -47,6 +49,8 @@ class FindingGroup(BaseModel):
     action: str | None
     explained_by: str | None
     other_targets: list[str]
+    #: NextDNS's name for a category finding's reason, when recorded.
+    target_name: str | None = None
 
 
 class VolumeLine(BaseModel):
@@ -286,6 +290,8 @@ class DigestBuilder:
                 FindingGroup(
                     priority=Severity(top.a_priority or top.severity),
                     rule_id=top.rule_id,
+                    rule_name=rule_name(top.rule_id, spec),
+                    target_name=reason_name(top.rule_id, top.evidence or {}),
                     profile_id=top.profile_id,
                     profile=self._labels.get(top.profile_id, top.profile_id),
                     target=top.target,
@@ -376,7 +382,11 @@ def _findings_line(digest: Digest) -> list[str]:
 
 
 def _group_lines(index: int, group: FindingGroup, tz: ZoneInfo) -> list[str]:
-    target = group.profile if group.target == group.profile_id else safe(group.target, limit=120)
+    target = (
+        group.profile
+        if group.target == group.profile_id
+        else safe(group.target_name or group.target, limit=120)
+    )
     where = (
         f"{group.profile}, device {safe(group.subject or '', limit=64)}"
         if group.device_mode
@@ -385,7 +395,8 @@ def _group_lines(index: int, group: FindingGroup, tz: ZoneInfo) -> list[str]:
     plural = "" if group.findings == 1 else "s"
     event_plural = "" if group.events == 1 else "s"
     lines = [
-        f"{index}. {group.priority.value.upper()} {group.rule_id}: {target} ({where})",
+        f"{index}. {group.priority.value.upper()} {group.rule_name or group.rule_id}: "
+        f"{target} ({where})",
         f"   {group.findings} finding{plural}, {group.events} event{event_plural}, "
         f"last {local_time(group.last_ts, tz)}",
         f"   {prose(group.summary)}",
@@ -394,11 +405,13 @@ def _group_lines(index: int, group: FindingGroup, tz: ZoneInfo) -> list[str]:
         lines.append(f"   Do: {prose(group.action, limit=300)}")
     if group.other_targets:
         lines.append(f"   Also: {safe(group.other_targets, limit=120)}")
-    lines.append(
-        f"   Explained by {clean_text(group.explained_by, limit=64)}."
+    explained = (
+        f"Explained by {clean_text(group.explained_by, limit=64)}."
         if group.explained_by
-        else "   Not explained by the local model."
+        else "Not explained by the local model."
     )
+    # The id is what `sentinel findings --rule` and the dashboard's Rule field show.
+    lines.append(f"   {explained} Rule: {group.rule_id}.")
     return lines
 
 

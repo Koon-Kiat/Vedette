@@ -59,8 +59,26 @@ def render(item: StoredFinding, explained: Analysis | None = None) -> Any:
 def test_alert_title_names_priority_rule_and_defanged_target() -> None:
     sent = render(finding(), analysis())
 
-    assert sent.title == "CRITICAL: threat-intel-allowed, bad[.]example (router)"
+    assert sent.title == "CRITICAL: Threat-feed domain allowed, bad[.]example (router)"
+    assert "Rule: Threat-feed domain allowed (threat-intel-allowed), severity floor critical" in (
+        sent.body
+    )
+    assert sent.body.endswith("More: sentinel findings --rule threat-intel-allowed")
     assert sent.priority is Severity.CRITICAL
+
+
+def test_an_alert_names_a_nextdns_reason_by_its_name() -> None:
+    sent = render(
+        finding(
+            rule_id="new-destination-category",
+            severity=Severity.LOW,
+            target="ads",
+            evidence={"category": "ads", "category_name": "Ads and trackers"},
+        )
+    )
+
+    assert sent.title.startswith("LOW: New category or blocklist, Ads and trackers (")
+    assert "Rule: New category or blocklist (new-destination-category)" in sent.body
 
 
 def test_alert_body_carries_the_explanation_time_and_evidence() -> None:
@@ -96,7 +114,7 @@ def test_alert_uses_the_raised_priority_and_says_so() -> None:
     sent = render(item, analysis(priority=Severity.HIGH))
 
     assert sent.priority is Severity.HIGH
-    assert sent.title.startswith("HIGH: volume-spike")
+    assert sent.title.startswith("HIGH: Query volume spike")
     assert "raised from LOW" in sent.body
 
 

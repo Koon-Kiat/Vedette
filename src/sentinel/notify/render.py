@@ -5,6 +5,7 @@ defanged, control characters are stripped and lengths are capped here, before
 any channel sees the text.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -37,6 +38,24 @@ def prose(value: str, *, limit: int = 400) -> str:
     return defang_text(clean_text(value, limit=limit))
 
 
+def rule_name(rule_id: str, spec: RuleSpec | None) -> str:
+    """A rule's plain name; its id when the rule has none."""
+    return spec.name if spec is not None and spec.name else rule_id
+
+
+def reason_name(rule_id: str, evidence: Mapping[str, Any]) -> str | None:
+    """NextDNS's name for the reason a category finding is about, if recorded."""
+    if rule_id != "new-destination-category":
+        return None
+    name = evidence.get("category_name")
+    return name if isinstance(name, str) and name.strip() else None
+
+
+def about_text(rule_id: str, target: str, evidence: Mapping[str, Any], *, limit: int = 120) -> str:
+    """What a finding is about, cleaned: a reason's name where NextDNS gave one."""
+    return safe(reason_name(rule_id, evidence) or target, limit=limit)
+
+
 def local_time(moment: datetime, tz: ZoneInfo) -> str:
     """``2026-03-15 12:30 (Asia/Singapore)``."""
     return f"{moment.astimezone(tz):%Y-%m-%d %H:%M} ({tz.key})"
@@ -67,8 +86,13 @@ def render_alert(
     """Build the instant alert for a finding."""
     priority = effective_priority(finding, analysis)
     label = clean_text(profile_label, limit=64)
-    target = label if finding.target == finding.profile_id else safe(finding.target, limit=120)
-    title = f"{priority.value.upper()}: {finding.rule_id}, {target} ({label})"[:TITLE_LIMIT]
+    rule = rule_name(finding.rule_id, spec)
+    target = (
+        label
+        if finding.target == finding.profile_id
+        else about_text(finding.rule_id, finding.target, finding.evidence)
+    )
+    title = f"{priority.value.upper()}: {rule}, {target} ({label})"[:TITLE_LIMIT]
 
     if finding.device_mode and finding.subject is not None:
         device = f"Device: {safe(finding.subject, limit=64)}"
@@ -79,7 +103,7 @@ def render_alert(
         device = "Device: attribution unavailable on this profile"
     events = f"{finding.event_count} event" + ("" if finding.event_count == 1 else "s")
     lines = [
-        f"Rule: {finding.rule_id} (severity floor {finding.severity.value})",
+        f"Rule: {rule} ({finding.rule_id}), severity floor {finding.severity.value}",
         f"Profile: {label}",
         device,
         f"Last seen: {local_time(finding.last_ts, tz)}, {events}",

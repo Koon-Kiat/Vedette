@@ -895,6 +895,17 @@ repository. Each decision that departs from it says so.
     in it: the service learns only that Vedette is up. Services differ in how
     they take a failure signal, so silence is the one signal used. Off unless
     `HEARTBEAT_URL` is set.
+95. **The runtime image ships no pip and takes Debian's security fixes.** A
+    Docker Scout scan of the image found 13 high, 17 medium and 38 low
+    vulnerabilities, all in the base layer; Vedette's own layers had none.
+    The 8 high ones with fixes were in pip, which bundles urllib3, msgpack and
+    setuptools code, and in zlib. Vedette runs from `/opt/venv` and never
+    installs anything, so the runtime stage uninstalls pip and ensurepip's
+    bundled wheel, and runs `apt-get upgrade`. That left no fixable
+    vulnerability, and 5 high ones in glibc and OpenSSL that Debian had not
+    fixed. The upgrade makes a build depend on when it runs, so CI and the
+    release never reuse that stage from the cache; CI then scans the image
+    with Trivy and fails on anything fixable and high or critical.
 
 ## Verified facts the design relies on
 

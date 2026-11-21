@@ -27,12 +27,21 @@ COPY . .
 RUN uv sync --locked
 CMD ["pytest"]
 
-# ---- runtime: no uv, no build tools, non-root -------------------------------
+# ---- runtime: no uv, no pip, no build tools, non-root -----------------------
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH
-RUN groupadd --gid 10001 vedette \
+# Debian's security fixes released since the base image was built, then no
+# pip: Vedette runs from /opt/venv and never installs anything, and pip ships
+# its own copies of urllib3, msgpack and setuptools code, each with advisories.
+# ensurepip's bundled pip wheel goes too.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall --yes --quiet pip \
+    && rm -rf "$(python -c 'import ensurepip, pathlib; print(pathlib.Path(ensurepip.__file__).parent / "_bundled")')" \
+    && groupadd --gid 10001 vedette \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin vedette \
     && mkdir -p /data /config \
     && chown vedette:vedette /data

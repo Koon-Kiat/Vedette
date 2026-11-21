@@ -14,6 +14,17 @@
   that. `vedette notify --test` is now recorded, so a good test after fixing
   the channel clears it.
 
+### A leaner, scanned image
+
+- The runtime image no longer ships pip, which bundled urllib3, msgpack and
+  setuptools code with known vulnerabilities, and it takes Debian's security
+  fixes when it is built. Docker Scout went from 13 high (8 of them fixable)
+  to 5 high, none fixable yet, all in glibc and OpenSSL; Vedette's own layers
+  had none before or after.
+- CI scans the built image with Trivy and fails on any fixable high or critical
+  vulnerability. CI and the release always rebuild the image's last stage, so
+  new Debian fixes are never skipped by the build cache.
+
 ### Maintenance
 
 - Every image is pinned to its digest as well as its tag: the Python and uv

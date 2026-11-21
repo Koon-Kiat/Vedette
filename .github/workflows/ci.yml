@@ -81,7 +81,7 @@ jobs:
           git --redact --no-banner /repo
 
   image:
-    name: docker image builds
+    name: docker image builds and scans
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,5 +93,17 @@ jobs:
           target: runtime
           platforms: linux/amd64
           push: false
+          load: true
+          tags: vedette:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # The runtime stage installs Debian's newest security fixes: never reuse it.
+          no-cache-filters: runtime
+      - name: Fail on fixable high or critical vulnerabilities in the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: vedette:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

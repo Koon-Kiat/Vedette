@@ -249,6 +249,10 @@ Mitigations:
 - **Pinning.** Dependencies are pinned with hashes and checked by pip-audit.
   Web dependencies are pinned exactly, and the vendored htmx file is checked
   against its hash.
+- **A lean runtime image.** It has no pip (whose bundled urllib3, msgpack and
+  setuptools code carried advisories), takes Debian's security fixes when it
+  is built, and is scanned by Trivy in CI, which fails on any fixable high or
+  critical vulnerability.
 
 Residual risk:
 - The database is not encrypted at rest. Anyone with Docker access on this
@@ -259,6 +263,9 @@ Residual risk:
 - Images are pinned by digest, but a new digest is trusted as the registry
   serves it when Dependabot proposes it and the pull request is merged.
 - The model weights are trusted as downloaded from the Ollama registry.
+- The base image still carries vulnerabilities that Debian has not fixed yet
+  (on 2026-11-21, five high-severity ones in glibc and OpenSSL). They are taken
+  up by the first build after Debian releases the fixes.
 
 ## Assumptions
 

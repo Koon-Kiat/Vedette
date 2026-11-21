@@ -111,8 +111,9 @@ If you already use [pre-commit](https://pre-commit.com), `.pre-commit-config.yam
 provides the same gitleaks check.
 
 CI (`.github/workflows/ci.yml`) runs lint, types and tests on Python 3.14 and
-3.15, pip-audit, gitleaks over the full history, and a build of the image, on
-every push and pull request and once a week, so a new advisory for a locked
+3.15, pip-audit, gitleaks over the full history, and a build of the image
+that Trivy scans for fixable high or critical vulnerabilities, on every push
+and pull request and once a week, so a new advisory for a locked
 dependency shows up without a push. Dependabot proposes updates every Monday
 for the Python dependencies, the CI actions, the Dockerfile's base images and
 the Ollama image, each once its release is 14 days old; security updates are

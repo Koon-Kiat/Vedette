@@ -76,5 +76,24 @@ def test_registered_domains_are_not_platform_customers(suffixes: SuffixRules, na
     assert suffixes.platform_suffix(name) is None
 
 
+@pytest.mark.parametrize(
+    ("name", "longer"),
+    [
+        # NextDNS made this a root of its own, so it knows a platform under
+        # "cdn-provider.com" that the list does not.
+        ("abc.cdn-provider.com", True),
+        ("x.y.example.org", True),
+        ("example.com", False),
+        ("bbc.co.uk", False),
+        ("customer.github.io", False),  # exactly the registered name under github.io
+        ("shop.zz", False),  # no rule: the last label stands in as the suffix
+    ],
+)
+def test_a_root_longer_than_its_registered_domain_is_recognised(
+    suffixes: SuffixRules, name: str, longer: bool
+) -> None:
+    assert suffixes.longer_than_registered(name) is longer
+
+
 def test_an_empty_list_knows_no_platforms() -> None:
     assert SuffixRules([]).platform_suffix("customer.github.io") is None

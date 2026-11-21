@@ -76,9 +76,7 @@ class Enricher:
         exact = self._suffixes if self._suffixes is not None and self._suffixes.known else None
         hosted = {
             root: (
-                exact.platform_suffix(root) is not None
-                if exact is not None
-                else platform[root] is not None
+                exact.is_platform_name(root) if exact is not None else platform[root] is not None
             )
             for root in roots
         }

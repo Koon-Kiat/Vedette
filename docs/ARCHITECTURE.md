@@ -946,9 +946,15 @@ repository. Each decision that departs from it says so.
     ranked parent domain, which missed platforms on no top-sites list (their
     random customer names could trip `dga-like`, and RDAP was asked about
     names nobody registered) and caught roots under ranked domains that are
-    not platforms. Now a root is a platform customer exactly when the rule
-    that sets its suffix is a private one; `young-domain`, `dga-like` and
-    RDAP skip it as before. The list (about 10,000 rules) is downloaded
+    not platforms. Now a root is a platform customer when the rule that sets
+    its suffix is a private one, or when the root is longer than the domain
+    registered under the list: NextDNS knows a few platforms the list does
+    not, and reports their customers as roots of their own. The second case
+    came from replaying the owner's history: one such root, under a ranked
+    domain the list does not call a suffix, tripped `dga-like` three times
+    with the list alone, where the parent-rank guess had caught it.
+    `young-domain`, `dga-like` and RDAP skip platform names as before. The
+    list (10,470 rules on 2026-11-21, 3,519 of them private) is downloaded
     weekly, stored in `public_suffixes` and matched in memory with the list's
     own algorithm (wildcards, exceptions, internationalised rules in ASCII).
     Until a copy exists, the parent-rank guess stands in.

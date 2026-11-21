@@ -604,16 +604,20 @@ async def test_with_the_suffix_list_platform_customers_are_known_exactly(
     batch = [
         # Under a private suffix that is on no top-sites list: a customer name.
         event(fqdn="www.shop.pages.example", root="shop.pages.example", n=1),
-        # Under a ranked domain that is not a platform: a domain of its own.
-        event(fqdn="x.customer-app.example.org", root="customer-app.example.org", n=2),
+        # Longer than the domain registered under the list: NextDNS knows a
+        # platform the list does not, ranked or not.
+        event(fqdn="x.abc.unlisted-cdn.example", root="abc.unlisted-cdn.example", n=2),
+        # A registered domain of its own.
+        event(fqdn="www.fresh-shop.example", root="fresh-shop.example", n=3),
     ]
 
-    hosted, own = await enricher.enrich_batch(batch, NOW)
+    hosted, unlisted, own = await enricher.enrich_batch(batch, NOW)
 
     assert hosted.is_platform is True
+    assert unlisted.is_platform is True
     assert own.is_platform is False
     asked = [str(call.request.url) for call in rdap.calls]
-    assert asked == [f"{RDAP_BASE}domain/customer-app.example.org"]
+    assert asked == [f"{RDAP_BASE}domain/fresh-shop.example"]
 
 
 async def test_without_the_suffix_list_a_ranked_parent_still_means_platform(

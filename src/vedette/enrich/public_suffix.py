@@ -4,7 +4,9 @@ NextDNS reports a customer's hostname on a platform such as ``github.io`` or a
 cloud provider as a root of its own, because those platforms list themselves in
 the private section of the Public Suffix List. Such a name is not a domain
 anyone registered: it has no registration date, and a random-looking one says
-nothing about malware. The list tells these names apart exactly. Until a copy
+nothing about malware. The list tells these names apart. NextDNS also knows a
+few platforms the list does not; it reports their customers as roots longer
+than the domain registered under the list, which marks them too. Until a copy
 has been downloaded, the enricher falls back to calling a root a platform
 customer when one of its parent domains is on the top-sites list.
 
@@ -96,6 +98,17 @@ class SuffixRules:
                 best = found
         return best
 
+    def longer_than_registered(self, name: str) -> bool:
+        """Whether ``name`` has more labels than the domain registered under the list.
+
+        For a root reported by NextDNS this means NextDNS treats a longer suffix
+        as public: a platform it knows that the list does not.
+        """
+        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        found = self._suffix(labels)
+        suffix = found[0] if found is not None else 1  # no rule: the last label is the suffix
+        return len(labels) > suffix + 1
+
     def platform_suffix(self, name: str) -> str | None:
         """The private suffix ``name`` is a customer name under, else ``None``."""
         labels = [label for label in name.lower().rstrip(".").split(".") if label]
@@ -170,3 +183,14 @@ class PublicSuffixList:
     def platform_suffix(self, name: str) -> str | None:
         """The hosting platform's suffix ``name`` is a customer name under, else ``None``."""
         return self._rules.platform_suffix(name)
+
+    def is_platform_name(self, root: str) -> bool:
+        """Whether a root NextDNS reported is a customer name on a hosting platform.
+
+        Either its suffix rule is a private one, or the root is longer than the
+        domain registered under the list, because NextDNS knows a platform the
+        list does not.
+        """
+        return self._rules.platform_suffix(root) is not None or self._rules.longer_than_registered(
+            root
+        )

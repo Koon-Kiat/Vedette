@@ -68,10 +68,10 @@
   --layer-1-dim: #1f6d74;
   --layer-2: #a78bfa;
   --layer-2-dim: #5a4699;
-  --layer-3: #8fb6ff;
-  --layer-3-dim: #3c5584;
-  --layer-4: #e2c07a;
-  --layer-4-dim: #7a6537;
+  --layer-3: #a9d46f; /* spare inks: hues no severity or status uses */
+  --layer-3-dim: #4a6630;
+  --layer-4: #c8b9a6;
+  --layer-4-dim: #5f574c;
 
   /* Revision ink: decisions, and what still waits for one. */
   --rev: #ff80ae;

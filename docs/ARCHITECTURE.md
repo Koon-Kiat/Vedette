@@ -847,6 +847,26 @@ repository. Each decision that departs from it says so.
     Compose keeps building locally unless `VEDETTE_IMAGE` names a released
     image. That variable reaches the container through `.env` too, and the
     settings loader ignores it; a test holds that.
+92. **The public repository uses GitHub's own security checks.** Since the
+    repository went public on 2026-11-21: private vulnerability reporting
+    (where `SECURITY.md` sends reports), Dependabot alerts and security
+    updates, secret scanning with push protection, and CodeQL code scanning
+    in its default setup. Default setup rather than a workflow file: GitHub
+    keeps the CodeQL version current, picks the languages from the code,
+    runs it on every push and pull request and weekly, and handles
+    Dependabot's pull requests, with no action to pin. It found Python,
+    JavaScript/TypeScript and the workflows. When the repository went
+    public, secret scanning over the full history and Dependabot reported
+    nothing. CodeQL's first analysis raised four alerts:
+    - **A redirect target with a tab** (`py/url-redirection`). Browsers
+      delete tabs from a URL, so `/<tab>/evil.example` would read as
+      `//evil.example`. Starlette percent-encodes the Location header, so it
+      was not exploitable, but `_safe_next` now refuses control characters
+      and spaces itself, and tests cover both the form post and `/scope`.
+    - **The template test matched script tags case-sensitively**
+      (`py/bad-tag-filter`, twice). It now uses an HTML parser.
+    - **A test that logs a fake secret on purpose**, to prove the redactor
+      removes it (`py/clear-text-logging-sensitive-data`): a false positive.
 
 ## Verified facts the design relies on
 
@@ -977,12 +997,8 @@ no name from your history or the feeds appears in it.
   tests.
 - Whether to pace history requests to stay under the undocumented rate limit,
   for example when several profiles backfill at once.
-- Settings to turn on once the repository is public, where they need no paid
-  licence: private vulnerability reporting (`SECURITY.md` points to it),
-  Dependabot alerts and security updates, secret scanning with push
-  protection, and CodeQL code scanning in its default setup (Python,
-  JavaScript and the workflows). A first release's image is private until
-  its package is made public as well.
+- A first release's image starts private on ghcr.io, even though the
+  repository is public, until its package is made public on GitHub.
 
 ## Future work
 

@@ -13,6 +13,14 @@
   release is 14 days old.
 - CI also runs weekly, so pip-audit sees new advisories without a push, and
   it now builds the image on every push and pull request.
+- The public repository uses GitHub's own checks: private vulnerability
+  reporting, Dependabot alerts and security updates, secret scanning with
+  push protection, and CodeQL code scanning.
+- From CodeQL's first analysis: the dashboard's redirect check refuses control
+  characters and spaces itself rather than relying on Starlette's encoding (a
+  tab could otherwise turn `/<tab>/evil.example` into `//evil.example`; it was
+  not exploitable), and the template test finds script tags with an HTML
+  parser in any case.
 
 ### Renamed to Vedette, ready to publish
 

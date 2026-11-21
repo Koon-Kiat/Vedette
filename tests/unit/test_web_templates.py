@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,29 @@ from vedette.web import app as web_app
 WEB = Path(web_app.__file__).resolve().parent
 TEMPLATES = sorted((WEB / "templates").glob("*.html"))
 HTMX = WEB / "static" / "vendor" / "htmx-2.0.11.min.js"
+
+
+class Scripts(HTMLParser):
+    """Every <script> tag in a template: its attributes and any text inside it."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tags: list[dict[str, str | None]] = []
+        self.inline: list[str] = []
+        self._inside = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script":  # the parser lowercases tag names
+            self.tags.append(dict(attrs))
+            self._inside = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self._inside = False
+
+    def handle_data(self, data: str) -> None:
+        if self._inside:
+            self.inline.append(data)
 
 
 def test_there_are_templates_to_check() -> None:
@@ -29,14 +53,18 @@ def test_templates_never_turn_escaping_off(template: Path) -> None:
 @pytest.mark.parametrize("template", TEMPLATES, ids=lambda p: p.name)
 def test_templates_contain_no_inline_script_or_style(template: Path) -> None:
     text = template.read_text(encoding="utf-8")
+    scripts = Scripts()
+    scripts.feed(text)
+    scripts.close()
 
-    for script in re.findall(r"<script\b[^>]*>(.*?)</script>", text, flags=re.S):
-        assert script.strip() == "", "inline script content"
-    for tag in re.findall(r"<script\b[^>]*>", text):
-        assert 'src="/static/' in tag
-    assert "<style" not in text
-    assert not re.search(r"\sstyle\s*=", text)
-    assert not re.search(r"\son[a-z]+\s*=", text)
+    assert "".join(scripts.inline).strip() == "", "inline script content"
+    for attrs in scripts.tags:
+        assert (attrs.get("src") or "").startswith("/static/")
+    # Every script tag, in any case, is one the parser saw.
+    assert text.lower().count("<script") == len(scripts.tags)
+    assert "<style" not in text.lower()
+    assert not re.search(r"\sstyle\s*=", text, flags=re.I)
+    assert not re.search(r"\son[a-z]+\s*=", text, flags=re.I)
     assert "javascript:" not in text.lower()
     assert "hx-on" not in text
 
@@ -116,3 +144,12 @@ def test_the_chart_script_builds_urls_only_from_numbers() -> None:
     assert "`/partials/window?from=${Math.floor(from)}&to=${Math.ceil(to)}`" in script
     assert "window.location.assign(`/findings/${c.items[0].id}`)" in script
     assert "Number.isInteger(c.items[0].id)" in script
+
+
+def test_the_script_check_sees_any_case_and_spacing() -> None:
+    scripts = Scripts()
+    scripts.feed('<SCRIPT type="x">alert(1)</script >')
+    scripts.close()
+
+    assert scripts.tags == [{"type": "x"}]
+    assert scripts.inline == ["alert(1)"]

@@ -30,6 +30,11 @@ def router() -> Iterator[respx.MockRouter]:
         mock_router.get(path="/api/tags").mock(
             return_value=httpx.Response(200, json={"models": [{"name": "qwen3:8b"}]})
         )
+        # The Public Suffix List's default address: unavailable, so the enricher
+        # uses its fallback unless a test serves a list itself.
+        mock_router.get("https://publicsuffix.org/list/public_suffix_list.dat").mock(
+            return_value=httpx.Response(404)
+        )
         yield mock_router
 
 

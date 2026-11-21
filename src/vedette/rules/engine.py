@@ -238,7 +238,7 @@ class RuleEngine:
             or item.domain_age_days >= spec.params["max_age_days"]
             or not item.popularity_known
             or item.popularity_rank is not None
-            or item.platform_rank is not None
+            or item.is_platform
             or self._allowed(item)
         ):
             return []
@@ -282,7 +282,7 @@ class RuleEngine:
             or lexical.entropy < spec.params["min_entropy"]
             or not item.popularity_known
             or item.popularity_rank is not None
-            or item.platform_rank is not None
+            or item.is_platform
             or self._allowed(item)
         ):
             return []

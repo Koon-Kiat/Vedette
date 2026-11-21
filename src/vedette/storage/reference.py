@@ -18,6 +18,7 @@ from vedette.storage.models import (
     domain_age,
     first_seen,
     popularity,
+    public_suffixes,
     reference_state,
     threat_intel,
 )
@@ -120,6 +121,33 @@ class ReferenceStore:
                 )
                 found.update((row.domain, row.rank) for row in rows)
         return found
+
+    # --- public suffix list -----------------------------------------------------------
+
+    async def replace_public_suffixes(
+        self, rules: Iterable[tuple[str, bool]], when: datetime
+    ) -> int:
+        """Replace the whole Public Suffix List in one transaction; return its size."""
+        total = 0
+        async with self._engine.begin() as connection:
+            await connection.execute(delete(public_suffixes))
+            statement = sqlite_insert(public_suffixes).on_conflict_do_nothing()
+            for chunk in batched(rules, _INSERT_CHUNK, strict=False):
+                await connection.execute(
+                    statement, [{"rule": rule, "private": private} for rule, private in chunk]
+                )
+                total += len(chunk)
+            if total == 0:
+                await connection.rollback()
+                return 0
+            await self._mark_refreshed(connection, "public_suffix", when, total)
+        return total
+
+    async def public_suffix_rules(self) -> list[tuple[str, bool]]:
+        """Every stored Public Suffix List rule and whether it is a private one."""
+        async with self._engine.connect() as connection:
+            rows = (await connection.execute(select(public_suffixes))).all()
+        return [(row.rule, row.private) for row in rows]
 
     # --- threat intelligence ----------------------------------------------------------
 

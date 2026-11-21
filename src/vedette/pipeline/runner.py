@@ -25,6 +25,7 @@ from vedette.config import Settings
 from vedette.enrich.enricher import Enricher
 from vedette.enrich.first_seen import FirstSeenTracker
 from vedette.enrich.popularity import PopularityList
+from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges, RdapClient
 from vedette.enrich.threat_intel import ThreatIntel
 from vedette.health.heartbeat import Heartbeat
@@ -168,6 +169,13 @@ class Pipeline:
                 refresh_days=enrich.popularity.refresh_days,
             )
             await popularity.load()
+            suffixes = PublicSuffixList(
+                reference,
+                web,
+                url=enrich.public_suffix.url,
+                refresh_days=enrich.public_suffix.refresh_days,
+            )
+            await suffixes.load()
             threat_intel = ThreatIntel(
                 reference,
                 web,
@@ -186,6 +194,7 @@ class Pipeline:
                 first_seen=await FirstSeenTracker.load(reference),
                 rdap_max_event_age=timedelta(hours=enrich.rdap.max_event_age_hours),
                 rdap_max_lookups_per_batch=enrich.rdap.max_lookups_per_batch,
+                suffixes=suffixes,
             )
             allowlist = Allowlist(
                 settings.allowlist, labels={profile.id: profile.label for profile in profiles}
@@ -248,7 +257,7 @@ class Pipeline:
                     for profile in profiles
                 ),
                 EnricherWorker(
-                    profile_ids, store, enricher, [popularity, threat_intel], queue
+                    profile_ids, store, enricher, [popularity, suffixes, threat_intel], queue
                 ).run(),
                 RuleWorker(
                     profile_ids,

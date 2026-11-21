@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -12,6 +13,7 @@ from tests.unit.test_reference_parsing import tranco_zip
 from vedette.enrich.enricher import Enricher
 from vedette.enrich.first_seen import FirstSeenTracker
 from vedette.enrich.popularity import PopularityList
+from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges, RdapClient
 from vedette.enrich.threat_intel import Feed, ThreatIntel
 from vedette.storage.reference import ReferenceStore
@@ -417,7 +419,11 @@ async def test_first_seen_without_device_data_keys_on_the_profile(
 
 
 async def make_enricher(
-    reference: ReferenceStore, client: httpx.AsyncClient, web: respx.MockRouter, **kw: int
+    reference: ReferenceStore,
+    client: httpx.AsyncClient,
+    web: respx.MockRouter,
+    suffixes: PublicSuffixList | None = None,
+    **kw: int,
 ) -> Enricher:
     web.get(TRANCO_URL).mock(
         return_value=httpx.Response(200, content=tranco_zip("1,example.org\r\n"))
@@ -434,6 +440,7 @@ async def make_enricher(
         first_seen=await FirstSeenTracker.load(reference),
         rdap_max_event_age=timedelta(hours=24),
         rdap_max_lookups_per_batch=kw.get("max_lookups", 20),
+        suffixes=suffixes,
     )
 
 
@@ -519,3 +526,105 @@ async def test_enricher_reports_the_rank_of_the_platform_a_name_is_hosted_on(
     assert asked == [f"{RDAP_BASE}domain/lonely.example"], (
         "platform customer names are not registered domains"
     )
+
+
+# --- the Public Suffix List ---------------------------------------------------------------
+
+PSL_URL = "https://lists.test/public_suffix_list.dat"
+PSL = """\
+// ===BEGIN ICANN DOMAINS===
+org
+example
+co.uk
+uk
+// ===END ICANN DOMAINS===
+// ===BEGIN PRIVATE DOMAINS===
+pages.example
+// ===END PRIVATE DOMAINS===
+"""
+
+
+def make_suffixes(reference: ReferenceStore, client: httpx.AsyncClient) -> PublicSuffixList:
+    return PublicSuffixList(reference, client, url=PSL_URL, refresh_days=7)
+
+
+async def test_the_suffix_list_is_unknown_until_downloaded(
+    reference: ReferenceStore, client: httpx.AsyncClient, web: respx.MockRouter
+) -> None:
+    suffixes = make_suffixes(reference, client)
+    await suffixes.load()
+    assert suffixes.known is False
+
+    web.get(PSL_URL).mock(return_value=httpx.Response(200, text=PSL))
+    assert await suffixes.refresh_if_stale(NOW) is True
+
+    assert suffixes.known is True
+    assert suffixes.platform_suffix("shop.pages.example") == "pages.example"
+    assert await suffixes.refresh_if_stale(NOW + timedelta(days=1)) is False, "weekly"
+
+
+async def test_the_suffix_list_survives_a_restart(
+    reference: ReferenceStore, client: httpx.AsyncClient, web: respx.MockRouter
+) -> None:
+    web.get(PSL_URL).mock(return_value=httpx.Response(200, text=PSL))
+    await make_suffixes(reference, client).refresh_if_stale(NOW)
+
+    restarted = make_suffixes(reference, client)
+    await restarted.load()
+
+    assert restarted.known is True
+    assert restarted.platform_suffix("shop.pages.example") == "pages.example"
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [httpx.Response(503), httpx.Response(200, text="// nothing but comments\n")],
+)
+async def test_a_failed_suffix_list_refresh_keeps_the_previous_list(
+    reference: ReferenceStore, client: httpx.AsyncClient, web: respx.MockRouter, failure: Any
+) -> None:
+    route = web.get(PSL_URL).mock(return_value=httpx.Response(200, text=PSL))
+    suffixes = make_suffixes(reference, client)
+    await suffixes.refresh_if_stale(NOW)
+    route.mock(return_value=failure)
+
+    assert await suffixes.refresh_if_stale(NOW + timedelta(days=8)) is False
+
+    assert suffixes.platform_suffix("shop.pages.example") == "pages.example"
+
+
+async def test_with_the_suffix_list_platform_customers_are_known_exactly(
+    reference: ReferenceStore, client: httpx.AsyncClient, web: respx.MockRouter
+) -> None:
+    rdap = web.get(url__startswith=f"{RDAP_BASE}domain/").mock(return_value=httpx.Response(404))
+    web.get(PSL_URL).mock(return_value=httpx.Response(200, text=PSL))
+    suffixes = make_suffixes(reference, client)
+    await suffixes.refresh_if_stale(NOW)
+    enricher = await make_enricher(reference, client, web, suffixes=suffixes)
+    batch = [
+        # Under a private suffix that is on no top-sites list: a customer name.
+        event(fqdn="www.shop.pages.example", root="shop.pages.example", n=1),
+        # Under a ranked domain that is not a platform: a domain of its own.
+        event(fqdn="x.customer-app.example.org", root="customer-app.example.org", n=2),
+    ]
+
+    hosted, own = await enricher.enrich_batch(batch, NOW)
+
+    assert hosted.is_platform is True
+    assert own.is_platform is False
+    asked = [str(call.request.url) for call in rdap.calls]
+    assert asked == [f"{RDAP_BASE}domain/customer-app.example.org"]
+
+
+async def test_without_the_suffix_list_a_ranked_parent_still_means_platform(
+    reference: ReferenceStore, client: httpx.AsyncClient, web: respx.MockRouter
+) -> None:
+    web.get(url__startswith=f"{RDAP_BASE}domain/").mock(return_value=httpx.Response(404))
+    suffixes = make_suffixes(reference, client)  # never downloaded
+    enricher = await make_enricher(reference, client, web, suffixes=suffixes)
+
+    (hosted,) = await enricher.enrich_batch(
+        [event(fqdn="x.customer-app.example.org", root="customer-app.example.org")], NOW
+    )
+
+    assert hosted.is_platform is True

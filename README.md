@@ -338,9 +338,10 @@ to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
 ## What leaves your machine
 
 - **NextDNS API:** your API key and profile ID, to read your logs.
-- **Top-sites list (Tranco) and threat feeds (Phishing Army, CERT Polska):**
-  plain downloads, weekly and daily. Matching happens locally, so these sites
-  learn nothing about your queries.
+- **Top-sites list (Tranco), the Public Suffix List and threat feeds
+  (Phishing Army, CERT Polska):** plain downloads, weekly for the two lists
+  and daily for the feeds. Matching happens locally, so these sites learn
+  nothing about your queries.
 - **RDAP:** to learn when a domain was registered, the registry is asked about
   that one root. This is limited to allowed, unranked domains seen in the last
   24 hours. Set `enrich.rdap.enabled: false` in `config.yaml` to stop it; the

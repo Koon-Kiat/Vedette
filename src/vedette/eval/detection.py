@@ -19,6 +19,7 @@ from vedette.enrich.enricher import Enricher
 from vedette.enrich.first_seen import FirstSeenTracker
 from vedette.enrich.model import EnrichedEvent
 from vedette.enrich.popularity import PopularityList
+from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges
 from vedette.enrich.threat_intel import ThreatIntel
 from vedette.eval.datasets import Name, TunnelSession
@@ -68,6 +69,9 @@ class Detector:
         self._popularity = PopularityList(
             self._reference, self._unused_client, url="https://unused.invalid/", refresh_days=36500
         )
+        self._suffixes = PublicSuffixList(
+            self._reference, self._unused_client, url="https://unused.invalid/", refresh_days=36500
+        )
         self._threats = ThreatIntel(
             self._reference, self._unused_client, feeds=(), refresh_hours=24 * 36500
         )
@@ -75,6 +79,7 @@ class Detector:
     async def __aenter__(self) -> Detector:
         """Load the top-sites list state."""
         await self._popularity.load()
+        await self._suffixes.load()
         return self
 
     async def __aexit__(self, *_: object) -> None:
@@ -94,6 +99,7 @@ class Detector:
             first_seen=FirstSeenTracker(self._scratch, {}),
             rdap_max_event_age=timedelta(0),
             rdap_max_lookups_per_batch=0,
+            suffixes=self._suffixes,
         )
 
     def _engine(self, *, prefilter: bool) -> RuleEngine:

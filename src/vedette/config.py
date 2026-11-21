@@ -126,6 +126,13 @@ class PopularityConfig(_Section):
     refresh_days: int = Field(default=7, ge=1)
 
 
+class PublicSuffixConfig(_Section):
+    """The Public Suffix List, which tells platform customer names from domains."""
+
+    url: NonEmptyStr = "https://publicsuffix.org/list/public_suffix_list.dat"
+    refresh_days: int = Field(default=7, ge=1)
+
+
 class RdapConfig(_Section):
     """Domain registration age lookups.
 
@@ -169,6 +176,7 @@ class EnrichConfig(_Section):
     """Sources of local context added to each event."""
 
     popularity: PopularityConfig = Field(default_factory=PopularityConfig)
+    public_suffix: PublicSuffixConfig = Field(default_factory=PublicSuffixConfig)
     rdap: RdapConfig = Field(default_factory=RdapConfig)
     threat_intel: ThreatIntelConfig = Field(default_factory=ThreatIntelConfig)
 

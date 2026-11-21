@@ -503,7 +503,8 @@ repository. Each decision that departs from it says so.
     skipped. `threat-intel-allowed` deliberately ignores `platform_rank`,
     because phishing hosted on a popular platform is exactly what it should
     catch. Trade-off: a random-looking name on a popular platform is not
-    flagged by `dga-like`.
+    flagged by `dga-like`. (Decision 99 replaces the parent rank with the
+    Public Suffix List, keeping it only until the list is downloaded.)
 24. **A feed entry never taints its parent or siblings**, and a feed match on a
     root ranked in the top 1,000 is distrusted, which limits the damage a
     wrong or compromised feed can do. A failed or empty download keeps the
@@ -936,8 +937,21 @@ repository. Each decision that departs from it says so.
     history as `allowlist_removed`, leaving the finding benign; the rule
     worker picks the change up within 30 seconds (decision 56). Only status
     changes count as a finding's latest decision, so a removal does not
-    change the time the tables show. It is the ninth sheet, between Devices
-    and Digests.
+    change the time the tables show. It is the sixth of nine sheets, between
+    Devices and Digests.
+99. **The Public Suffix List decides what is a platform customer name.**
+    NextDNS reports a customer's name on `github.io` or a cloud provider as a
+    root of its own because those platforms list themselves in the private
+    section of the Public Suffix List. Decision 23 guessed at them from a
+    ranked parent domain, which missed platforms on no top-sites list (their
+    random customer names could trip `dga-like`, and RDAP was asked about
+    names nobody registered) and caught roots under ranked domains that are
+    not platforms. Now a root is a platform customer exactly when the rule
+    that sets its suffix is a private one; `young-domain`, `dga-like` and
+    RDAP skip it as before. The list (about 10,000 rules) is downloaded
+    weekly, stored in `public_suffixes` and matched in memory with the list's
+    own algorithm (wildcards, exceptions, internationalised rules in ASCII).
+    Until a copy exists, the parent-rank guess stands in.
 
 ## Verified facts the design relies on
 
@@ -1076,6 +1090,4 @@ no name from your history or the feeds appears in it.
 - Measure young-domain recall in the evaluation, with registration dates
   cached ahead of time for a fixed test set.
 - Optional abuse.ch feeds for users who register for a free key.
-- Use the Public Suffix List to tell registrable domains from platform
-  customer names exactly, instead of the parent-rank heuristic.
 - Batch stream writes if catch-up after long outages needs to be faster.

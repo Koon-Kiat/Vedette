@@ -7,6 +7,7 @@ from vedette.enrich.first_seen import FirstSeenTracker
 from vedette.enrich.lexical import lexical_features
 from vedette.enrich.model import EnrichedEvent
 from vedette.enrich.popularity import PopularityList
+from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges
 from vedette.enrich.threat_intel import ThreatIntel
 from vedette.sources.base import DnsEvent
@@ -32,6 +33,7 @@ class Enricher:
         first_seen: FirstSeenTracker,
         rdap_max_event_age: timedelta,
         rdap_max_lookups_per_batch: int,
+        suffixes: PublicSuffixList | None = None,
     ) -> None:
         """Create an enricher.
 
@@ -44,6 +46,9 @@ class Enricher:
                 lookup (cached ages are still used), so reading a week of
                 history does not send thousands of domains to registries.
             rdap_max_lookups_per_batch: Upper bound on RDAP lookups per batch.
+            suffixes: The Public Suffix List, which tells platform customer names
+                from registered domains. Without it, or before it is downloaded,
+                a root with a ranked parent domain counts as a platform name.
         """
         self._popularity = popularity
         self._threat_intel = threat_intel
@@ -51,6 +56,7 @@ class Enricher:
         self._first_seen = first_seen
         self._rdap_max_event_age = rdap_max_event_age
         self._rdap_max_lookups = rdap_max_lookups_per_batch
+        self._suffixes = suffixes
 
     async def enrich_batch(self, events: Sequence[DnsEvent], now: datetime) -> list[EnrichedEvent]:
         """Enrich events in order.
@@ -67,11 +73,18 @@ class Enricher:
             root: min((rank for name in names if (rank := ranks[name]) is not None), default=None)
             for root, names in parents.items()
         }
+        exact = self._suffixes if self._suffixes is not None and self._suffixes.known else None
+        hosted = {
+            root: (
+                exact.platform_suffix(root) is not None
+                if exact is not None
+                else platform[root] is not None
+            )
+            for root in roots
+        }
         threats = await self._threat_intel.match_many((event.fqdn, event.root) for event in events)
 
-        unpopular = [
-            root for root in roots if known and ranks[root] is None and platform[root] is None
-        ]
+        unpopular = [root for root in roots if known and ranks[root] is None and not hosted[root]]
         lookup: list[str] = []
         for event in events:
             root = event.root
@@ -79,7 +92,7 @@ class Enricher:
                 root is not None
                 and known
                 and ranks[root] is None
-                and platform[root] is None
+                and not hosted[root]
                 and event.status != _BLOCKED
                 and now - event.ts <= self._rdap_max_event_age
                 and root not in lookup
@@ -100,6 +113,7 @@ class Enricher:
                     lexical=lexical_features(event.fqdn, event.root),
                     popularity_rank=ranks[root],
                     platform_rank=platform[root],
+                    platform=hosted[root] if exact is not None else None,
                     popularity_known=known,
                     domain_age_days=ages.get(root),
                     threat_feeds=feeds,

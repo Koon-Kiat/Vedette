@@ -16,6 +16,9 @@ class EnrichedEvent(BaseModel):
         platform_rank: Best rank among the root's parent domains. Set when the
             name is a customer hostname on a popular platform (a cloud or CDN
             provider), which NextDNS reports as a root of its own.
+        platform: Whether the root is a customer name on a hosting platform, from
+            the Public Suffix List; ``None`` when no list is loaded, in which case
+            a ranked parent (``platform_rank``) stands in. Read ``is_platform``.
         popularity_known: ``False`` when no top-sites list is loaded, in which
             case a missing rank says nothing and "unpopular" rules stay quiet.
         domain_age_days: Days since the root was registered; ``None`` = unknown.
@@ -34,6 +37,7 @@ class EnrichedEvent(BaseModel):
     lexical: LexicalFeatures
     popularity_rank: int | None = None
     platform_rank: int | None = None
+    platform: bool | None = None
     popularity_known: bool = False
     domain_age_days: int | None = None
     threat_feeds: tuple[str, ...] = ()
@@ -43,3 +47,8 @@ class EnrichedEvent(BaseModel):
     new_root_for_profile: bool = False
     new_root_for_device: bool = False
     new_categories: tuple[str, ...] = ()
+
+    @property
+    def is_platform(self) -> bool:
+        """Whether the root is a platform customer name, not a registered domain."""
+        return self.platform if self.platform is not None else self.platform_rank is not None

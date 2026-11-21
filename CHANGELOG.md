@@ -24,6 +24,13 @@
 
 ### Detection
 
+- The Public Suffix List, downloaded weekly, now decides which roots are
+  customer names on a hosting platform (`github.io`, cloud providers) instead
+  of a ranked parent domain. Customer names on platforms that are on no
+  top-sites list no longer trip `dga-like` or get sent to RDAP, and a root
+  under a ranked domain that is not a platform is judged as a domain. Until
+  the list has been downloaded, the old parent-rank guess stands in.
+
 - Device names now go through the instruction-word pre-filter as well as
   domain names, with a shorter word list (`ignore`, `instruction`, `override`
   and a few others) so that names like "Mark's iPhone" stay quiet. A hit

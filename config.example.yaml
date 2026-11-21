@@ -28,6 +28,9 @@ enrich:
   popularity:
     url: "https://tranco-list.eu/top-1m.csv.zip"
     refresh_days: 7
+  public_suffix:           # tells customer names on platforms (github.io) from domains
+    url: "https://publicsuffix.org/list/public_suffix_list.dat"
+    refresh_days: 7
   rdap:
     enabled: true          # false = never ask registries; young-domain goes silent
     bootstrap_url: "https://data.iana.org/rdap/dns.json"

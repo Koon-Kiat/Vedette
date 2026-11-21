@@ -184,8 +184,8 @@ Residual risk:
 - **RDAP** reveals one root to its registry when its registration date is
   looked up. This is limited to allowed, unranked, recently seen roots, at
   most a few per batch, and can be switched off (`enrich.rdap.enabled`).
-- **The top-sites list and feeds** are bulk downloads matched locally, so they
-  reveal nothing about your lookups.
+- **The top-sites list, the Public Suffix List and the feeds** are bulk
+  downloads matched locally, so they reveal nothing about your lookups.
 
 Residual risk: the registry learns that someone at your address looked up that
 root.

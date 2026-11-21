@@ -125,6 +125,15 @@ popularity = Table(
     Column("rank", Integer, nullable=False),
 )
 
+# Public Suffix List rules ("co.uk", "*.ck", "!www.ck"); private marks the
+# section for platforms such as github.io, whose customers get names of their own.
+public_suffixes = Table(
+    "public_suffixes",
+    metadata,
+    Column("rule", String(255), primary_key=True),
+    Column("private", Boolean, nullable=False),
+)
+
 threat_intel = Table(
     "threat_intel",
     metadata,

@@ -12,55 +12,36 @@ finding's detail, Domains, Devices, Digests, Health, Evaluation, login, errors).
 Visitor mode: Operate.
 
 Audience and job: the owner alone, in short triage visits after the digest or
-an alert, and with the page left open all day as a live monitor. The job that
-matters most is triaging the day's findings; the owner asked for a dark,
-modern dashboard that is visibly live.
+an alert, and with the page left open all day as a live monitor. Triaging the
+day's findings matters most. The owner asked for a more professional and
+futuristic dark dashboard, every control custom-made, sortable table headings,
+and an easy way to see router, pc or both on every page and chart.
+
+Confirmed answers (2026-11-20): one global profile switch, remembered, with
+each option's open-findings count; with both shown, every query chart draws
+each profile as its own series; avoid a neon gamer look, a generic admin
+template, too dense and too sparse; keep dark only and inked triage decisions.
 
 Constraints: strict CSP (no inline styles or scripts, nothing external; fonts
-self-hosted), server-rendered with htmx plus one same-origin script for the
-live feed (server-sent events, written with textContent only), every outside
-name escaped and defanged, no links built from log data.
+self-hosted), server-rendered with htmx plus same-origin scripts, every
+outside name escaped and defanged, no links built from log data, every page
+usable without JavaScript.
 
-Memorable moment: a triage decision inked onto the row in magenta; a new
-finding arriving live under a magenta wash.
+Memorable moment: switching the layer re-inks every chart, table and feed; a
+decision entered as a revision, the old status struck in place.
 
 Unresolved: none.
 
 ## Direction contract
 
-THESIS: Each finding is a numbered notice and each triage decision is written
-onto the record in magenta, like a correction on a nautical chart, read at
-night on a live bridge display. It refuses the category default of KPI tiles
-over a grey findings table, and the neon-on-black monitoring cliche.
+THESIS: Every page is a sheet in one drawing set. Each profile draws on its own layer in its own ink, and every triage decision is entered as a revision: the old status struck, the new one written with its time, never erased. It refuses KPI tiles over a grey table, and the neon HUD.
 
-OWN-WORLD: Night chart only: a navy ground, never black, with a darker rail
-and layered navy surfaces; neutrals from one navy-tinted ramp; depth-tint blue
-for the usual-traffic band; magenta only for attention and corrections;
-severity as buoy-coloured tinted chips. Mona Sans for the product's voice
-(wider for titles and live figures), JetBrains Mono for data with its italic
-marking every name from outside, tabular figures everywhere, a five-step type
-ladder (12, 14, 16, 18, 28).
+OWN-WORLD: Graphite drafting ground, cool and near-neutral (not navy), sheets and panels one step lighter, hairline linework. Layer inks carry real jobs: router teal, pc violet, revision rose for decisions and attention. Severity as tinted chips (critical red, high orange, medium amber, low blue, info grey). Mona Sans, expanded for titles and title-block figures; JetBrains Mono for data, its italic marking every outside name; tabular figures. A title block heads each sheet (what it shows, when drawn, its place in the set), dimension lines mark chart spans, revision deltas mark decisions. Every control is drawn in this ink: selects, checkboxes, switches, segmented controls, dialogs.
 
-STORY: The owner sees what needs a decision, that the pipeline is alive and
-healthy, reads why each finding fired, decides in place, and watches queries
-arrive as they happen.
+STORY: The owner sees which layers are shown and what needs a decision, reads why each finding fired, decides in place, and can separate router from pc anywhere with one switch.
 
-FIRST VIEWPORT: Navy rail on the left: navigation with Live (a status dot)
-and the open-findings count in magenta, pipeline status and newest event at
-its foot. Main: title, "N findings need a decision", and a live pill with
-queries and blocked in the last minute; the needs-a-decision table first,
-refreshed live; below, across the full width, queries over time over the
-usual band with magenta markers keyed to finding numbers: a live, interactive
-chart (ranges, drag or Ctrl + scroll to zoom, Shift to move through time,
-hover readout, click a bar to list that period, Enlarge into a dialog); then
-"Right now", the last queries streaming in, beside new devices and findings.
-On the owner's ultrawide screen the Overview is a two-column board instead:
-decisions and the chart on the left, the live and daily panels on the right;
-the Live page sets the feed beside the chart.
+FIRST VIEWPORT: Rail: brand and sheet name; the layer switch (Both, router, pc, each with its open count); navigation; pipeline status at the foot. Main: the title block (title, the lead, what is shown, the last minute, when drawn, revisions today); "Needs a decision" with sortable headings; queries over time drawn per profile layer under a dimension line, revision markers keyed to finding numbers, legend toggles per layer; "Right now" with each row inked by its layer. Ultrawide: two columns.
 
-FORM: grounded list, position 7 of 7; seed:2299fde56ec293aa. Signature
-interaction: a triage action swaps the row in place and the magenta
-correction (struck old status, new status, time) is inked in left to right;
-live arrivals open their own space and settle, never jumping the page.
+FORM: assigned direction, position 5 of 7; seed:fbe2605e9bc5e46b. Signature interaction: the layer switch re-inks every sheet in place; a decision is entered as a revision (delta, letter, old status struck, new status, time). Raises: dense tabular columns (from Datamatics); next open finding one key away (from Vertical Feed); span bars on one exact 24-hour axis (from Labanotation).
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

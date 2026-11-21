@@ -46,18 +46,21 @@ are treated as attacker-controlled text everywhere, including on this page.
 - Two NextDNS profiles today: `router`, which reports no device information
   (device attribution unavailable), and `pc`, a laptop profile that reports
   device ids and names and is often silent for hours.
-- The daily digest arrives at 08:00 Asia/Singapore; instant alerts go out for
-  fresh high and critical findings once a notification channel is chosen (none
-  is chosen yet, so messages are kept, not sent).
+- The daily digest arrives at 08:00 Asia/Singapore, or late at start-up when
+  the computer was off then; digests, instant alerts for fresh high and
+  critical findings, and health messages go to the owner's Discord channel.
 - Scale: the router profile produces tens of thousands of queries a day;
   findings so far are a handful a week.
 
 ## Capabilities and Constraints
 
-- Pages: Overview, Findings (filters: profile, device, rule, minimum priority,
-  status, day; triage actions), a finding's detail (explanation, evidence,
-  cached domain facts, recent queries, history), Domains (24 hours or 7 days),
-  Devices, Digests, Health, Evaluation (results of `sentinel eval`).
+- Pages: Overview, Live, Findings (filters: status, minimum priority, rule,
+  device, day; triage actions), a finding's detail (explanation, evidence,
+  cached domain facts, recent queries, revisions), Domains (24 hours or 7
+  days), Devices, Digests, Health, Evaluation (results of `sentinel eval`).
+- One profile switch (both, router, pc) scopes every page, chart, table and
+  the live feed and is remembered; the owner asked for each device's view to
+  be easy to separate. Every table sorts by its headings.
 - Severity levels, highest first: critical, high, medium, low, info. Finding
   statuses: open, acknowledged, benign.
 - Terminology: finding, rule, priority (effective) and floor (the rule's),

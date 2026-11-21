@@ -1,440 +1,381 @@
 ---
 name: NextDNS Sentinel
-description: A local DNS watch dashboard drawn as a nautical chart with its notices and corrections, read at night on a live bridge display.
+description: A local DNS watch dashboard drawn as one set of technical drawings, each profile on its own inked layer and every triage decision entered as a revision.
 colors:
-  ground: "#0a131d"
-  rail: "#070e16"
-  surface: "#0f1b28"
-  surface-2: "#142334"
-  surface-3: "#1a2c40"
-  line: "#1c2c3d"
-  line-strong: "#2a4058"
-  ink: "#e7eef6"
-  ink-2: "#a3b6c9"
-  ink-3: "#7c93ab"
-  tint: "#183650"
-  tint-2: "#11273b"
-  magenta: "#ee6dbf"
-  magenta-wash: "#3a1730"
-  on-magenta: "#160611"
-  primary: "#a9cdea"
-  primary-hi: "#d3e6f6"
-  on-primary: "#07111b"
-  ok: "#5fd39a"
-  warn: "#f5c95c"
-  problem: "#ff8593"
-  critical: "#ff8593"
-  critical-bg: "#3a1522"
-  critical-line: "#5a2032"
-  high: "#ffad7a"
-  high-bg: "#3a2216"
-  high-line: "#5a3420"
-  medium: "#f5c95c"
-  medium-bg: "#33290f"
-  medium-line: "#4f3f17"
-  low: "#8ec3ff"
-  low-bg: "#14283f"
-  low-line: "#1f3d5e"
-  info: "#b3c2d1"
-  info-bg: "#1a2533"
-  info-line: "#2a394b"
-  allowed: "#4f86c0"
-  blocked: "#8aa2bb"
-  span: "#a9cdea"
+  rail: "#0a0b0c"
+  ground: "#0d0e10"
+  sheet: "#0f1012"
+  panel: "#141518"
+  panel-2: "#1a1c1f"
+  panel-3: "#212327"
+  line: "#222428"
+  line-strong: "#2e3136"
+  line-ink: "#454950"
+  frame: "#5c616a"
+  ink: "#e3e5e8"
+  ink-2: "#adb1b8"
+  ink-3: "#858a92"
+  layer-0: "#adb1b8"
+  layer-0-dim: "#5b5f66"
+  layer-1: "#45c6cf"
+  layer-1-dim: "#1f6d74"
+  layer-2: "#a78bfa"
+  layer-2-dim: "#5a4699"
+  layer-3: "#a9d46f"
+  layer-3-dim: "#4a6630"
+  layer-4: "#c8b9a6"
+  layer-4-dim: "#5f574c"
+  rev: "#ff80ae"
+  rev-wash: "#33121f"
+  on-rev: "#1e0710"
+  usual: "#cfd2d7"
+  band: "#191a1d"
+  now-wash: "rgb(227 229 232 / 0.2)"
+  critical: "#ff7171"
+  critical-bg: "#2b1316"
+  critical-line: "#5b2329"
+  high: "#ffa264"
+  high-bg: "#2a1b11"
+  high-line: "#5a3620"
+  medium: "#f0c95a"
+  medium-bg: "#262011"
+  medium-line: "#4e4119"
+  low: "#8fb6ff"
+  low-bg: "#121d31"
+  low-line: "#233a5d"
+  info: "#b6c2ce"
+  info-bg: "#1b1c20"
+  info-line: "#33363c"
+  ok: "#6fd69a"
+  warn: "#f0c95a"
+  problem: "#ff7171"
 typography:
-  title:
+  display:
     fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
-    fontSize: "28px"
-    fontWeight: 650
-    lineHeight: 1.15
-    letterSpacing: "-0.015em"
-    fontFeature: "tnum"
-  figure:
-    fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
-    fontSize: "28px"
-    fontWeight: 600
+    fontSize: "30px"
+    fontWeight: 640
     lineHeight: 1.1
-    fontFeature: "tnum"
+    letterSpacing: "-0.022em"
+    fontVariation: "'wdth' 122"
   headline:
     fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
-    fontSize: "18px"
+    fontSize: "17px"
     fontWeight: 620
-    lineHeight: 1.3
-    letterSpacing: "-0.005em"
-    fontFeature: "tnum"
-  subhead:
+    letterSpacing: "-0.01em"
+    fontVariation: "'wdth' 110"
+  title:
     fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
-    fontSize: "16px"
-    fontWeight: 600
-    lineHeight: 1.55
-    fontFeature: "tnum"
-  lead:
+    fontSize: "15px"
+    fontWeight: 620
+  summary:
     fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
-    fontSize: "16px"
+    fontSize: "17px"
     fontWeight: 400
     lineHeight: 1.55
-    fontFeature: "tnum"
   body:
     fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
     fontSize: "14px"
-    fontWeight: 420
-    lineHeight: 1.55
-    letterSpacing: "0.005em"
-    fontFeature: "tnum"
+    fontWeight: 400
+    lineHeight: 1.5
+    fontFeature: "'tnum'"
   label:
     fontFamily: "Mona Sans, system-ui, Segoe UI, Roboto, sans-serif"
     fontSize: "12px"
-    fontWeight: 560
-    lineHeight: 1.55
-    letterSpacing: "0.01em"
-    fontFeature: "tnum"
-  data-mono:
-    fontFamily: "JetBrains Mono, ui-monospace, Cascadia Mono, Consolas, monospace"
-    fontSize: "12px"
     fontWeight: 400
-    lineHeight: 1.55
+  data:
+    fontFamily: "JetBrains Mono, ui-monospace, Cascadia Mono, Consolas, monospace"
+    fontSize: "13px"
+    fontWeight: 400
+    fontFeature: "'tnum'"
   outside-name:
     fontFamily: "JetBrains Mono, ui-monospace, Cascadia Mono, Consolas, monospace"
-    fontSize: "14px"
+    fontSize: "0.93em"
     fontWeight: 400
-    lineHeight: 1.55
+  chip:
+    fontFamily: "JetBrains Mono, ui-monospace, Cascadia Mono, Consolas, monospace"
+    fontSize: "11px"
+    fontWeight: 620
+    lineHeight: 1.4
 rounded:
-  key: "3px"
-  focus: "4px"
-  key-pill: "5px"
-  control: "8px"
-  panel: "12px"
-  pill: "999px"
+  frame: "2px"
+  control: "3px"
+  chip: "4px"
 spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "12px"
-  heading: "14px"
-  lg: "16px"
-  panel-x: "20px"
-  gutter: "24px"
-  xl: "32px"
-  page-x: "36px"
-  section: "40px"
+  field-gap: "6px"
+  heading-gap: "12px"
+  panel-y: "16px"
+  panel-x: "18px"
+  column-gutter: "32px"
+  block-gap: "34px"
+  main-x: "40px"
 components:
   button:
-    backgroundColor: "{colors.surface-2}"
+    backgroundColor: "{colors.panel-2}"
     textColor: "{colors.ink}"
-    typography: "{typography.label}"
     rounded: "{rounded.control}"
-    padding: "8px 13px"
+    padding: "7px 12px"
   button-hover:
-    backgroundColor: "{colors.surface-3}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.panel-3}"
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.label}"
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.sheet}"
     rounded: "{rounded.control}"
-    padding: "8px 13px"
-  button-primary-hover:
-    backgroundColor: "{colors.primary-hi}"
-    textColor: "{colors.on-primary}"
+    padding: "7px 12px"
   button-quiet:
+    backgroundColor: "transparent"
     textColor: "{colors.ink-2}"
-    typography: "{typography.label}"
-    padding: "0"
-  button-decide:
-    typography: "{typography.body}"
     rounded: "{rounded.control}"
-    padding: "10px 15px"
-  input:
-    backgroundColor: "{colors.surface-2}"
+    padding: "7px 12px"
+  segmented:
+    backgroundColor: "{colors.panel}"
+    rounded: "{rounded.control}"
+    padding: "2px"
+  segmented-current:
+    backgroundColor: "{colors.panel-3}"
     textColor: "{colors.ink}"
-    typography: "{typography.body}"
-    rounded: "{rounded.control}"
-    padding: "7px 10px"
-  rail:
-    backgroundColor: "{colors.rail}"
+    rounded: "{rounded.chip}"
+    padding: "5px 12px"
+  layer-option:
     textColor: "{colors.ink-2}"
-    width: "240px"
-    padding: "20px 12px 16px"
-  rail-link-active:
-    backgroundColor: "{colors.surface-2}"
-    textColor: "{colors.ink}"
     rounded: "{rounded.control}"
     padding: "8px 10px"
-  count:
-    backgroundColor: "{colors.magenta}"
-    textColor: "{colors.on-magenta}"
-    rounded: "{rounded.pill}"
+  layer-option-current:
+    backgroundColor: "{colors.panel-3}"
+    textColor: "{colors.ink}"
+  nav-count:
+    backgroundColor: "{colors.rev}"
+    textColor: "{colors.on-rev}"
+    rounded: "{rounded.chip}"
+    typography: "{typography.data}"
     padding: "0 7px"
-    height: "20px"
-  count-zero:
-    backgroundColor: "{colors.surface-3}"
-    textColor: "{colors.ink-2}"
-    rounded: "{rounded.pill}"
+  titleblock:
+    backgroundColor: "{colors.panel}"
+    rounded: "{rounded.frame}"
+    padding: "18px 22px"
+  panel:
+    backgroundColor: "{colors.panel}"
+    rounded: "{rounded.frame}"
+    padding: "16px 18px"
   badge-critical:
     backgroundColor: "{colors.critical-bg}"
     textColor: "{colors.critical}"
-    rounded: "{rounded.pill}"
-    padding: "0 9px"
-    width: "68px"
-    height: "22px"
+    rounded: "{rounded.chip}"
+    typography: "{typography.chip}"
+    padding: "2px 7px"
   badge-high:
     backgroundColor: "{colors.high-bg}"
     textColor: "{colors.high}"
-    rounded: "{rounded.pill}"
-    padding: "0 9px"
+    rounded: "{rounded.chip}"
+    typography: "{typography.chip}"
+    padding: "2px 7px"
   badge-medium:
     backgroundColor: "{colors.medium-bg}"
     textColor: "{colors.medium}"
-    rounded: "{rounded.pill}"
-    padding: "0 9px"
+    rounded: "{rounded.chip}"
+    typography: "{typography.chip}"
+    padding: "2px 7px"
   badge-low:
     backgroundColor: "{colors.low-bg}"
     textColor: "{colors.low}"
-    rounded: "{rounded.pill}"
-    padding: "0 9px"
+    rounded: "{rounded.chip}"
+    typography: "{typography.chip}"
+    padding: "2px 7px"
   badge-info:
     backgroundColor: "{colors.info-bg}"
     textColor: "{colors.info}"
-    rounded: "{rounded.pill}"
-    padding: "0 9px"
-  chip-blocked:
-    backgroundColor: "{colors.surface-3}"
-    textColor: "{colors.ink-2}"
-    rounded: "{rounded.pill}"
-    padding: "0 8px"
-    height: "20px"
-  panel:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.panel}"
-    padding: "18px 20px"
-  filters:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.panel}"
-    padding: "16px 18px"
-  live-line:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink-2}"
-    typography: "{typography.label}"
-    rounded: "{rounded.pill}"
-    padding: "8px 14px"
-  segmented-active:
-    backgroundColor: "{colors.surface-3}"
+    rounded: "{rounded.chip}"
+    typography: "{typography.chip}"
+    padding: "2px 7px"
+  select-button:
+    backgroundColor: "{colors.panel-2}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    padding: "6px 14px"
-  range-button-active:
-    backgroundColor: "{colors.surface-3}"
+    rounded: "{rounded.control}"
+    padding: "7px 10px"
+  select-list:
+    backgroundColor: "{colors.panel-2}"
+    rounded: "{rounded.frame}"
+    padding: "4px"
+  input-text:
+    backgroundColor: "{colors.panel-2}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    padding: "6px 12px"
-  chart-dialog:
-    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.control}"
+    padding: "9px 11px"
+  dialog-confirm:
+    backgroundColor: "{colors.panel-2}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.panel}"
-    padding: "22px 24px 18px"
+    rounded: "{rounded.frame}"
+    padding: "22px 22px 18px"
 ---
 
 # Design System: NextDNS Sentinel
 
 ## Overview
 
-**Creative North Star: "Notices and Chart Corrections, at Night"**
+**Creative North Star: "The Drawing Set"**
 
-The dashboard is a nautical chart kept current by its owner and read on a dimmed bridge display. Every finding is a numbered notice (printed as four digits, `0004`), and every triage decision is written onto the record in magenta, the way a correction is inked onto a chart: the old status struck through, the new status and the time beside it. Nothing is erased; the record only grows.
+Every page is a sheet in one set of technical drawings. Each NextDNS profile draws on its own layer in its own ink, so router reads teal and pc reads violet wherever they appear: the profile switch in the rail, the tables, the live feed and every chart. Every triage decision is entered as a revision in rose ink: a delta and its letter, the old status struck through, the new status and its time. Nothing is erased; the record only grows.
 
-The world is night only: a deep-water navy ground, never black, with a darker rail and three layered navy surfaces above it. One navy-tinted ramp carries every neutral, line and ink. Depth-tint blue marks the usual (the usual-traffic band in the charts, selection, the span track). Magenta is scarce and means one of two things: something needs attention, or a decision was made. Severity reads as buoy-coloured tinted chips. The density is an operator's instrument: 14px body, tight tables, many figures, all tabular, read in short triage visits or glanced at from across the room while the page is left open as a live monitor.
+The ground is graphite, cool and near neutral, dark only. The rail is the darkest stock, the sheet one step lighter, panels one to three steps above that. Hairlines divide everything inside a sheet; a heavier frame rule runs only round each sheet's title block, which states what the sheet shows, which profiles, when it was drawn and its place in the set. Charts carry a drafter's furniture: a dimension line over the span drawn, finding markers with leaders down to their moment, break marks where a bar runs off the capped scale. The density is an operator's instrument: 14px body, tight tables, many figures, all tabular, read in short triage visits or left open all day as a live monitor.
 
-Mona Sans is the product's own voice, set a touch wider for titles and live figures. JetBrains Mono carries data, and its italic marks every name that came from outside (a domain, a device name), so attacker-controlled text is always visibly someone else's words. The page is visibly live: new queries open their own space and settle, the status dot rings, changed numbers flash once, and the time charts follow the present until the owner zooms away.
+Mona Sans is the set's own voice, widened for titles and the title block. JetBrains Mono carries data, and its italic marks every name that came from outside (a domain, a device name), so text an attacker controls is always visibly someone else's words. Confirmed refusals: KPI tiles over a grey table, a neon HUD, a generic admin template, a navy ground.
 
 **Key Characteristics:**
-- Night chart only (`color-scheme: dark`): navy ground, darker rail, surfaces stepping lighter as they rise.
-- Magenta reserved for attention (the open count, open-finding markers, a newly arrived finding) and decisions (corrections, history).
-- Severity as tinted buoy chips: coloured text on a dark wash of the same hue, with a matching hairline.
-- Mona Sans upright for the product; JetBrains Mono for data; JetBrains Mono italic for every outside name.
-- Tabular figures everywhere; a five-step ladder (12/14/16/18/28).
-- Interactive time charts (uPlot) that follow live, zoom, pan, list a period, and enlarge into a dialog.
-- Rounded, softly lifted panels (12px corners, a low diffuse shadow) on the navy ground.
+- Graphite, dark only; tonal steps for depth, hairlines for structure.
+- One ink per profile layer, fixed by its position in the configuration, identical on every surface.
+- Rose revision ink for decisions and for what still waits for one; old states struck, never erased.
+- Square frames (2px), a heavier frame rule only round the title block.
+- Mona Sans expanded for titles; JetBrains Mono for data, its italic for every outside name; tabular figures throughout.
+- Every control drawn in the set's own ink: select, checkbox, switch, segmented control, dialog, sort headings.
+- Every page works without JavaScript under a strict CSP.
 
 ## Colors
 
-A cold night-navy palette with one hot ink (magenta), one pale chart blue for action, and a fixed set of buoy hues for severity.
+A graphite ramp carries every surface, line and ink; colour is reserved for layer inks, revision rose and severity.
 
 ### Primary
-- **Pale Chart Blue** (primary): the one filled button in a row (Acknowledge on an open finding, Pause, log in), the current bar in a time chart and the current minute, selection and picked-period bands, links, and the focus ring. Dark ink (on-primary) on its fill.
-- **Pale Chart Blue, Lit** (primary-hi): primary button hover, and the colour a changed live figure flashes from.
-- **Span Blue** (span): the seen interval on a finding's 24-hour span bar.
+- **Revision Rose** (`rev`): the owner's hand. A decision drawn as a revision (delta, letter, struck old status, new status), the open-findings count in the navigation and the switch, the lead's "needs a decision" count, open finding markers on charts, a fresh finding's wash (`rev-wash`), a figure that just changed (a one-shot flash), the text caret, selection and a switched-on switch. Text on a rose fill uses `on-rev`.
 
 ### Secondary
-- **Correction Magenta** (magenta): the open-findings count, open-finding markers on the charts, the inked correction on a decided row, the numbered history circles and their actions. Its dark ink (on-magenta) sits on every magenta fill.
-- **Magenta Wash** (magenta-wash): the wash under a finding that has just arrived in the Needs a decision table, settling to nothing.
+- **Router Teal** (`layer-1`) and **PC Violet** (`layer-2`): the two profile layer inks, assigned by each profile's position in the configuration. Their `-dim` partners draw that profile's blocked queries in stacked charts.
+- **Spare Inks** (`layer-3` lime, `layer-4` stone): reserved for a third and fourth profile, in hues no severity or status colour uses, so a new profile never reads as a priority.
+- **Neutral Layer** (`layer-0`, `layer-0-dim`): anything that belongs to no single profile, and the server-drawn chart before the interactive one loads.
 
 ### Tertiary
-- **Depth Tint** (tint): the usual-level band behind the bars (at 55%), the usual key, text selection.
-- **Shallow Tint** (tint-2): the span-bar track.
-- **Allowed Blue** (allowed) and **Blocked Slate** (blocked): the two stacked series in every query chart, allowed below, blocked on top.
-
-### Severity (buoys, as tinted chips)
-Each level has a text colour, a dark wash and a hairline in the same hue: **Buoy Red** (critical, critical-bg, critical-line), **Buoy Orange** (high, high-bg, high-line), **Buoy Amber** (medium, medium-bg, medium-line), **Buoy Blue** (low, low-bg, low-line; also the dashed usual line and a span that began on an earlier day), **Buoy Grey** (info, info-bg, info-line).
-
-### Status
-- **Pass Green** (ok): a passing pipeline, an open live connection, the "Following live" dot, the ring on the live dot.
-- **Signal Amber** (warn): the live dot while connecting.
-- **Coral** (problem): failing checks, errors.
+- **Severity chips**: critical red, high orange, medium amber, low blue, info grey; each a foreground, a near-black tinted background (`-bg`) and a border (`-line`).
+- **Status** (`ok`, `warn`, `problem`): pipeline state, the live dot, health rows, login errors. `warn` and `problem` share their values with medium and critical.
 
 ### Neutral
-One ramp, tinted from the navy.
-- **Night Ground** (ground): the page.
-- **Rail Dark** (rail): the navigation rail and the bare login/error ground.
-- **Surface** (surface), **Surface 2** (surface-2), **Surface 3** (surface-3): panels; then table headers, controls, the current rail link and row hover; then pressed and current segments, the blocked chip, decided-finding markers.
-- **Line** (line) and **Strong Line** (line-strong): panel and row rules; control borders, axis ticks, underlines.
-- **Ink** (ink), **Second Ink** (ink-2), **Third Ink** (ink-3): text; leads, labels and decided rows; meta, times, ticks and struck statuses.
+- **Rail Graphite** (`rail`): the navigation rail and the bare login/error pages.
+- **Ground Graphite** (`ground`): the html ground and scrollbar track.
+- **Sheet Graphite** (`sheet`): the working area behind every panel; also the halo cut round chart lines and break marks.
+- **Panel Graphite 1-3** (`panel`, `panel-2`, `panel-3`): containers, then controls and hover, then current/pressed states and decided chart markers.
+- **Hairline** (`line`), **Strong Hairline** (`line-strong`), **Ink Line** (`line-ink`): row and panel dividers, table head rules and control borders, then open/hover control borders and the dimension line.
+- **Frame** (`frame`): only the rule round the title block.
+- **Ink 1-3** (`ink`, `ink-2`, `ink-3`): text and primary fills, secondary text, labels and quiet figures.
+- **Chart furniture** (`usual`, `band`, `now-wash`): the dashed usual-traffic line, its band, and the current period's wash.
 
 ### Named Rules
-**The Two Jobs Rule.** Magenta does exactly two jobs: attention (what needs a decision) and decisions written onto the record. On a chart, an open finding's marker is magenta and a decided finding's marker is a grey pill (surface-3 with a strong-line stroke and second ink). Magenta is never a link, never a primary button, never a data series, never decoration.
+**The One Layer, One Ink Rule.** A profile's ink comes from its position in the configuration and is the same on every surface: rail switch, title block, table, feed row, chart series, legend, leader. Layer inks are never decoration and never severity.
 
-**The Buoy Chip Rule.** Severity is only ever told by the five buoy hues, in order critical, high, medium, low, info, and always as a chip: buoy text on its own dark wash with its own hairline. No other colour carries severity.
+**The Revision Ink Rule.** Rose means a decision, something waiting for one, or the owner's own hand (caret, selection, a switch they turned on). It is never used for severity, branding beyond the brand mark's one stroke, or emphasis.
 
-**The Never Black Rule.** The darkest value is the rail navy; every neutral comes from the navy-tinted ramp. No pure black or pure grey surfaces.
+**The Graphite Rule.** Neutrals are cool, near-neutral graphite, never navy and never pure black; depth comes from the next graphite step, not from a hue.
 
 ## Typography
 
-**Display Font:** Mona Sans (self-hosted variable woff2, weight 200 to 900, width 75 to 125%; with system-ui, Segoe UI, Roboto)
+**Display Font:** Mona Sans (with system-ui, Segoe UI, Roboto), variable width 75-125%, self-hosted
 **Body Font:** Mona Sans
-**Label/Mono Font:** JetBrains Mono (self-hosted, normal and italic; with ui-monospace, Cascadia Mono, Consolas)
+**Label/Mono Font:** JetBrains Mono (with ui-monospace, Cascadia Mono, Consolas), upright and italic, self-hosted
 
-**Character:** A wide, confident grotesque for everything the product says, set beside a plain coding mono for everything the record holds. The mono's italic is reserved for names that came from outside, so they read as quoted evidence.
+**Character:** A wide, engineered grotesque for the set's own words against a drafting mono for every figure, time and name; the mono italic is a typographic quarantine for outside text.
 
 ### Hierarchy
-- **Title** (650, 28px, 1.15, -0.015em, width 112%): page titles and the login heading; one per page.
-- **Figure** (600, 28px, 1.1, width 110%): live figures beside the Live chart (peak minute, open findings).
-- **Headline** (620, 18px, 1.3, -0.005em, width 106%): section headings above blocks and inside panels; the enlarged chart's title.
-- **Sub-heading** (600, 16px): headings inside a panel, the period list's heading, side-panel headings on a finding's page.
-- **Lead** (400, 16px, max 72ch): the sentence under a title; a finding's summary (1.6, max 68ch); the current decision.
-- **Body** (420, 14px, 1.55, 0.005em): tables, prose, controls in filters, the period readout.
-- **Label** (560, 12px, 0.01em): table headers, filter and fact labels, the live pill; buttons at 620; meta at 400 to 450 (stamps, "usual" notes, hints, legends, chart ticks).
-- **Data mono** (400, 12px): feed times; at body size, evidence keys and values, code and the digest text.
+- **Display** (640, 30px, 1.1, width 122%): the title block's sheet title; 26px on phones. The login title uses 650, 24px, width 120%.
+- **Headline** (620, 17px, width 110%): each block's heading on a sheet.
+- **Title** (620, 15px): panel headings; chart dialog title 18px, width 112%; confirm title 16px, width 110%.
+- **Summary** (400, 17px, 1.55, max 72ch): the model's reading at the top of a finding's explanation.
+- **Body** (400, 14px, 1.5): everything else; the lead under a title is 15px, max 76ch.
+- **Label** (400, 12px, ink-3): field labels, title-block field names, table headings (520), hints, legends.
+- **Data** (JetBrains Mono, 12-13px): times, figures, counts, finding numbers (printed four digits), chart axes (11px).
+- **Chip** (JetBrains Mono 620, 11px): severity badges and status chips.
 
 ### Named Rules
-**The Outside Voice Rule.** Every name that came from outside is sloped: domains in JetBrains Mono italic (always defanged, never a link), device names in italic. The product's own words are never sloped, and outside names are never upright.
+**The Outside Words Rule.** Every name that came from outside (domain, device) is set in JetBrains Mono italic, escaped and defanged, and is never a link.
 
-**The Five Steps Rule.** Sizes are 12, 14, 16, 18 and 28, one job per step. Emphasis inside a step is weight (560 to 650), not size.
+**The Tabular Rule.** Figures are tabular everywhere (`font-variant-numeric: tabular-nums` on the root); numeric columns align right.
 
-**The Night Weight Rule.** Light text on the dark ground is set one weight step heavier than it would be on paper (body 420, labels 560, buttons 620) with a touch more letter-spacing (0.005em body, 0.01em labels).
-
-**The Tabular Rule.** Figures are tabular everywhere (`font-variant-numeric: tabular-nums` on the body); numeric columns align right.
+**The Eleven Pixel Floor Rule.** No text below 11px, including canvas text in charts.
 
 ## Layout
 
-A two-column shell: a sticky full-height rail (240px) and a main column that fills the screen up to 3200px (a 3440px ultrawide), with 32px top, 72px bottom and 36 to 64px side padding that grows with the window. Pages never stretch one column across a wide screen; they recompose into more columns (see Responsive behaviour). Page heads are a two-column grid: title and lead on the left, a stamp, segmented control or the live pill on the right, centred on the title line, 32px above the first block. Section heads wrap their note or link under the heading when both do not fit. Blocks stack 40px apart; headings sit 14px above their content. Composite rows use a 24px gutter (32px between board columns): even halves, a finding's main column beside a 360px sticky side column (32px gap).
+A fixed 252px rail on the left (220px between 641 and 1180px) and the sheet beside it, padded 26px top and 40px sides (28px on tablets, 16px on phones), up to 3200px wide. Each sheet opens with its title block, then blocks stacked 34px apart, each with a 17px heading 12px above its panel. Panels pad 16px by 18px; columns sit 32px apart.
 
-**Overview order:** the title with the live pill; Needs a decision (the open high and critical findings, refreshed live); Queries over time, full width; Right now (the last eight queries, a fixed-height feed) beside New devices and findings; Today against the usual week. On an ultrawide screen the page becomes a board of two columns (2 to 1, the side at least 440px): Needs a decision and Queries over time on the left; Right now, New devices and findings, and Today against the usual week stacked on the right, both columns starting on one line.
+Responsive behaviour: at 1180px and under, the title block's fields drop below the title and two-column boards stack. At 860px the rail becomes a top bar: brand and sign-out, then the profile switch as a full-width row, the pipeline line, then the page links as a horizontally scrolling row that fades out at its right edge. At 640px findings become stacked cards with full-width, equal action buttons. Wider than 2240px, what sat in rows becomes columns: Overview goes two-column (2fr and a 460px-minimum side), Live puts the feed and chart side by side, a finding's detail goes to a two-column main plus a 400px side.
 
-**Live order:** the title with the live pill; Queries over time with the live figures beside its heading and the short (200px) interactive chart; then the Queries feed with its controls (Show N new, Only blocked, Profile, Pause) above a panel that scrolls inside itself, so new rows never push the page. On an ultrawide screen the feed and the chart sit side by side in equal halves, feed on the left; their heads share one height so both panels start on one line, and the chart, which stays in view as the page scrolls, grows with the window (340 to 560px).
-
-Spacing steps observed in reuse: 4, 8, 12, 14, 16, 18/20 (panel insets), 24, 32, 36, 40.
-
-Responsive behaviour:
-- **Ultrawide, 2240px and wider:** the Overview and Live boards above; Domains sets its four tables in one row; a finding's page puts the explanation and the cached domain facts beside the evidence, with recent queries across both, next to a 400px side column.
-- **Wide, 1800px and wider:** the findings table gives its spare width to the About column (38%), so the domain and why it fired wrap less instead of every column drifting apart.
-- **Time charts** ask the server for about one bar per 6px of plot width (60 to 480 bars), so a wider chart shows finer bars, and fetch again when a resize changes that by more than a fifth.
-- **Table fold, any findings table under 1200px wide:** a container query on the table, not the window, hides its wide columns (number, rule, profile and device, last seen, events) and folds them into one meta line under the domain, so the decision buttons stay in view on a 1280px laptop and in narrower board columns.
-- **Laptop, 641 to 1180px:** the rail narrows to 212px and main side padding drops to 28px.
-- **1180px and below:** the Overview's side panels and the finding detail collapse to one column; the side column stops sticking.
-- **860px and below:** the rail becomes a top bar: brand and log-out on one line, pipeline state below, then the navigation as a horizontally scrolling row that fades out at its right edge instead of drawing a scrollbar. Main padding drops to 22px/16px; feed rows move profile and device onto a second line.
-- **640px and below (phone):** each findings row becomes a stacked notice card (14px/16px padding, 12px corners, 10px apart) with the decision and actions on its last line, in thumb reach: the status keeps only the room it needs, the buttons take the rest and wrap, right-aligned, if even that is too narrow; a finding about a whole profile skips the repeated profile line. A wide table in a plain panel (Today against the usual week) scrolls sideways inside it. Time charts drop to 220px (180px short); the enlarged chart fills the screen less 8px.
-- **Pointer-less devices:** the chart hint switches to the touch wording.
+The findings table narrows by container query rather than viewport: under 1180px of container it drops the Events column, under 1000px it folds the secondary columns into one line under the finding, so the decision buttons stay in view without horizontal scrolling. The live feed keeps a fixed eight-row height in its compact form so a new row never moves what sits below it.
 
 ## Elevation & Depth
 
-Tonal layering first, with a soft lift. Depth is told by stepping the surface lighter as it rises (ground, then surface, surface-2, surface-3) and by 1px navy lines. Panels and table wrappers carry one low, diffuse shadow that only darkens the ground beneath them; it never reads as a hard edge. The enlarged chart dialog is the one raised object, over a near-opaque navy backdrop.
+Flat by default. Depth is tonal: rail, sheet and three panel steps. Structure is hairlines. One shadow exists, and it only lifts what floats over the sheet.
 
 ### Shadow Vocabulary
-- **Panel lift** (`box-shadow: 0 12px 32px -20px rgb(0 0 0 / 0.65)`): panels and table wrappers on the ground.
-- **Login lift** (`box-shadow: 0 24px 60px -24px rgb(0 0 0 / 0.8)`): the single card on the bare rail ground (login, errors).
-- **Dialog lift** (`box-shadow: 0 40px 100px -30px rgb(0 0 0 / 0.85)`, backdrop `rgb(3 8 13 / 0.76)`): the enlarged chart.
-- **Hairline stroke** (`box-shadow: inset 0 0 0 1px var(--line-strong)`): not depth; the stroke round a decided-finding key.
+- **Lift** (`box-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.3)`): the select's listbox, the confirm dialog, the enlarged chart dialog. Dialog backdrops are `rgb(5 5 6 / 0.8)`.
 
 ### Named Rules
-**The Rising Surface Rule.** A surface that sits higher is lighter, never more saturated: ground, surface, surface-2, surface-3. Lift comes from tone first; the shadow only softens the ground under it.
+**The Lift Only Floats Rule.** A shadow means the layer floats over the sheet (a menu or a dialog). Panels, cards, buttons and chips never carry one.
+
+**The Frame Rule.** The title block alone carries the heavier 1.5px `frame` rule, with a 1px `frame` rule between its title and fields; everything inside a sheet is a 1px hairline.
 
 ## Shapes
 
-Soft, rounded and pill-shaped. Panels, tables, the filters bar, phone notice cards and the chart dialog round at 12px; buttons, inputs, rail links and the period-list boxes at 8px. Every token of state is a full pill: severity chips, the blocked chip, the magenta count, the live pill, the segmented control and the chart's range group. Chart markers are pills drawn half their height round. Legend keys and swatches are 3px squares; the marker keys are 5px pills. Two forms are circles: the live and pipeline dots (8px) and the numbered history circle (22px, 1.5px magenta stroke). Lines are 1px throughout; the heavier strokes are the 2px focus outline (4px radius, 2px offset), the 2px dashed usual line and the 2px magenta strike on a corrected status.
+Square drawing frames. Panels, tables, the title block, menus and dialogs use a 2px radius; controls (buttons, selects, inputs, layer options, page links) use 3px; inner items (segment buttons, menu options, severity and status chips, the navigation count, code and kbd) use 4px. Round shapes are kept for things that are round in a drawing set: the live status dot, the switch track and knob, and the 2px-rounded ink marks (layer marks 16 by 4px, legend keys) that stand for a pen stroke. Icons are drawn SVG strokes, 1.5px, round caps and joins, in `currentColor`.
 
 ## Components
 
 ### Buttons
-Compact and quiet; the one filled button in a row is the decision the owner is most likely to make.
-- **Shape:** softly rounded (8px).
-- **Default:** surface-2 fill, strong-line border, ink text, 12px/620 at 0.01em, 8px 13px; 10px 15px at 14px in a finding's decision bar and the filters bar.
-- **Primary:** pale chart blue fill and border, dark ink. Used for Acknowledge on an open finding, Pause on the Live feed (it drops to default while paused, reading Resume), and log in.
-- **Quiet:** no border or fill, second ink, underlined at a 3px offset in the strong line. Used for Reopen, Log out, Back to live, Close list.
-- **Hover / Focus / Active:** default goes to surface-3 with a third-ink border; primary goes to the lit blue; 2px pale-blue focus outline offset 2px; pressed buttons drop 1px; a pending htmx request dims the form to 0.6 with a progress cursor. Transitions are 120ms.
+- **Shape:** gently squared (3px).
+- **Default:** `panel-2` fill, `line-strong` border, 560 weight 13px, 7px by 12px; hover steps to `panel-3` and a `line-ink` border; press nudges 0.5px down.
+- **Primary:** an `ink` fill with `sheet` text, for the single decision on a finding's page and confirm dialogs; hover goes to white. In a findings table the primary is drawn in outline (`ink-2` border, transparent), so a column of identical buttons never outshouts the revisions.
+- **Quiet:** transparent, `ink-2` text; hover takes `panel-2`.
+- **Link button:** rose, underlined, no frame; an inline action inside a sentence, such as showing the new rows a paused feed has held back.
+- **Disabled:** 50% opacity, not-allowed cursor.
 
-### Severity Chips
-- **Style:** pill, at least 68px wide, 12px/620, buoy text on the buoy wash with a 1px buoy hairline.
-- **State:** once a finding is acknowledged or benign, its chip keeps its priority but drops the wash (outline only), and the row's text drops to second ink.
+### Chips
+- **Severity badge:** mono 620 11px, 2px by 7px, 4px radius, the severity's tinted background, border and foreground. Decided rows dim their badge to 70%.
+- **Status chip:** outlined in `line-strong`, `ink-2` text; a blocked chip takes `line-ink` and `ink`.
 
 ### Cards / Containers
-- **Corner Style:** 12px.
-- **Background:** surface on the ground; table headers on surface-2.
-- **Shadow Strategy:** panel lift (see Elevation & Depth).
-- **Border:** 1px line.
-- **Internal Padding:** 18px 20px for panels; 16px 18px for the filters bar and chart panels; 22px 24px for the digest text.
-
-### Tables
-Wrapped in a 12px bordered panel that scrolls sideways when it must. Headers are 12px/560 second ink on surface-2; cells 12px with line rules between rows; row hover takes surface-2. Compact tables inside panels drop the header fill and outer padding. Key-value evidence tables set both columns in mono.
+- **Panel:** `panel` fill, 1px `line` border, 2px radius, 16px by 18px. No shadow.
+- **Title block:** `panel` fill, 1.5px `frame` border; the title and lead on the left, a row of fields on the right (Showing, with the layer mark; any page figures; Drawn; Sheet), each field a 12px `ink-3` label over a 14px value.
+- **Findings on phones:** each row becomes a bordered `panel` card with the decision on its own line and equal-width actions.
 
 ### Inputs / Fields
-- **Style:** surface-2 fill, 1px strong-line border, 8px corners, 7px 10px, at least 9rem wide; labels sit above as 12px/560 second ink; checkboxes take the pale blue accent.
-- **Focus:** the global 2px pale-blue outline, offset 1px; hover lifts the border to third ink.
+- **Select (listbox):** the native select stays in the form and is replaced by a drawn button with a chevron that turns 180 degrees when open; the list drops 5px below (or opens upward near the viewport foot) on `panel-2` with a `line-ink` border and the lift shadow, the active option on `panel-3`, the chosen one in 600 with a check.
+- **Checkbox:** the real input stays for keyboard and screen readers; a 15px drawn box with a `line-ink` border fills with `ink` and draws a `sheet` tick when checked.
+- **Switch:** a 30 by 17px track; when on, the border and knob turn rose over `rev-wash`.
+- **Text field:** `panel-2`, `line-strong` border, mono 14px; focus moves the border to `line-ink` with a 2px `panel-3` ring; invalid takes a `problem` border.
+- **Focus:** every focusable element shows a 2px `ink` outline, 2px offset.
 
 ### Navigation
-- **Rail:** rail navy, 240px, sticky, a 1px line on its right. Brand in 16px Mona Sans at 110% width, "Sentinel" at 700. Links are 14px/480 second ink at 8px 10px with 8px corners; hover takes surface and ink, the current page surface-2 at 600. Live carries the live dot; Findings carries the magenta open count (a dark surface-3 pill when nothing is open). Pipeline health sits at the foot under a line: a dot and state in pass green or coral, then 12px third-ink "Newest event" meta.
-- **Segmented control:** a pill on surface; segments 6px 14px; the current segment fills surface-3 at 600.
-- **Skip link:** the first stop for the keyboard, hidden until focused, then a pale chart blue pill (on-primary text, 620) fixed 12px from the top left, jumping to the page's content past the rail.
-- **Decisions announced:** after Acknowledge, Mark benign or Reopen, focus returns to the new row's first action and a polite status line reads "Finding 0003 acknowledged." (or marked benign, reopened).
-- **Mobile:** see Layout.
+- **Rail:** the brand (a 24px squared mark with three strokes: teal, violet, rose; the name in Mona Sans at 112% width), the profile switch, the page links, and the pipeline state at the foot.
+- **Profile switch:** a `panel` box listing Both, then each profile with its layer mark and its open count in rose (`ink-3` when zero); the current option sits on `panel-3` with a `line-ink` border. Choosing a layer re-inks every sheet.
+- **Page links:** `ink-2`, hover on `panel`, current on `panel-2` in 600, with a rose count chip (grey when zero).
 
-### Live Signals (signature)
-- **Live pill:** a surface pill (8px 14px 8px 12px) in two parts: the live dot and the state at 620, 7px apart; then a hairline (strong line, 11px inset) and the last minute's queries and blocked count as ink figures in 12px second ink, the noun following the count ("1 query"). In a page head it sits on the title's centre line.
-- **Live dot:** 8px; pass green when open, signal amber while connecting, third ink when paused or closed. When queries arrive it rings: a 2px green ring scales out and fades (900ms), at most once every 4 seconds and never while paused.
-- **Tick:** a changed live figure flashes from the lit blue back to its colour (700ms).
-- **Feed row:** time (mono, third ink), the domain (outside name), profile and device (12px second ink), and a blocked chip. A new row first opens its own height (340ms, standard curve) while fading and sliding 4px in from a surface-3 glow (560ms, ease-out); rows past the limit are removed 600ms later, once the new ones have opened. Blocked rows set the domain in second ink. Rows stay newest first by the query's own time, so one that reached the collector late opens where its time belongs, not on top. The Right now feed is eight 37px rows at a fixed height, so the panel never grows.
-- **Fresh finding:** a finding that arrives in Needs a decision is washed in magenta-wash, holds for a quarter of the time, then settles to nothing over 2400ms.
+### Sortable Table Headings
+The heading itself is the button; a drawn two-chevron sort icon at 45% shows the available directions, the active chevron goes full `ink` and the other drops to 20%; `aria-sort` carries the state. Rows divide with `line`, hover takes a 70% `panel-2` wash, numeric columns align right in mono.
 
-### Time Chart (signature)
-An interactive query chart on uPlot 1.6.32, mounted over the server-drawn SVG chart, which stays in place until the series loads and whenever JavaScript is off.
-- **Bars:** each bar is the total in allowed blue, with the blocked share drawn over its foot in blocked slate; the bar still counting is pale chart blue. Behind them the depth-tint band rises to the usual level, and a 2px dashed buoy-blue line marks that level over a 4px surface halo.
-- **Markers:** open findings are magenta pills carrying the four-digit notice number in 12px/700 on-magenta, with a hairline drop to the axis; decided findings are grey pills (surface-3, strong-line stroke, second ink). Findings close together share one pill ("0004 +2").
-- **Controls:** a pill range group above the plot (6h, 24h, 7d, 30d on Overview; 30m, 1h, 6h, 24h on Live), "Following live" with a soft green dot while the chart shows the present, Back to live once it does not, and Enlarge.
-- **Pointer:** drag across to zoom (a pale-blue selection with 1px edges); Ctrl + scroll zooms; Shift + scroll or Shift + drag pans; double-click goes back to live; hovering shows a faint ink band and a two-line readout that never moves the plot; clicking a bar lists that period under the chart; clicking a marker opens its finding, or lists the period when the marker stands for several.
-- **Keyboard:** the plot is focusable; left and right move between bars, Shift with the arrows moves through time, Home and End jump to the ends, plus and minus zoom, 0 goes back to live, Enter or Space lists the period. Changes are announced in a polite live region.
-- **Period list:** under a line, the period's heading, totals and Close list; the period's findings, when there are any; then Most looked up beside Latest queries as two matching tables in 8px-cornered boxes: the same top, the same sticky header, the same one-line rows and the same height (the header and ten rows, the latest queries scrolling inside), so their rows line up across the gap. Long names end in an ellipsis with the full name as the row's tooltip. One column under 760px of chart width.
-- **Enlarge:** the same chart moves into a modal dialog that fills the window less 24px on every side (12px corners) that rises 8px into place (220ms); the page keeps its height while the chart is away, and closing returns it and its focus.
+### Segmented Control
+A `panel` tray with a 2px inner padding; segments are transparent `ink-2`, the current one on `panel-3` with a `line-ink` border. Used for time ranges and views.
 
-### The Correction (signature)
-A decision written onto the record. On a decided row the cell reads, in magenta 620: the old status struck through (third ink, 2px magenta strike), then the new status and the time. In the findings list the struck status sits on its own line above the new one, as on a corrected chart. When a triage action swaps the row in place, the correction is revealed left to right by a clip-path transition (520ms, ease-out); under reduced motion it simply appears. On a finding's page the history lists every correction beside a 22px magenta numbered circle, the action in magenta and its time in meta.
+### Revision Mark (signature)
+A decision is a revision: a small rose delta, its letter, the old status struck in `ink-3` with a 2px rose strike, then the new status and its mono time. In a table it takes two lines. When a decision lands, the revision inks in left to right over 560ms; a newly arrived finding settles out of a rose wash over 2.4s. On a finding's page the revisions list each entry beside a numbered delta outline.
 
-### Span Bar
-A 120 by 8 SVG strip under "Last seen": the day as a shallow-tint track with strong-line ticks at 06, 12 and 18, and the seen interval in span blue (buoy blue when it began on an earlier day).
+### Interactive Chart (signature)
+Per-profile stacked layers in each profile's ink, its blocked share in the dim ink; legend checkboxes turn layers on and off. A dimension line (ticked extension lines either side of the mono span) sits over the plot; a two-line readout above the plot holds its height so the plot never moves under the pointer. Finding markers sit at the top as rose tags (open) or `panel-3` tags (decided) with dashed leaders down in the profile's ink. A bar past the capped scale is cut by a break mark, two slashes in the sheet's colour, with its real value above. The dashed `usual` line shows normal traffic. The server draws an SVG version first and without JavaScript.
+
+### Finding Explanation
+The model's summary first (17px, 72ch), then likely cause and recommended action side by side in a bordered grid (the action cell one step lighter), each headed by a drawn 16px icon, then a facts row with a confidence meter (100 by 6px), priority and who decides.
+
+### Confirm Dialog
+A 460px `panel-2` dialog with a `line-ink` border and the lift shadow, rising 8px into place over 200ms; the question in `ink-2`, actions right-aligned.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** print every finding number as a four-digit notice (`0004`), in the table, the page title and the chart markers alike.
-- **Do** write a decision as a correction: struck old status, then new status and time, in correction magenta, and keep every past correction visible in the history.
-- **Do** draw open-finding markers in magenta and decided-finding markers as grey pills, on every chart.
-- **Do** set every outside name sloped (domains in JetBrains Mono italic, defanged; device names in italic), escaped and never as a link.
-- **Do** keep to the 12/14/16/18/28 ladder, the night weights (body 420, labels 560, buttons 620) and tabular figures, with numeric columns right-aligned.
-- **Do** let live arrivals open their own space and settle, keep fixed-height feeds fixed, and reserve room for text that changes (readouts, Show N new, Pause/Resume) so nothing under the pointer moves.
-- **Do** step surfaces lighter as they rise (ground, surface, surface-2, surface-3) and take every neutral from the navy ramp.
-- **Do** give every animation a reduced-motion form: transitions near zero, no ring, feed rows fade in over 200ms, the correction and the dialog simply appear.
-- **Do** serve every font, script and stylesheet from `/static/`, with no inline style attributes or inline scripts, so the strict CSP holds.
+- **Do** draw every profile in its layer ink (`layer-1` teal, `layer-2` violet by configuration position) on every surface that names or plots it, and its blocked queries in the `-dim` partner.
+- **Do** enter every triage decision as a revision: rose delta, letter, old status struck, new status, time.
+- **Do** head every sheet with the title block (title, lead, Showing, Drawn, Sheet) inside the 1.5px `frame` rule.
+- **Do** set every outside name (domain, device) in JetBrains Mono italic, escaped and defanged, as plain text.
+- **Do** keep figures tabular and in mono, and text at 11px or larger.
+- **Do** draw every control in the set's ink: the custom select, drawn checkbox and switch, segmented control, sort headings, and dialogs, with the native element kept for keyboard, screen readers and no-JavaScript use.
+- **Do** keep every page usable without JavaScript and within a strict CSP: no inline styles or scripts, nothing external, fonts self-hosted.
+- **Do** honour reduced motion: transitions collapse, the revision appears already inked, dialogs and menus appear without animation.
 
 ### Don't:
-- **Don't** use magenta for links, primary buttons, decoration or a data series; it means attention or a decision, nothing else.
-- **Don't** show severity by any colour outside the five buoys, or as a solid fill instead of a tinted chip.
-- **Don't** set the product's own words in italics, or an outside name upright.
-- **Don't** use pure black or a neutral grey for any surface; the darkest value is the rail navy.
-- **Don't** let a new row, a refreshed table or a changed figure push the page or shift a control.
-- **Don't** load fonts, scripts, icons or images from outside `/static/`.
+- **Don't** use rose for severity, decoration or emphasis; it belongs to decisions and the owner's hand.
+- **Don't** use a layer ink for anything that is not that profile.
+- **Don't** add shadows to panels, cards, buttons or chips; only menus and dialogs lift.
+- **Don't** build KPI tiles over a grey table, a neon HUD with glows, or a generic admin template.
+- **Don't** move to a navy or pure-black ground, or add a light theme; the set is graphite and dark only.
+- **Don't** make an outside name a link, or render it in the sans.
+- **Don't** erase a decision; a reopened finding shows "open" with its revision under it.

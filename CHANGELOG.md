@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### Dashboard: the drawing set
+
+A new visual world, recorded in `DESIGN.md`: every page is a sheet in one
+set of drawings, each NextDNS profile draws on its own layer in its own ink
+(router teal, pc violet), and every triage decision is entered as a revision
+in rose ink. Still dark only; inked decisions are kept.
+
+- One profile switch in the rail: Both, router or pc. It scopes every page,
+  chart, table and the live feed, is remembered in a cookie
+  (`sentinel_scope`, `HttpOnly`, `SameSite=Strict`), and each option shows its
+  open findings, so a problem on a profile not shown is never hidden. A link
+  to a finding on another profile still opens. New route: `/scope`.
+- Charts draw each profile shown as its own layer, stacked, with its blocked
+  queries darker within it; a checkbox per layer in the legend hides or shows
+  it; the readout splits every count per profile; a dimension line over the
+  plot states the span and bar size. `/api/series` gains `layers`.
+- Every table heading sorts: numbers, times and priorities the right way
+  round, remembered across live refreshes. Works on the findings, the
+  decisions table, Domains, Devices, Health, Digests, Evaluation, a finding's
+  recent queries and the list under a chart.
+- Every control is the dashboard's own: dropdowns are listboxes drawn in its
+  ink (keyboard, type-ahead, screen-reader roles; the native select stays in
+  the form, so filters work without JavaScript), checkboxes and the "Only
+  blocked" switch are drawn, the "Mark benign" confirmation is the dashboard's
+  dialog instead of the browser's, and scrollbars, selection and focus rings
+  are themed.
+- The findings Day filter lists only days that have findings, with counts.
+- A finding's explanation leads with the model's reading, then likely cause
+  and recommended action side by side, then confidence (a meter), whether the
+  model raised the priority, and who decides. Its history is a lettered
+  revision list.
+- On a finding's page, J and K (or the links) move to the next and previous
+  open finding in triage order.
+- Every page opens with a title block: what it shows, when it was drawn, and
+  its place in the set. The live feed sets time, profile, name, device and
+  status in fixed columns.
+- The findings table keeps every sortable column down to about 1,000 pixels
+  of table width, giving up only Events first.
+
 ### Fixes
 
 - The daily digest arrives even when the computer is off at the digest time:

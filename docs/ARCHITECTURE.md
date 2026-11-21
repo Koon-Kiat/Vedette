@@ -316,6 +316,61 @@ uPlot 1.6.32 on a canvas, from `static/charts.js`.
   call or `cssText`, and if `charts.js` builds a request or link from anything
   but numbers it has checked.
 
+### Profiles shown
+
+The rail's switch chooses which profiles every page shows: all of them, or
+one. `GET /scope?to=<all|profile id>&next=<path>` stores the choice in a
+`sentinel_scope` cookie (`HttpOnly`, `SameSite=Strict`, a year) and redirects
+back; `next` goes through the same check as every other redirect, so it never
+leaves the dashboard, and an unknown profile gets a 422. A plain link does it,
+so it works without JavaScript; a cross-site request carries no session
+(`SameSite=Strict`) and lands on the login page.
+
+Each request builds its reads for the chosen profiles: the dashboard's
+queries already take their profile list when they are created, so the
+Overview, the charts and `/api/series`, the list under a chart, the Live page
+and its stream, Findings, Domains and Devices all follow the switch. Some
+things stay whole on purpose:
+
+- **The rail** counts open findings for every profile, and each option of
+  the switch shows its own, so a problem on a profile not shown is still in
+  sight. The live stream's open count follows the rail.
+- **A finding's page** is looked up across every profile, so a link from an
+  alert or a digest always opens; its next and previous links follow the
+  switch.
+- **Digests, Health and Evaluation** describe the whole pipeline and say so
+  in their title block.
+
+Each profile has a layer ink, by its position in the configuration
+(`layer-1`, `layer-2`, ...), used for it everywhere: the switch, tables, the
+live feed and the charts. `/api/series` returns `layers`, one per profile
+shown, with its own allowed and blocked counts, besides the totals.
+
+### Controls
+
+`static/ui.js` adds the dashboard's own controls on top of markup that works
+without it:
+
+- **Select.** A native `<select data-ui="select">` becomes a button and a
+  listbox (`role="listbox"`, `aria-activedescendant`, arrows, Home, End,
+  type-ahead, Esc). The native select stays in the form, holds the value and
+  fires `change`, so the htmx filters work unchanged; without the script it
+  is a styled native select and a Filter button.
+- **Sorting.** Every `table.sortable` gets a button in each heading and
+  `aria-sort`. Cells may carry `data-sort` (epoch seconds, a priority's rank)
+  so times and priorities sort by value; numbers sort as numbers. A table
+  that htmx refreshes (the decisions on the Overview) keeps its sort.
+- **Confirm.** htmx's `hx-confirm` opens a native `<dialog>` drawn by the
+  dashboard instead of `window.confirm`; the action button repeats the
+  action's name.
+- **Keys.** On a finding's page, J and K follow the next and previous open
+  finding links.
+
+The same test that guards `live.js` and `charts.js` fails the build if
+`ui.js` uses an HTML-writing call or `cssText`. Checkboxes and the switch are
+drawn in CSS beside a real input, which keeps the keyboard and screen-reader
+behaviour of the input itself.
+
 ### Fonts
 
 Mona Sans (variable weight and width) and JetBrains Mono (upright and italic)
@@ -720,6 +775,19 @@ test checks each file's SHA-256, as for htmx.
     reports when it has caught up; the check waits for that for at most 10
     minutes, and a problem announced before the restart is neither repeated
     nor resolved meanwhile.
+84. **The dashboard became "the drawing set", with one profile switch.** The
+    owner asked for a more professional and futuristic look, a way to see
+    router, pc or both on every chart, sortable headings and controls of the
+    dashboard's own. The world was chosen from a deal of directions, recorded
+    with its reasons in `.impeccable/surfaces/src-sentinel-web.md`, and is
+    described in `DESIGN.md`. Profiles became layers with their own inks
+    because that one idea answers the request for separation everywhere at
+    once. The switch is global and remembered, not one control per panel, as
+    the owner chose; its options carry open counts so scoping never hides a
+    problem. Sorting runs in the browser on the rows shown, since every table
+    shows all its rows (findings at most 200), and the server's order stays
+    the default. Dark only and the inked decisions were kept at the owner's
+    request.
 
 ## Verified facts the design relies on
 

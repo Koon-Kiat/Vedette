@@ -196,6 +196,16 @@ the dashboard itself; nothing is loaded from the internet. It uses the whole
 width of wide and ultrawide screens: from 2,240 pixels the Overview and Live
 pages set their panels side by side instead of in one long column.
 
+**Profiles shown.** The switch at the top of the menu shows both profiles,
+or only the router or only the pc, on every page, chart, table and the live
+feed; the browser remembers the choice. Each profile keeps its own colour
+everywhere (router teal, pc violet), and each option shows how many findings
+are open on it, so nothing waits unseen on the profile you are not looking
+at. Digests, Health and Evaluation always cover every profile.
+
+**Tables** sort by any column: click a heading, and click again to reverse.
+On a finding's page, J and K move to the next and previous open finding.
+
 The "Queries over time" charts on the Overview and Live pages follow live:
 each query joins its bar as it arrives. You can work with them directly:
 
@@ -204,8 +214,12 @@ each query joins its bar as it arrives. You can work with them directly:
   finer bars, down to one minute.
 - **Move through time:** hold Shift and scroll or drag, or scroll sideways on
   a trackpad. A double-click, or "Back to live", returns to the present.
-- **Read exact numbers:** point at a bar for its queries, blocked share and
-  the usual level; point at a pink marker for the finding it stands for.
+- **Read exact numbers:** point at a bar for its queries, blocked share,
+  each profile's share and the usual level; point at a pink marker for the
+  finding it stands for.
+- **One profile or both:** with both shown, each profile is its own layer
+  of the bars, its blocked queries darker; the checkboxes under the chart
+  hide or show a layer.
 - **Click through:** click a bar to list what happened then (totals,
   findings, the most looked-up domains and the latest queries); click a
   marker to open its finding.

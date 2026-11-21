@@ -1,43 +1,42 @@
 {% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
 {% block content %}
-<header class="page-head">
-  <h1>Findings</h1>
-  <p class="lead">Acknowledge what you have seen; mark benign what is not a problem. Every decision stays on the record.</p>
-</header>
+{% call titleblock("Findings", "3 of 8") %}
+  <p class="lead">Acknowledge what you have seen; mark benign what is not a problem. Every decision is entered on the record and never erased.</p>
+{% endcall %}
 <form class="filters" method="get" action="/findings" hx-get="/findings" hx-target="#findings-table" hx-push-url="true" hx-trigger="change, submit">
-  <label>Profile
-    <select name="profile">
-      <option value="">Any</option>
-      {% for id, label in labels.items() %}<option value="{{ id }}"{% if wanted.profile_id == id %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  <label class="field"><span class="field-label">Status</span>
+    <select name="status" data-ui="select">
+      {% for status in statuses %}<option value="{{ status }}"{% if (wanted.status or "all") == status %} selected{% endif %}>{{ "Any status" if status == "all" else status|capitalize }}</option>{% endfor %}
     </select>
   </label>
-  <label>Device
-    <select name="device">
-      <option value="">Any</option>
-      {% for device in devices %}<option value="{{ device }}"{% if wanted.device == device %} selected{% endif %}>{{ device|text }}</option>{% endfor %}
+  <label class="field"><span class="field-label">Priority</span>
+    <select name="severity" data-ui="select">
+      <option value="">Any priority</option>
+      {% for level in severities %}<option value="{{ level }}"{% if wanted.min_severity and wanted.min_severity.value == level %} selected{% endif %}>{{ level|capitalize }}{{ "" if level == "critical" else " or higher" }}</option>{% endfor %}
     </select>
   </label>
-  <label>Rule
-    <select name="rule">
-      <option value="">Any</option>
+  <label class="field"><span class="field-label">Rule</span>
+    <select name="rule" data-ui="select">
+      <option value="">Any rule</option>
       {% for rule in rules %}<option value="{{ rule }}"{% if wanted.rule_id == rule %} selected{% endif %}>{{ rule }}</option>{% endfor %}
     </select>
   </label>
-  <label>At least
-    <select name="severity">
-      <option value="">Any priority</option>
-      {% for level in severities %}<option value="{{ level }}"{% if wanted.min_severity and wanted.min_severity.value == level %} selected{% endif %}>{{ level }}</option>{% endfor %}
+  <label class="field"><span class="field-label">Device</span>
+    <select name="device" data-ui="select">
+      <option value="">Any device</option>
+      {% for device in devices %}<option value="{{ device }}"{% if wanted.device == device %} selected{% endif %}>{{ device|text }}</option>{% endfor %}
     </select>
   </label>
-  <label>Status
-    <select name="status">
-      {% for status in statuses %}<option value="{{ status }}"{% if (wanted.status or "all") == status %} selected{% endif %}>{{ status }}</option>{% endfor %}
+  <label class="field"><span class="field-label">Last seen</span>
+    <select name="date" data-ui="select">
+      <option value="">Any day</option>
+      {% set listed = days|map(attribute=0)|list %}
+      {% if wanted.day and wanted.day not in listed %}<option value="{{ wanted.day.isoformat() }}" selected>{{ wanted.day.strftime("%a %d %b %Y") }}, none</option>{% endif %}
+      {% for day, count in days %}<option value="{{ day.isoformat() }}"{% if wanted.day == day %} selected{% endif %}>{% if day == today %}Today{% elif (today - day).days == 1 %}Yesterday{% else %}{{ day.strftime("%a %d %b") }}{% endif %} · {{ count|num }}</option>{% endfor %}
     </select>
   </label>
-  <label>Day
-    <input type="date" name="date" value="{{ wanted.day.isoformat() if wanted.day else "" }}">
-  </label>
-  <button type="submit">Filter</button>
+  <button type="submit" class="filters-apply">Filter</button>
 </form>
 <div id="findings-table" class="block">
 {% include "_findings_table.html" %}

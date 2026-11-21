@@ -5,24 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#08121c">
+<meta name="theme-color" content="#0a0b0c">
 <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false, "selfRequestsOnly": true, "historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
 <title>{{ title }} · NextDNS Sentinel</title>
 <link rel="preload" href="/static/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
 {% block styles %}{% endblock %}
 <link rel="stylesheet" href="/static/style.css?v={{ version("style.css") }}">
 <script src="/static/vendor/htmx-2.0.11.min.js" defer></script>
-{% if csrf is defined %}<script src="/static/live.js?v={{ version("live.js") }}" defer></script>{% endif %}
+{% if csrf is defined %}<script src="/static/live.js?v={{ version("live.js") }}" defer></script>
+<script src="/static/ui.js?v={{ version("ui.js") }}" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </head>
 {% if csrf is defined %}
 <body class="app" hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
 <a class="skip-link" href="#main">Skip to the content</a>
 <header class="rail">
-  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>NextDNS <strong>Sentinel</strong></span></a>
-  <nav aria-label="Pages">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">NextDNS <strong>Sentinel</strong></span></a>
+  {% if switch is defined and switch %}
+  <nav class="layers" aria-labelledby="layers-title">
+    <p class="layers-title" id="layers-title">Profiles shown</p>
+    <ul>
+      {% for item in switch %}
+      <li><a class="layer-option{% if item.current %} is-current{% endif %}" href="/scope?to={{ item.id|urlencode }}&amp;next={{ here|urlencode }}"{% if item.current %} aria-current="true"{% endif %}>
+        <span class="layer-mark {{ "layer-mark-all" if item.id == "all" else "layer-mark-%d"|format(layers[item.id]) }}" aria-hidden="true"></span>
+        <span class="layer-name">{{ item.label }}</span>
+        <span class="layer-open{% if not item.open %} is-zero{% endif %}">{{ item.open|num }} open</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+  <nav class="pages" aria-label="Pages">
     {% for key, label, href in [("overview", "Overview", "/"), ("live", "Live", "/live"), ("findings", "Findings", "/findings"), ("domains", "Domains", "/domains"), ("devices", "Devices", "/devices"), ("digests", "Digests", "/digests"), ("health", "Health", "/health"), ("evaluation", "Evaluation", "/evaluation")] %}
-    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}{% if key == "findings" and shell is defined %} <span class="count{% if not shell.open_findings %} count-zero{% endif %}" data-live="open-count" title="Open findings">{{ shell.open_findings|num }}</span>{% elif key == "live" %} <span class="live-dot" data-live="dot" aria-hidden="true"></span>{% endif %}</a>
+    <a href="{{ href }}"{% if nav == key %} aria-current="page"{% endif %}><span class="page-name">{{ label }}</span>{% if key == "findings" and shell is defined %}<span class="count{% if not shell.open_findings %} count-zero{% endif %}" data-live="open-count" title="Open findings, every profile">{{ shell.open_findings|num }}</span>{% elif key == "live" %}<span class="live-dot" data-live="dot" aria-hidden="true"></span>{% endif %}</a>
     {% endfor %}
   </nav>
   {% if shell is defined %}

@@ -25,7 +25,10 @@ async def test_evidence_is_labelled_in_words(filled: Store) -> None:
 
     assert "Evidence when it fired" in html
     assert "What the local caches know now" in html
-    assert "<th>Name queried</th>" in html and "<th>Domain age, days</th>" in html
+    assert (
+        '<th scope="row">Name queried</th>' in html
+        and '<th scope="row">Domain age, days</th>' in html
+    )
     assert "domain_age_days" not in html and "<th>fqdn</th>" not in html
     assert "<td>allowed</td>" in html and "<td>default</td>" not in html
 

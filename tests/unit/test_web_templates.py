@@ -86,7 +86,7 @@ def test_the_vendored_uplot_is_the_reviewed_file(name: str, sha256: str) -> None
     assert hashlib.sha256(file.read_bytes()).hexdigest() == sha256
 
 
-@pytest.mark.parametrize("name", ["live.js", "charts.js"])
+@pytest.mark.parametrize("name", ["live.js", "charts.js", "ui.js"])
 def test_our_scripts_never_write_html(name: str) -> None:
     script = (WEB / "static" / name).read_text(encoding="utf-8")
 

@@ -17,7 +17,8 @@
 
   const feeds = live("feed");
   const shown = new Set($$(".feed-row[data-id]").map((row) => row.dataset.id));
-  const filters = { onlyBlocked: false, profile: "" };
+  const filters = { onlyBlocked: false };
+  const inkOf = (value) => (Number.isInteger(value) && value >= 0 && value <= 9 ? value : 0);
   let paused = false;
   let buffer = [];
   const BUFFER_LIMIT = 500;
@@ -75,25 +76,22 @@
   // --- the feed --------------------------------------------------------------
 
   function visible(item) {
-    if (filters.onlyBlocked && item.status !== "blocked") return false;
-    if (filters.profile && item.profile !== filters.profile) return false;
-    return true;
+    return !(filters.onlyBlocked && item.status !== "blocked");
   }
 
   function row(item) {
-    const li = el("li", `feed-row status-${item.status === "blocked" ? "blocked" : "allowed"} is-new`);
+    const ink = inkOf(item.ink);
+    const li = el("li", `feed-row ink-${ink} status-${item.status === "blocked" ? "blocked" : "allowed"} is-new`);
     li.dataset.id = item.id;
     li.dataset.t = String(item.t);
     li.dataset.status = item.status;
-    li.dataset.profile = item.profile;
     li.append(el("span", "feed-time", item.time));
+    // Each row carries its profile's layer ink, with the name spelt out beside it.
+    const layer = el("span", "feed-layer");
+    layer.append(el("span", `layer-mark layer-mark-${ink}`), el("span", "feed-profile", item.profile));
+    li.append(layer);
     li.append(el("span", "feed-domain name", item.domain));
-    const where = el("span", "feed-where", item.profile);
-    if (item.device) {
-      where.append(" · ");
-      where.append(el("span", "device", item.device));
-    }
-    li.append(where);
+    li.append(el("span", "feed-device device", item.device || ""));
     const status = el("span", "feed-status");
     if (item.status === "blocked") {
       const chip = el("span", "chip chip-blocked", "blocked");
@@ -164,7 +162,7 @@
     // The charts add each query to its bar as it arrives.
     document.dispatchEvent(
       new CustomEvent("sentinel:queries", {
-        detail: fresh.map((item) => ({ t: item.t, status: item.status })),
+        detail: fresh.map((item) => ({ t: item.t, status: item.status, ink: item.ink })),
       }),
     );
     ping();
@@ -185,7 +183,7 @@
     for (const feed of feeds) {
       if (!("filterable" in feed.dataset)) continue;
       for (const item of $$(".feed-row", feed)) {
-        item.hidden = !visible({ status: item.dataset.status, profile: item.dataset.profile });
+        item.hidden = !visible({ status: item.dataset.status });
       }
     }
   }
@@ -195,12 +193,6 @@
   for (const box of live("only-blocked")) {
     box.addEventListener("change", () => {
       filters.onlyBlocked = box.checked;
-      applyFilters();
-    });
-  }
-  for (const select of live("profile")) {
-    select.addEventListener("change", () => {
-      filters.profile = select.value;
       applyFilters();
     });
   }

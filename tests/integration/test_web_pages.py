@@ -44,7 +44,8 @@ async def test_overview_compares_the_last_day_with_the_week(filled: Store) -> No
     assert page.status_code == 200
     assert "Last 24 hours" in html
     assert "router" in html and "pc" in html
-    assert "1 critical" in html and "2 high" in html
+    assert 'sev-critical">critical</span></th><td class="num strong">1</td>' in html
+    assert 'sev-high">high</span></th><td class="num strong">2</td>' in html
     assert "D2" in html and "Kitchen tablet" in html
     assert html.count('class="bar-allowed"') == 24
     assert "threat-intel-allowed" in html and "bad[.]example" in html
@@ -104,7 +105,7 @@ async def test_finding_detail_shows_evidence_enrichment_explanation_and_queries(
 
     html = page.text
     assert page.status_code == 200
-    assert "<th>Domain age, days</th>" in html  # evidence, in words
+    assert '<th scope="row">Domain age, days</th>' in html  # evidence, in words
     assert "The laptop visited fresh-site[.]example" in html
     assert "Registered 5 days ago" in html
     assert "Not on the top-sites list" in html

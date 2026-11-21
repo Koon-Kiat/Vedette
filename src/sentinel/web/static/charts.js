@@ -62,21 +62,26 @@
   function palette() {
     const style = getComputedStyle(document.documentElement);
     const get = (name) => style.getPropertyValue(name).trim();
+    // Each profile's layer ink, by its position in the configuration (1, 2, ...);
+    // 0 is the neutral ink for a series that carries no layers.
+    const layer = (ink) => get(`--layer-${ink}`) || get("--layer-0");
+    const layerDim = (ink) => get(`--layer-${ink}-dim`) || get("--layer-0-dim");
     return {
-      allowed: get("--allowed"),
-      blocked: get("--blocked"),
-      now: get("--primary"),
-      usual: get("--low"),
-      band: get("--tint"),
-      halo: get("--surface"),
-      magenta: get("--magenta"),
-      onMagenta: get("--on-magenta"),
-      decided: get("--surface-3"),
+      layer,
+      layerDim,
+      now: get("--now-wash"),
+      usual: get("--usual"),
+      band: get("--band"),
+      halo: get("--sheet"),
+      rev: get("--rev"),
+      onRev: get("--on-rev"),
+      decided: get("--panel-3"),
       ink2: get("--ink-2"),
       ink3: get("--ink-3"),
       line: get("--line"),
       lineStrong: get("--line-strong"),
       sans: '"Mona Sans", system-ui, sans-serif',
+      mono: '"JetBrains Mono", ui-monospace, monospace',
     };
   }
 
@@ -117,6 +122,8 @@
     else ctx.rect(x, y, w, h);
   }
 
+  const inkOf = (value) => (Number.isInteger(value) && value >= 0 && value <= 9 ? value : 0);
+
   function cleanFinding(raw) {
     if (!raw || !Number.isInteger(raw.id) || !Number.isFinite(raw.t)) return null;
     return {
@@ -126,11 +133,30 @@
       rule: String(raw.rule ?? "").slice(0, 80),
       about: String(raw.about ?? "").slice(0, 120),
       status: STATUSES.has(raw.status) ? raw.status : "open",
+      profile: String(raw.profile ?? "").slice(0, 40),
+      ink: inkOf(raw.ink),
     };
   }
 
   function counts(list) {
     return Array.isArray(list) ? list.map((value) => (Number.isFinite(value) && value > 0 ? value : 0)) : null;
+  }
+
+  /* The per-profile layers of a series, or one neutral layer from its totals. */
+  function layersOf(body, length) {
+    const out = [];
+    for (const raw of Array.isArray(body.layers) ? body.layers.slice(0, 9) : []) {
+      const allowed = counts(raw && raw.allowed);
+      const blocked = counts(raw && raw.blocked);
+      if (!allowed || !blocked || allowed.length !== length || blocked.length !== length) return null;
+      out.push({
+        label: String(raw.label ?? "").slice(0, 40),
+        ink: inkOf(raw.ink),
+        total: allowed.map((value, i) => value + blocked[i]),
+        blocked,
+      });
+    }
+    return out;
   }
 
   // --- one chart ------------------------------------------------------------------
@@ -143,10 +169,12 @@
     const detail = part("detail");
     const title = part("title");
     const follow = part("follow");
+    const dim = part("dim");
     const fallback = part("fallback");
     const liveButton = section.querySelector('[data-action="live"]');
     const expandButton = section.querySelector('[data-action="expand"]');
     const rangeButtons = Array.from(section.querySelectorAll("[data-range]"));
+    const layerKeys = part("layers");
     if (!plot || !readout || !detail || !expandButton) return;
 
     const clock = clockFor(section.dataset.tz || undefined);
@@ -159,8 +187,10 @@
       max: 0,
       step: 60,
       t: [],
-      total: [],
+      total: [], // over the layers shown
       blocked: [],
+      layers: [], // { label, ink, total: [], blocked: [] } per profile
+      hidden: new Set(), // inks of the layers switched off in the legend
       usual: null,
       findings: [],
       clusters: [],
@@ -175,6 +205,7 @@
       seq: 0,
       controller: null,
       points: 0, // how many bars the last fetch asked for
+      cap: null, // where the y scale stops when one bar towers over the rest
     };
     state.span = state.range;
 
@@ -212,16 +243,40 @@
 
     // --- data -----------------------------------------------------------------------
 
+    const shown = () => state.layers.filter((layer) => !state.hidden.has(layer.ink));
+
+    /* Totals over the layers shown, for the readouts and the y scale. */
+    function recount() {
+      const layers = shown();
+      state.total = state.t.map((_, i) => layers.reduce((sum, layer) => sum + layer.total[i], 0));
+      state.blocked = state.t.map((_, i) => layers.reduce((sum, layer) => sum + layer.blocked[i], 0));
+    }
+
+    /* The layers are stacked, the first profile at the bottom; within each,
+     * its blocked queries sit darker at the foot of its segment. Bars always
+     * rise from zero, so they are painted tallest first and each later one
+     * covers the lower part of the one before: per layer, from the top down,
+     * its segment's top and then the top of its blocked part. */
     function data() {
       const half = state.step / 2;
       const nowBucket = state.following ? Math.floor(nowEst() / state.step) * state.step : null;
-      // Copies: the live stream changes the counts between redraws.
-      return [
-        state.t.map((t) => t + half),
-        state.total.slice(),
-        state.t.map((t, i) => (t === nowBucket ? state.total[i] : null)),
-        state.blocked.slice(),
-      ];
+      const out = [state.t.map((t) => t + half)];
+      const below = [];
+      let base = state.t.map(() => 0);
+      for (const layer of state.layers) {
+        below.push(base);
+        const off = state.hidden.has(layer.ink);
+        base = base.map((value, i) => value + (off ? 0 : layer.total[i]));
+      }
+      for (let k = state.layers.length - 1; k >= 0; k--) {
+        const layer = state.layers[k];
+        const off = state.hidden.has(layer.ink);
+        out.push(below[k].map((value, i) => (off ? null : value + layer.total[i])));
+        out.push(below[k].map((value, i) => (off || !layer.blocked[i] ? null : value + layer.blocked[i])));
+      }
+      // The bar still counting, washed over every layer.
+      out.push(state.t.map((t, i) => (t === nowBucket ? state.total[i] : null)));
+      return out;
     }
 
     function visibleIdx() {
@@ -244,6 +299,10 @@
         state.t.push(state.t[state.t.length - 1] + state.step);
         state.total.push(0);
         state.blocked.push(0);
+        for (const layer of state.layers) {
+          layer.total.push(0);
+          layer.blocked.push(0);
+        }
         grew = true;
       }
       return grew;
@@ -254,9 +313,15 @@
       const bucket = Math.floor(item.t / state.step) * state.step;
       const index = (bucket - state.t[0]) / state.step;
       if (index < 0 || index > state.t.length + 1440) return false;
+      const layer = state.layers.find((each) => each.ink === item.ink) || (state.layers.length === 1 ? state.layers[0] : null);
+      if (!layer) return false; // a profile this chart does not draw
       grow(bucket);
-      state.total[index] += 1;
-      if (item.blocked) state.blocked[index] += 1;
+      layer.total[index] += 1;
+      if (item.blocked) layer.blocked[index] += 1;
+      if (!state.hidden.has(layer.ink)) {
+        state.total[index] += 1;
+        if (item.blocked) state.blocked[index] += 1;
+      }
       return true;
     }
 
@@ -267,6 +332,10 @@
         state.t.shift();
         state.total.shift();
         state.blocked.shift();
+        for (const layer of state.layers) {
+          layer.total.shift();
+          layer.blocked.shift();
+        }
       }
     }
 
@@ -278,10 +347,22 @@
       if (!t || !allowed || !blocked || !(step > 0) || allowed.length !== t.length || blocked.length !== t.length) {
         return false;
       }
+      let layers = layersOf(body, t.length);
+      if (!layers) return false;
+      if (!layers.length) {
+        layers = [{ label: "", ink: 0, total: allowed.map((value, i) => value + blocked[i]), blocked }];
+      }
+      // The chart's layers are fixed by its first answer; later answers fill them.
+      if (state.layers.length) {
+        layers = state.layers.map((known) => {
+          const fresh = layers.find((layer) => layer.ink === known.ink);
+          return fresh || { ...known, total: t.map(() => 0), blocked: t.map(() => 0) };
+        });
+      }
       state.step = step;
       state.t = t;
-      state.blocked = blocked;
-      state.total = allowed.map((value, i) => value + blocked[i]);
+      state.layers = layers;
+      recount();
       state.usual = Number.isFinite(body.usual) ? body.usual : null;
       state.findings = (Array.isArray(body.findings) ? body.findings : []).map(cleanFinding).filter(Boolean);
       state.serverNow = Number.isFinite(body.now) ? body.now : Date.now() / 1000;
@@ -349,8 +430,24 @@
 
     // --- drawing --------------------------------------------------------------------
 
+    /* A few bars far above the rest (bursts of hundreds in a quiet half hour)
+       would flatten every other bar to a sliver. When the tallest bar is more
+       than four times the 90th-percentile bar, the scale stops at two and a
+       half times that bar instead, and every bar that passes it is drawn
+       broken, with its value written on it. */
+    function cap() {
+      const [first, last] = visibleIdx();
+      const values = [];
+      for (let i = first; first >= 0 && i <= last; i++) if (state.total[i] > 0) values.push(state.total[i]);
+      if (values.length < 6) return null;
+      values.sort((a, b) => a - b);
+      const usual = values[Math.floor((values.length - 1) * 0.9)];
+      return usual > 0 && values[values.length - 1] > 4 * usual ? usual * 2.5 : null;
+    }
+
     function yTop(self, high) {
-      const top = Math.max(high || 0, state.usual || 0, 1);
+      state.cap = cap();
+      const top = Math.max(state.cap ?? (high || 0), state.usual || 0, 1);
       const height = self.bbox && self.bbox.height ? self.bbox.height / uPlot.pxRatio : 200;
       const room = state.findings.length ? 30 : 8; // kept free above the tallest bar
       return top / Math.max(0.5, 1 - room / height);
@@ -404,7 +501,7 @@
       const width = self.bbox.width / uPlot.pxRatio;
       const { ctx } = self;
       ctx.save();
-      ctx.font = `700 12px ${colors.sans}`;
+      ctx.font = `600 11.5px ${colors.mono}`;
       const finish = (c) => {
         const first = c.items[0];
         const last = c.items[c.items.length - 1];
@@ -437,29 +534,33 @@
       const height = 18 * r;
       const bottom = bbox.top + bbox.height;
       ctx.save();
-      ctx.font = `700 ${12 * r}px ${colors.sans}`;
+      ctx.font = `600 ${11.5 * r}px ${colors.mono}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       for (const c of state.clusters) {
+        // Each finding's leader runs down in its profile's ink, dashed like a
+        // revision cloud's tail; open ones are drawn stronger.
         ctx.lineWidth = r;
-        ctx.strokeStyle = c.open ? colors.magenta : colors.lineStrong;
-        ctx.globalAlpha = c.open ? 0.5 : 1;
+        ctx.setLineDash([3 * r, 3 * r]);
         for (const item of c.items) {
           const x = Math.round(bbox.left + item.x * r) + 0.5;
+          ctx.strokeStyle = item.status === "open" ? colors.layer(item.ink) : colors.lineStrong;
+          ctx.globalAlpha = item.status === "open" ? 0.9 : 0.7;
           ctx.beginPath();
           ctx.moveTo(x, top + height);
           ctx.lineTo(x, bottom);
           ctx.stroke();
         }
+        ctx.setLineDash([]);
         ctx.globalAlpha = 1;
         const x = bbox.left + c.x * r;
         const w = c.w * r;
         ctx.beginPath();
-        roundRect(ctx, x - w / 2, top, w, height, height / 2);
+        roundRect(ctx, x - w / 2, top, w, height, 3 * r);
         if (c.open) {
-          ctx.fillStyle = colors.magenta;
+          ctx.fillStyle = colors.rev;
           ctx.fill();
-          ctx.fillStyle = colors.onMagenta;
+          ctx.fillStyle = colors.onRev;
         } else {
           ctx.fillStyle = colors.decided;
           ctx.fill();
@@ -490,8 +591,46 @@
       band.style.width = `${right - left}px`;
     }
 
+    /* A break mark across each bar that passes the capped scale: two slashes
+       cut in the sheet's colour, the bar's real value written above them. */
+    function drawBreaks(self) {
+      if (state.cap == null) return;
+      const { ctx, bbox } = self;
+      const r = uPlot.pxRatio;
+      const max = self.scales.y.max;
+      const [first, last] = visibleIdx();
+      const at = bbox.top + (state.findings.length ? 40 : 18) * r;
+      ctx.save();
+      ctx.font = `600 ${11 * r}px ${colors.mono}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      for (let i = first; first >= 0 && i <= last; i++) {
+        if (!(state.total[i] > max)) continue;
+        const left = self.valToPos(state.t[i], "x", true);
+        const right = self.valToPos(state.t[i] + state.step, "x", true);
+        const x = (left + right) / 2;
+        const half = Math.max(4 * r, ((right - left) * 0.84) / 2) + 2 * r;
+        ctx.strokeStyle = colors.halo;
+        ctx.lineWidth = 2.5 * r;
+        for (const dy of [0, 5 * r]) {
+          ctx.beginPath();
+          ctx.moveTo(x - half, at + dy + 3 * r);
+          ctx.lineTo(x + half, at + dy - 3 * r);
+          ctx.stroke();
+        }
+        const label = number.format(state.total[i]);
+        const width = ctx.measureText(label).width + 8 * r;
+        ctx.fillStyle = colors.halo;
+        ctx.fillRect(x - width / 2, at - 19 * r, width, 15 * r);
+        ctx.fillStyle = colors.ink2;
+        ctx.fillText(label, x, at - 5 * r);
+      }
+      ctx.restore();
+    }
+
     function drawOverlay(self) {
       drawUsual(self);
+      drawBreaks(self);
       drawMarkers(self);
       place(pickedBand, state.picked);
     }
@@ -500,6 +639,23 @@
 
     function findingsBetween(from, to) {
       return state.findings.filter((f) => f.t >= from && f.t < to);
+    }
+
+    /* "router 312 (21 blocked), pc 64": each layer shown, over bars first to last. */
+    function perLayer(first, last) {
+      if (state.layers.length < 2 || first < 0) return [];
+      const parts = [];
+      shown().forEach((layer, n) => {
+        let total = 0;
+        let blocked = 0;
+        for (let i = first; i <= last; i++) {
+          total += layer.total[i];
+          blocked += layer.blocked[i];
+        }
+        parts.push(["", n ? ", " : ". "], ["layer", layer.label], ["", " "], ["figure", number.format(total)]);
+        if (blocked) parts.push(["", ` (${number.format(blocked)} blocked)`]);
+      });
+      return parts;
     }
 
     function summary() {
@@ -512,10 +668,12 @@
         blocked += state.blocked[i];
       }
       const found = findingsBetween(min, max).length;
+      // The span and the bar size are on the dimension line above the plot.
       write(readout, [
-        ["unit", `Each bar is ${duration(state.step)}. `],
-        ["when", clock.span(Math.max(min, state.t[0] ?? min), Math.min(max, nowEst()))],
-        ["", ": "],
+        ["", dim ? "In view: " : ""],
+        ["unit", dim ? "" : `Each bar is ${duration(state.step)}. `],
+        ["when", dim ? "" : clock.span(Math.max(min, state.t[0] ?? min), Math.min(max, nowEst()))],
+        ["", dim ? "" : ": "],
         ...(total
           ? [
               ["figure", number.format(total)],
@@ -525,6 +683,7 @@
             ]
           : [["", "no queries"]]),
         ["", found ? `, ${plural(found, "finding")}` : ""],
+        ...(total ? perLayer(first, last) : []),
         ["", "."],
       ]);
     }
@@ -544,6 +703,7 @@
         ["figure", number.format(blocked)],
         ["", " blocked"],
         ["", total ? ` (${percent.format(blocked / total)})` : ""],
+        ...(total ? perLayer(i, i) : []),
         ["", state.usual != null ? `. Usual ${number.format(Math.round(state.usual))}` : ""],
         ["", found ? `. ${plural(found, "finding")}` : ""],
         ["", state.following && from <= now && now < to ? ". Still counting" : ""],
@@ -784,6 +944,13 @@
       if (liveButton) liveButton.hidden = state.following;
       if (!u) return;
       const [min, max] = view();
+      // The dimension line over the plot: the span drawn and the bar size.
+      if (dim) {
+        write(dim, [
+          ["when", clock.span(min, Math.min(max, nowEst()))],
+          ["unit", ` · 1 bar = ${duration(state.step)}`],
+        ]);
+      }
       u.setScale("x", { min, max });
     }
 
@@ -822,7 +989,7 @@
       for (const raw of items) {
         const t = Number(raw && raw.t);
         if (!Number.isFinite(t)) continue;
-        const item = { t, blocked: raw.status === "blocked" };
+        const item = { t, blocked: raw.status === "blocked", ink: inkOf(raw.ink) };
         state.recent.push(item);
         if (u && state.following && t > state.cutoff && add(item)) changed = true;
       }
@@ -880,6 +1047,59 @@
       plot.focus({ preventScroll: true });
     }
 
+    // --- layers in the legend ---------------------------------------------------------
+
+    const HIDDEN_KEY = "sentinel:hidden-layers";
+
+    function rememberHidden() {
+      try {
+        window.localStorage.setItem(HIDDEN_KEY, JSON.stringify([...state.hidden]));
+      } catch {
+        /* private window or storage blocked: the choice lasts until reload */
+      }
+    }
+
+    function recallHidden() {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(HIDDEN_KEY) || "[]");
+        if (Array.isArray(saved)) for (const ink of saved) if (Number.isInteger(ink)) state.hidden.add(ink);
+      } catch {
+        /* nothing saved, or unreadable: every layer shows */
+      }
+      // Never hide every layer: an empty chart reads as no traffic.
+      if (state.layers.every((layer) => state.hidden.has(layer.ink))) state.hidden.clear();
+    }
+
+    /* A switch per profile layer, drawn as the dashboard's own checkbox. */
+    function buildLayerKeys() {
+      if (!layerKeys || state.layers.length < 2) return;
+      recallHidden();
+      recount();
+      layerKeys.replaceChildren();
+      for (const layer of state.layers) {
+        const label = el("label", "check legend-item");
+        const box = el("input");
+        box.type = "checkbox";
+        box.checked = !state.hidden.has(layer.ink);
+        box.addEventListener("change", () => {
+          if (!box.checked && shown().length === 1) {
+            box.checked = true; // one layer always stays
+            announce(`${layer.label} is the only profile shown; it stays on.`);
+            return;
+          }
+          if (box.checked) state.hidden.delete(layer.ink);
+          else state.hidden.add(layer.ink);
+          rememberHidden();
+          recount();
+          redraw();
+          announce(`${layer.label} ${box.checked ? "shown" : "hidden"} on the chart.`);
+        });
+        label.append(box, el("span", "check-box"), el("span", `key key-layer key-layer-${layer.ink}`), document.createTextNode(layer.label));
+        layerKeys.append(label);
+      }
+      layerKeys.hidden = false;
+    }
+
     // --- create ---------------------------------------------------------------------
 
     function resize() {
@@ -892,12 +1112,13 @@
     }
 
     function create() {
-      for (const role of ["bar", "readout", "plot", "legend", "hint"]) {
+      for (const role of ["bar", "dim", "readout", "plot", "legend", "hint"]) {
         const node = part(role);
         if (node) node.hidden = false;
       }
       if (fallback) fallback.hidden = true;
-      const font = `12px ${colors.sans}`;
+      buildLayerKeys();
+      const font = `11.5px ${colors.mono}`;
       const bars = uPlot.paths.bars({ size: [0.84, Infinity, 1], align: 0 });
       const opts = {
         width: Math.max(200, Math.floor(plot.clientWidth)),
@@ -952,9 +1173,14 @@
         ],
         series: [
           {},
-          { label: "Queries", fill: colors.allowed, width: 0, paths: bars, points: { show: false } },
+          ...state.layers
+            .slice()
+            .reverse()
+            .flatMap((layer) => [
+              { label: `${layer.label || "Queries"}`, fill: colors.layer(layer.ink), width: 0, paths: bars, points: { show: false } },
+              { label: `${layer.label || "Queries"} blocked`, fill: colors.layerDim(layer.ink), width: 0, paths: bars, points: { show: false } },
+            ]),
           { label: "Current bar", fill: colors.now, width: 0, paths: bars, points: { show: false } },
-          { label: "Blocked", fill: colors.blocked, width: 0, paths: bars, points: { show: false } },
         ],
         hooks: {
           drawClear: [drawBand],

@@ -1,23 +1,23 @@
 {% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
 {% block content %}
-<header class="page-head">
-  <h1>Devices</h1>
-  <p class="lead">Devices seen in the last 7 days.</p>
-</header>
+{% call titleblock("Devices", "5 of 8") %}
+  <p class="lead">Devices seen in the last 7 days, one layer per profile.</p>
+{% endcall %}
 {% for profile in profiles %}
-<section class="block" aria-labelledby="profile-{{ loop.index }}">
-  <h2 id="profile-{{ loop.index }}">{{ profile.label }}</h2>
+<section class="block layer-section ink-{{ label_inks.get(profile.label, 0) }}" aria-labelledby="profile-{{ loop.index }}">
+  <h2 id="profile-{{ loop.index }}"><span class="layer-mark layer-mark-{{ label_inks.get(profile.label, 0) }}" aria-hidden="true"></span>{{ profile.label }}</h2>
   {% if not profile.queries_7d %}
   <p class="empty">No queries from this profile in the last 7 days, so there are no devices to show.</p>
   {% elif not profile.attribution %}
   <p class="panel notice">Device attribution unavailable on this profile: NextDNS reports no devices for it, so per-device rules count the whole profile. {{ profile.client_ips|num }} client address{{ "" if profile.client_ips == 1 else "es" }} seen.</p>
   {% elif profile.devices %}
   <div class="table-wrap">
-  <table>
-    <thead><tr><th>Device</th><th>Name</th><th>First seen</th><th>Last seen</th><th class="num">Queries, 24 h</th><th class="num">Queries, 7 days</th><th class="num">Findings</th></tr></thead>
+  <table class="sortable" id="t-devices-{{ loop.index }}">
+    <thead><tr><th>Device</th><th>Name</th><th data-first="descending">First seen</th><th data-first="descending" data-sorted="descending">Last seen</th><th class="num">Queries, 24 h</th><th class="num">Queries, 7 days</th><th class="num">Findings</th></tr></thead>
     <tbody>
       {% for device in profile.devices %}
-      <tr><td><span class="device">{{ device.device_id|text }}</span></td><td>{% if device.name %}<span class="device">{{ device.name|text }}</span>{% else %}–{% endif %}</td><td class="when">{{ device.first_seen|local(tz) }}</td><td class="when">{{ device.last_seen|local(tz) }}</td><td class="num">{{ device.queries_24h|num }}</td><td class="num">{{ device.queries_7d|num }}</td><td class="num">{{ device.findings|num }}</td></tr>
+      <tr><td><span class="device">{{ device.device_id|text }}</span></td><td>{% if device.name %}<span class="device">{{ device.name|text }}</span>{% else %}–{% endif %}</td><td class="when" data-sort="{{ device.first_seen.timestamp()|int if device.first_seen else 0 }}">{{ device.first_seen|local(tz) }}</td><td class="when" data-sort="{{ device.last_seen.timestamp()|int if device.last_seen else 0 }}">{{ device.last_seen|local(tz) }}</td><td class="num">{{ device.queries_24h|num }}</td><td class="num">{{ device.queries_7d|num }}</td><td class="num">{{ device.findings|num }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -4,24 +4,58 @@
 {% set a = row.analysis %}
 {% set level = row.priority.value %}
 {% set seen = f|span(tz) %}
-<p class="back"><a href="/findings">All findings</a></p>
-<header class="page-head finding-head">
-  <h1><span class="notice-no">{{ "%04d"|format(f.id) }}</span> {% include "_badge.html" %} <span>{{ f.rule_id }}</span> <span class="about">{% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}<span class="name">{{ f.target|domain }}</span>{% endif %}</span></h1>
+{% set ink = layers.get(f.profile_id, 0) %}
+<nav class="sheet-nav" aria-label="Findings">
+  <a class="back" href="/findings">All findings</a>
+  <span class="sheet-steps">
+    {% if previous_id %}<a href="/findings/{{ previous_id }}" data-key="previous" rel="prev">Previous open <span class="figure">{{ "%04d"|format(previous_id) }}</span></a>{% else %}<span class="step-off">No earlier open finding</span>{% endif %}
+    {% if next_id %}<a href="/findings/{{ next_id }}" data-key="next" rel="next">Next open <span class="figure">{{ "%04d"|format(next_id) }}</span></a>{% else %}<span class="step-off">No later open finding</span>{% endif %}
+    <span class="keys" aria-hidden="true"><kbd>K</kbd><kbd>J</kbd></span>
+  </span>
+</nav>
+<header class="titleblock finding-head ink-{{ ink }}">
+  <div class="tb-title">
+    <h1><span class="notice-no">{{ "%04d"|format(f.id) }}</span> {% include "_badge.html" %} <span class="rule-name">{{ f.rule_id }}</span></h1>
+    <p class="about">{% if f.target == f.profile_id %}{{ labels[f.profile_id] }}{% else %}<span class="name">{{ f.target|domain }}</span>{% endif %}</p>
+  </div>
+  <dl class="tb-fields">
+    <div class="tb-field"><dt>Profile</dt><dd><span class="layer-mark layer-mark-{{ ink }}" aria-hidden="true"></span>{{ labels[f.profile_id] }}{% if f.device_mode %} · <span class="device">{{ f.subject|text }}</span>{% endif %}</dd></div>
+    <div class="tb-field"><dt>Last seen</dt><dd class="figure">{{ f.last_ts|local(tz) }}</dd></div>
+    <div class="tb-field"><dt>Status</dt><dd>{% if f.status == "open" %}<span class="status-open">open</span>{% else %}<span class="corr"><svg class="chart rev-delta" viewBox="0 0 10 9" width="10" height="9" aria-hidden="true"><path d="M5 .6 9.4 8.4H.6Z"/></svg><s>open</s> {{ f.status }}</span>{% endif %}</dd></div>
+  </dl>
 </header>
 
 <div class="detail">
   <div class="detail-main">
-    <section class="block detail-explain" aria-labelledby="explain-title">
-      <h2 id="explain-title">Explanation</h2>
+    <section class="block explain" aria-labelledby="explain-title">
+      <div class="block-head">
+        <h2 id="explain-title">Explanation</h2>
+        {% if a %}
+        <p class="explain-source">{% if a.source == "template" %}Standard explanation; the local model was not used{% else %}<span class="model">{{ a.model|text }}</span>{% if a.source == "cache" %}, reused from an earlier identical finding{% endif %}{% endif %}</p>
+        {% endif %}
+      </div>
       {% if a %}
-      <p class="summary">{{ a.summary|prose }}</p>
-      <dl class="facts">
-        <dt>Likely cause</dt><dd>{{ a.likely_cause|prose }}</dd>
-        <dt>Recommended action</dt><dd>{{ a.recommended_action|prose }}</dd>
+      <p class="explain-summary">{{ a.summary|prose }}</p>
+      <div class="explain-grid">
+        <section class="explain-cell" aria-labelledby="cause-title">
+          <h3 id="cause-title"><svg class="chart explain-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.4 10.4 3.6 3.6"/></svg>Likely cause</h3>
+          <p>{{ a.likely_cause|prose }}</p>
+        </section>
+        <section class="explain-cell explain-action" aria-labelledby="action-title">
+          <h3 id="action-title"><svg class="chart explain-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.5 8h9"/><path d="m8.5 4.5 3.5 3.5-3.5 3.5"/><path d="M14 3v10"/></svg>Recommended action</h3>
+          <p>{{ a.recommended_action|prose }}</p>
+        </section>
+      </div>
+      <dl class="explain-facts">
+        {% if a.source != "template" %}
+        <div><dt>Confidence</dt><dd class="meter-row"><svg class="chart meter" viewBox="0 0 100 6" width="100" height="6" role="img" aria-label="Confidence {{ "%.2f"|format(a.confidence) }}"><rect class="meter-track" x="0" y="0" width="100" height="6" rx="1"/><rect class="meter-fill" x="0" y="0" width="{{ (a.confidence * 100)|round(0)|int }}" height="6" rx="1"/></svg><span class="figure">{{ "%.2f"|format(a.confidence) }}</span></dd></div>
+        {% endif %}
+        <div><dt>Priority</dt><dd>{% if row.priority != f.severity %}raised from the rule's <strong>{{ f.severity.value }}</strong> to <strong>{{ row.priority.value }}</strong> by the model{% else %}<strong>{{ f.severity.value }}</strong>, as the rule set it{% endif %}</dd></div>
+        <div><dt>Who decides</dt><dd>The rule set the floor; the model can only raise it.</dd></div>
       </dl>
-      <p class="note">{% if a.source == "template" %}Standard explanation; the local model was not used.{% else %}Explained by {{ a.model|text }}, confidence {{ "%.2f"|format(a.confidence) }}{% if a.source == "cache" %}, reused from an earlier identical finding{% endif %}.{% endif %} The rule set the floor; the model can only raise it.</p>
       {% else %}
-      <p>Not analysed yet. {% if spec %}{{ spec.description|prose }}{% endif %}</p>
+      <p class="explain-summary pending">Not analysed yet.</p>
+      {% if spec %}<p class="explain-rule">{{ spec.description|prose }}</p>{% endif %}
       {% endif %}
     </section>
 
@@ -29,7 +63,7 @@
       <h2 id="evidence-title">Evidence when it fired</h2>
       <div class="table-wrap">
       <table class="kv">
-        {% for label, value in f.evidence|evidence %}<tr><th>{{ label }}</th><td>{{ value }}</td></tr>{% endfor %}
+        {% for label, value in f.evidence|evidence %}<tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>{% endfor %}
       </table>
       </div>
     </section>
@@ -55,10 +89,10 @@
       <h2 id="queries-title">Recent queries</h2>
       {% if queries %}
       <div class="table-wrap">
-      <table>
-        <thead><tr><th>Time</th><th>Name</th><th>Status</th><th>Device</th></tr></thead>
+      <table class="sortable" id="t-recent">
+        <thead><tr><th data-first="descending" data-sorted="descending">Time</th><th>Name</th><th>Status</th><th>Device</th></tr></thead>
         <tbody>
-          {% for q in queries %}<tr><td class="when">{{ q.ts|local(tz) }}</td><td class="name">{{ q.fqdn|domain }}</td><td>{{ q.status|status_word }}</td><td>{% if q.device_id %}<span class="device">{{ q.device_id|text }}</span>{% if q.device_name %} (<span class="device">{{ q.device_name|text }}</span>){% endif %}{% else %}<span class="muted">unavailable</span>{% endif %}</td></tr>{% endfor %}
+          {% for q in queries %}<tr class="status-{{ "blocked" if q.status == "blocked" else "allowed" }}"><td class="when" data-sort="{{ q.ts.timestamp()|int }}">{{ q.ts|local(tz) }}</td><td class="name">{{ q.fqdn|domain }}</td><td>{% if q.status == "blocked" %}<span class="chip chip-blocked">blocked</span>{% else %}{{ q.status|status_word }}{% endif %}</td><td>{% if q.device_id %}<span class="device">{{ q.device_id|text }}</span>{% if q.device_name %} (<span class="device">{{ q.device_name|text }}</span>){% endif %}{% else %}<span class="muted">unavailable</span>{% endif %}</td></tr>{% endfor %}
         </tbody>
       </table>
       </div>
@@ -71,7 +105,7 @@
   <aside class="detail-side">
     <section class="panel decide" aria-labelledby="decide-title">
       <h2 id="decide-title">Decision</h2>
-      <p class="decision">{% if f.status == "open" %}<span class="status-open">open</span>{% else %}<span class="corr"><s>open</s> {{ f.status }}{% if row.decision %} {{ row.decision.at|clock(tz) }}{% endif %}</span>{% endif %}</p>
+      <p class="decision">{% if f.status == "open" %}<span class="status-open">open</span>{% else %}<span class="corr"><svg class="chart rev-delta" viewBox="0 0 10 9" width="10" height="9" aria-hidden="true"><path d="M5 .6 9.4 8.4H.6Z"/></svg><s>open</s> {{ f.status }}{% if row.decision %} <span class="corr-time">{{ row.decision.at|clock(tz) }}</span>{% endif %}</span>{% endif %}</p>
       <div class="actions-bar">
         {% for action, label in [("acknowledge", "Acknowledge"), ("benign", "Mark benign"), ("reopen", "Reopen")] %}
         {% if (action == "acknowledge" and f.status != "acknowledged") or (action == "benign" and f.status != "benign") or (action == "reopen" and f.status != "open") %}
@@ -89,7 +123,7 @@
     <section class="panel" aria-labelledby="facts-title">
       <h2 id="facts-title">Facts</h2>
       <dl class="facts">
-        <dt>Profile</dt><dd>{{ labels[f.profile_id] }}</dd>
+        <dt>Profile</dt><dd><span class="layer-tag"><span class="layer-mark layer-mark-{{ ink }}" aria-hidden="true"></span>{{ labels[f.profile_id] }}</span></dd>
         <dt>Device</dt><dd>{% if f.device_mode %}<span class="device">{{ f.subject|text }}</span>{% else %}attribution unavailable on this profile{% endif %}</dd>
         <dt>First seen</dt><dd class="when">{{ f.first_ts|local(tz) }}</dd>
         <dt>Last seen</dt><dd class="when">{{ f.last_ts|local(tz) }}</dd>
@@ -100,10 +134,10 @@
     </section>
 
     <section class="panel" aria-labelledby="history-title">
-      <h2 id="history-title">History</h2>
+      <h2 id="history-title">Revisions</h2>
       {% if audit %}
       <ol class="corrections">
-        {% for entry in audit %}<li><span class="corr-no">{{ loop.index }}</span><div><span class="corr-action">{{ entry.action|replace("_", " ") }}</span> by {{ entry.actor }} <span class="when">{{ entry.at|local(tz) }}</span><span class="corr-detail">{{ entry.detail|text }}</span></div></li>{% endfor %}
+        {% for entry in audit %}<li><span class="corr-no" aria-label="Revision {{ "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[(loop.index0) % 26] }}"><svg class="chart rev-delta" viewBox="0 0 26 22" width="26" height="22" aria-hidden="true"><path d="M13 1.2 24.8 20.8H1.2Z"/></svg><span>{{ "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[(loop.index0) % 26] }}</span></span><div><span class="corr-action">{{ entry.action|replace("_", " ") }}</span> by {{ entry.actor }} <span class="when">{{ entry.at|local(tz) }}</span><span class="corr-detail">{{ entry.detail|text }}</span></div></li>{% endfor %}
       </ol>
       {% else %}
       <p class="empty">No decisions yet.</p>

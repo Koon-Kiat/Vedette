@@ -1,18 +1,18 @@
 {% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
 {% block content %}
-<header class="page-head">
-  <h1>Health</h1>
+{% call titleblock("Health", "7 of 8", scoped=False) %}
   <p class="lead">{% if health.checks %}Checked {{ health.checks[0].updated_at|local(tz) }}.{% else %}The health monitor has not run yet.{% endif %}</p>
-</header>
+{% endcall %}
 <section class="block" aria-labelledby="checks-title">
   <h2 id="checks-title">Checks</h2>
   {% if health.checks %}
   <div class="table-wrap">
-  <table>
-    <thead><tr><th>Check</th><th>State</th><th>Detail</th><th>Since</th></tr></thead>
+  <table class="sortable" id="t-checks">
+    <thead><tr><th>Check</th><th>State</th><th>Detail</th><th data-first="descending">Since</th></tr></thead>
     <tbody>
       {% for check in health.checks %}
-      <tr class="{{ "ok" if check.ok else "problem" }}"><td>{{ check.label|text }}</td><td><span class="state">{{ "OK" if check.ok else "Problem" }}</span></td><td>{{ check.detail|detail }}{% if not check.ok and check.key.startswith("events:") %}<span class="note">If this profile is often off, give it <code>stale_after_minutes</code> or <code>quiet_hours</code> in config.yaml; 0 switches this check off.</span>{% endif %}</td><td class="when">{{ check.since|local(tz) }}</td></tr>
+      <tr class="{{ "ok" if check.ok else "problem" }}"><td>{{ check.label|text }}</td><td><span class="state">{{ "OK" if check.ok else "Problem" }}</span></td><td>{{ check.detail|detail }}{% if not check.ok and check.key.startswith("events:") %}<span class="note">If this profile is often off, give it <code>stale_after_minutes</code> or <code>quiet_hours</code> in config.yaml; 0 switches this check off.</span>{% endif %}</td><td class="when" data-sort="{{ check.since.timestamp()|int }}">{{ check.since|local(tz) }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

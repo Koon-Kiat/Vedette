@@ -1,0 +1,17 @@
+{# The title block that heads every sheet: the page's title and lead on the
+   left, and the facts a reader checks before trusting the sheet on the right:
+   which profiles it shows, when it was drawn, and its place in the set. #}
+{% macro titleblock(heading, sheet, scoped=True, extra=()) %}
+<header class="titleblock">
+  <div class="tb-title">
+    <h1>{{ heading }}</h1>
+    {{ caller() }}
+  </div>
+  <dl class="tb-fields">
+    <div class="tb-field"><dt>Showing</dt><dd>{% if scoped and scope is defined and scope != "all" %}<span class="layer-mark layer-mark-{{ layers[scope] }}" aria-hidden="true"></span>{{ scope_label }} only{% elif scoped and switch is defined and switch %}<span class="layer-mark layer-mark-all" aria-hidden="true"></span>{{ "Both profiles" if scope_label == "Both" else scope_label }}{% else %}Every profile{% endif %}</dd></div>
+    {% for label, value in extra %}<div class="tb-field"><dt>{{ label }}</dt><dd class="figure">{{ value }}</dd></div>{% endfor %}
+    <div class="tb-field"><dt>Drawn</dt><dd class="figure">{{ now|local(tz) }}</dd></div>
+    <div class="tb-field"><dt>Sheet</dt><dd>{{ sheet }}</dd></div>
+  </dl>
+</header>
+{% endmacro %}

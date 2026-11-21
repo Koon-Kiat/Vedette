@@ -5,19 +5,20 @@
 <section class="tchart{% if size %} tchart-{{ size }}{% endif %}" id="chart-{{ id }}" data-chart data-default="{{ default }}" data-tz="{{ tz.key }}" aria-label="{{ label }}">
   <h3 class="tchart-title" data-role="title" hidden>{{ label }}</h3>
   <div class="tchart-bar" data-role="bar" hidden>
-    <div class="tchart-ranges" role="group" aria-label="Time range">
+    <div class="segmented tchart-ranges" role="group" aria-label="Time range">
       {% for seconds, short, long in ranges %}<button type="button" data-range="{{ seconds }}" data-label="{{ long }}" title="Last {{ long }}" aria-pressed="{{ "true" if seconds == default else "false" }}">{{ short }}</button>{% endfor %}
     </div>
     <div class="tchart-tools">
-      <span class="tchart-follow" data-role="follow">Following live</span>
+      <span class="tchart-follow" data-role="follow"><span class="live-dot" aria-hidden="true"></span>Following live</span>
       <button type="button" class="quiet" data-action="live" hidden>Back to live</button>
       <button type="button" data-action="expand" aria-expanded="false">Enlarge</button>
     </div>
   </div>
+  <p class="tchart-dim" data-role="dim" hidden></p>
   <p class="tchart-readout" data-role="readout" hidden></p>
   <div class="tchart-plot" data-role="plot" hidden tabindex="0" role="application" aria-roledescription="chart" aria-label="{{ label }}. Left and right arrows move between bars and Enter lists what happened in one; plus and minus zoom; Shift with the arrows moves through time; 0 goes back to live."></div>
   <div class="tchart-fallback" data-role="fallback">{{ caller() }}</div>
-  <p class="legend tchart-legend" data-role="legend" hidden><span class="legend-item"><span class="key key-allowed"></span>allowed</span> <span class="legend-item"><span class="key key-blocked"></span>blocked</span> <span class="legend-item"><span class="key key-now"></span>current bar, still counting</span> <span class="legend-item"><span class="key key-usual"></span>usual level, 7-day average</span> <span class="legend-item"><span class="key key-marker"></span>open finding</span> <span class="legend-item"><span class="key key-decided"></span>decided finding</span></p>
+  <div class="legend tchart-legend" data-role="legend" hidden><span class="legend-layers" data-role="layers" role="group" aria-label="Profiles on the chart" hidden></span><span class="legend-item"><span class="key key-blocked"></span>darker: blocked</span> <span class="legend-item"><span class="key key-now"></span>current bar, still counting</span> <span class="legend-item"><span class="key key-usual"></span>usual level, 7-day average</span> <span class="legend-item"><span class="key key-marker"></span>open finding</span> <span class="legend-item"><span class="key key-decided"></span>decided finding</span></div>
   <p class="tchart-hint" data-role="hint" hidden><span class="hint-pointer">Drag across the chart to zoom in; click a bar to list what happened then. Ctrl + scroll zooms, Shift + scroll or Shift + drag moves through time, and a double-click goes back to live.</span><span class="hint-touch">Tap a bar to list what happened then. Choose a range to zoom out.</span></p>
   <p class="visually-hidden" data-role="status" aria-live="polite"></p>
   <div class="tchart-detail" data-role="detail"></div>

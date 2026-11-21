@@ -1,11 +1,11 @@
 {% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
 {% macro pct(value) %}{{ "n/a" if value is none else value|pct }}{% endmacro %}
 {% block content %}
-<header class="page-head">
-  <h1>Evaluation</h1>
+{% call titleblock("Evaluation", "8 of 8", scoped=False) %}
   <p class="lead">How well the rules and the local model hold up against known-good, known-bad and hostile names.</p>
   {% if run %}<p class="stamp">Run {{ run.finished_at|local(tz) }}</p>{% endif %}
-</header>
+{% endcall %}
 {% if not run %}
 <section class="block">
   <p class="empty">No evaluation has run yet.</p>
@@ -34,7 +34,7 @@
 <section class="block" aria-labelledby="detection-title">
   <h2 id="detection-title">Detection</h2>
   <div class="table-wrap">
-  <table>
+  <table class="sortable" id="t-detection">
     <thead><tr><th>Dataset</th><th>Kind</th><th class="num">Items</th><th class="num">Flagged</th><th class="num">Rate</th><th class="num">High or critical</th></tr></thead>
     <tbody>
       {% for row in s.detection %}

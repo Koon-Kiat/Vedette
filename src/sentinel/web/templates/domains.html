@@ -1,12 +1,13 @@
 {% extends "base.html" %}
-{% macro table(rows, empty) %}
+{% from "_titleblock.html" import titleblock with context %}
+{% macro table(rows, empty, id) %}
 {% if rows %}
 <div class="table-wrap">
-<table class="compact">
-  <thead><tr><th>Domain</th><th class="num">Queries</th><th class="num">Top-sites rank</th><th class="num">Registered</th></tr></thead>
+<table class="compact sortable" id="t-{{ id }}">
+  <thead><tr><th>Domain</th><th class="num" data-sorted="descending">Queries</th><th class="num" data-first="ascending">Top-sites rank</th><th class="num" data-first="ascending">Registered</th></tr></thead>
   <tbody>
     {% for row in rows %}
-    <tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.count|num }}</td><td class="num">{{ row.rank|num if row.rank else "–" }}</td><td class="num">{% if row.age_days is not none %}{{ "%d days ago"|format(row.age_days) }}{% else %}<span class="muted" title="Not looked up">–</span>{% endif %}</td></tr>
+    <tr><td class="name">{{ row.root|domain }}</td><td class="num">{{ row.count|num }}</td><td class="num" data-sort="{{ row.rank if row.rank else "" }}">{{ row.rank|num if row.rank else "–" }}</td><td class="num" data-sort="{{ row.age_days if row.age_days is not none else "" }}">{% if row.age_days is not none %}{{ "%d days ago"|format(row.age_days) }}{% else %}<span class="muted" title="Not looked up">–</span>{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -16,19 +17,18 @@
 {% endif %}
 {% endmacro %}
 {% block content %}
-<header class="page-head">
-  <h1>Domains</h1>
+{% call titleblock("Domains", "4 of 8") %}
   <p class="lead">Ranks and registration dates come from the local caches; nothing is looked up from this page. Registration dates are looked up only for new, little-known domains, so most show a dash.</p>
   <nav class="segmented" aria-label="Period">
     <a href="/domains?period=24h"{% if period == "24h" %} aria-current="page"{% endif %}>24 hours</a>
     <a href="/domains?period=7d"{% if period == "7d" %} aria-current="page"{% endif %}>7 days</a>
   </nav>
-</header>
+{% endcall %}
 <p class="visually-hidden">Showing the last {{ "24 hours" if period == "24h" else "7 days" }}.</p>
 <div class="quad">
-  <section class="block"><h2>Most allowed</h2>{{ table(page.top_allowed, "No allowed queries.") }}</section>
-  <section class="block"><h2>Most blocked</h2>{{ table(page.top_blocked, "No blocked queries.") }}</section>
-  <section class="block"><h2>Newly seen</h2>{{ table(page.newly_seen, "No new domains.") }}</section>
-  <section class="block"><h2>Registered in the last 30 days</h2>{{ table(page.young, "No recently registered domains.") }}</section>
+  <section class="block"><h2>Most allowed</h2>{{ table(page.top_allowed, "No allowed queries.", "allowed") }}</section>
+  <section class="block"><h2>Most blocked</h2>{{ table(page.top_blocked, "No blocked queries.", "blocked") }}</section>
+  <section class="block"><h2>Newly seen</h2>{{ table(page.newly_seen, "No new domains.", "new") }}</section>
+  <section class="block"><h2>Registered in the last 30 days</h2>{{ table(page.young, "No recently registered domains.", "young") }}</section>
 </div>
 {% endblock %}

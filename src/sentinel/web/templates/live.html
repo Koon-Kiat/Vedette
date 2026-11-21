@@ -1,28 +1,25 @@
 {% extends "base.html" %}
 {% from "_tchart.html" import tchart with context %}
+{% from "_titleblock.html" import titleblock with context %}
 {% block styles %}<link rel="stylesheet" href="/static/vendor/uPlot-1.6.32.min.css">{% endblock %}
 {% block scripts %}<script src="/static/vendor/uPlot-1.6.32.iife.min.js" defer></script>
 <script src="/static/charts.js?v={{ version("charts.js") }}" defer></script>{% endblock %}
 {% block content %}
 {% set totals = stats.per_minute|map("sum")|list %}
 {% set peak = [totals|max, 1]|max %}
-<header class="page-head">
-  <h1>Live</h1>
-  <p class="lead">Every DNS query from your profiles as it arrives. Domains are shown defanged and are never links.</p>
+{% call titleblock("Live", "2 of 8") %}
+  <p class="lead">Every DNS query as it arrives, each inked by its profile. Domains are shown defanged and are never links.</p>
   {% include "_live_line.html" %}
-</header>
+{% endcall %}
 
 <div class="live-board">
 <section class="block live-chart" aria-labelledby="rate-title">
   <div class="block-head rate-head">
     <h2 id="rate-title">Queries over time</h2>
-    <dl class="rate-figures">
-      <div><dt>Peak minute, last 30 minutes</dt><dd data-live="peak">{{ totals|max|num }}</dd></div>
-      <div><dt>Open findings</dt><dd data-live="open-findings">{{ stats.open_findings|num }}</dd></div>
-    </dl>
+    <p class="rate-line">Busiest minute of the last 30: <strong data-live="peak">{{ totals|max|num }}</strong> queries. Open findings on every profile: <strong data-live="open-findings">{{ stats.open_findings|num }}</strong>.</p>
   </div>
   <div class="panel chart-panel">
-    {% call tchart("live", 1800, [(1800, "30m", "30 minutes"), (3600, "1h", "hour"), (21600, "6h", "6 hours"), (86400, "24h", "24 hours")], "Queries over time, allowed and blocked, with findings", size="short") %}
+    {% call tchart("live", 1800, [(1800, "30m", "30 minutes"), (3600, "1h", "hour"), (21600, "6h", "6 hours"), (86400, "24h", "24 hours")], "Queries over time, per profile, allowed and blocked, with findings", size="short") %}
     <p class="hint">Queries per minute over the last 30 minutes; the bar on the right is the current minute.</p>
     <svg class="chart minutes" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Queries per minute over the last 30 minutes" data-live="minutes">
       {% for allowed, blocked in stats.per_minute %}
@@ -40,17 +37,12 @@
     <h2 id="feed-title">Queries</h2>
     <div class="feed-controls" role="group" aria-label="Feed controls">
       <span class="feed-buffer" data-live="buffer" hidden><button type="button" class="link" data-live="resume-buffer">Show <span data-live="buffer-count">0</span> new</button></span>
-      <label class="toggle"><input type="checkbox" data-live="only-blocked"> Only blocked</label>
-      <label class="select-label">Profile
-        <select data-live="profile">
-          <option value="">All</option>
-          {% for id, label in labels.items() %}<option value="{{ label }}">{{ label }}</option>{% endfor %}
-        </select>
-      </label>
+      <label class="switch"><input type="checkbox" role="switch" data-live="only-blocked"><span class="switch-track" aria-hidden="true"></span>Only blocked</label>
       <button type="button" class="primary" data-live="pause" aria-pressed="false">Pause</button>
     </div>
   </div>
   <div class="panel feed-panel">
+    <div class="feed-columns" aria-hidden="true"><span>Time</span><span>Profile</span><span>Name</span><span>Device</span><span>Status</span></div>
     <ol class="feed" data-live="feed" data-limit="200" data-filterable aria-live="off">
       {% for item in recent %}{% include "_feed_row.html" %}{% else %}<li class="feed-empty">Waiting for the first query.</li>{% endfor %}
     </ol>

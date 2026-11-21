@@ -1,16 +1,16 @@
 {% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
 {% block content %}
-<header class="page-head">
-  <h1>Digests</h1>
-  <p class="lead">Every daily digest, as it was produced.</p>
-</header>
+{% call titleblock("Digests", "6 of 8", scoped=False) %}
+  <p class="lead">Every daily digest, as it was produced. Each covers every profile.</p>
+{% endcall %}
 {% if digests %}
 <div class="table-wrap block">
-<table>
-  <thead><tr><th>Period ending</th><th>Digest</th><th>Delivery</th></tr></thead>
+<table class="sortable" id="t-digests">
+  <thead><tr><th data-first="descending" data-sorted="descending">Period ending</th><th>Digest</th><th>Delivery</th></tr></thead>
   <tbody>
     {% for digest in digests %}
-    <tr><td class="when">{{ digest.period_end|local(tz) }}</td><td><a href="/digests/{{ digest.id }}">{{ digest.title }}</a></td><td>{{ digest.delivery or "unknown" }}{% if digest.delivery == "skipped" %} (no channel){% endif %}</td></tr>
+    <tr><td class="when" data-sort="{{ digest.period_end.timestamp()|int }}">{{ digest.period_end|local(tz) }}</td><td><a href="/digests/{{ digest.id }}">{{ digest.title }}</a></td><td>{{ digest.delivery or "unknown" }}{% if digest.delivery == "skipped" %} (no channel){% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>

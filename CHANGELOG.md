@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Dashboard: triage polish
+
+From a UX evaluation of the drawing set (`docs/ux/evaluation-dashboard.md`).
+
+- Every rule has a plain name (`name` in `rules.yaml`, optional in an
+  override file; the id stands in when it is missing). Findings are titled by
+  it everywhere; the id stays in a finding's title block, where it matches the
+  Discord alerts and the CLI. What the rule checks is on every finding's page,
+  not only before the model has explained it.
+- Findings open in triage order, highest priority first and then most recently
+  seen, as the Overview and J/K already did.
+- A decision updates every open count at once: the profile switch, the menu and
+  the Overview link, through the decision's response (`HX-Trigger:
+  sentinel-counts`) and the live stats (`open_by_layer`).
+- Mark benign's confirmation opens on Cancel, is titled with the action, sets
+  the domain as an outside name and says Reopen undoes it; the dialog's body is
+  its accessible description.
+- Health shows "Retrying" for a NextDNS API check inside its error window and
+  "Catching up" after a start-up, and says in words what NextDNS answered
+  ("NextDNS is rate-limiting Sentinel since 14:05. Sentinel waits and tries
+  again."). The alert after the window ends with the HTTP status.
+- In a window 1,180px or narrower, a finding's Decision panel follows the
+  explanation; at 860px or narrower the Findings filters fold behind one
+  control that counts the filters set.
+- A new-category-or-blocklist finding shows NextDNS's name for the reason, with
+  the id after it.
+- Error pages are titled in words ("Finding 0042 not found") inside the title
+  block, with the status code as a field. A 429's own message is shown.
+- Outside names in a finding's evidence are set like every other outside name;
+  Domains names break only at their dots; usual counts of 100 or more drop
+  their tenths; a decision no longer changes the findings table's column
+  widths.
+
 ### Dashboard: the drawing set
 
 A new visual world, recorded in `DESIGN.md`: every page is a sheet in one

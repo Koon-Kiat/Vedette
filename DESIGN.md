@@ -242,7 +242,7 @@ A graphite ramp carries every surface, line and ink; colour is reserved for laye
 
 ### Tertiary
 - **Severity chips**: critical red, high orange, medium amber, low blue, info grey; each a foreground, a near-black tinted background (`-bg`) and a border (`-line`).
-- **Status** (`ok`, `warn`, `problem`): pipeline state, the live dot, health rows, login errors. `warn` and `problem` share their values with medium and critical.
+- **Status** (`ok`, `warn`, `problem`): pipeline state, the live dot, health rows (`warn` for a passing check that is retrying or catching up), login errors. `warn` and `problem` share their values with medium and critical.
 
 ### Neutral
 - **Rail Graphite** (`rail`): the navigation rail and the bare login/error pages.
@@ -335,6 +335,7 @@ Square drawing frames. Panels, tables, the title block, menus and dialogs use a 
 - **Switch:** a 30 by 17px track; when on, the border and knob turn rose over `rev-wash`.
 - **Text field:** `panel-2`, `line-strong` border, mono 14px; focus moves the border to `line-ink` with a 2px `panel-3` ring; invalid takes a `problem` border.
 - **Focus:** every focusable element shows a 2px `ink` outline, 2px offset.
+- **Folded filters:** at 860px and narrower the Findings filters sit behind one `panel-2` control reading "Filters" with a drawn chevron and, in rose mono, how many filters are set; opened, the filters panel sits 10px under it. Above 860px the control is not shown. Without JavaScript the filters stay open.
 
 ### Navigation
 - **Rail:** the brand (a 24px squared mark with three strokes: teal, violet, rose; the name in Mona Sans at 112% width), the profile switch, the page links, and the pipeline state at the foot.
@@ -354,10 +355,12 @@ A decision is a revision: a small rose delta, its letter, the old status struck 
 Per-profile stacked layers in each profile's ink, its blocked share in the dim ink; legend checkboxes turn layers on and off. A dimension line (ticked extension lines either side of the mono span) sits over the plot; a two-line readout above the plot holds its height so the plot never moves under the pointer. Finding markers sit at the top as rose tags (open) or `panel-3` tags (decided) with dashed leaders down in the profile's ink. A bar past the capped scale is cut by a break mark, two slashes in the sheet's colour, with its real value above. The dashed `usual` line shows normal traffic. The server draws an SVG version first and without JavaScript.
 
 ### Finding Explanation
-The model's summary first (17px, 72ch), then likely cause and recommended action side by side in a bordered grid (the action cell one step lighter), each headed by a drawn 16px icon, then a facts row with a confidence meter (100 by 6px), priority and who decides.
+The model's summary first (17px, 72ch), then likely cause and recommended action side by side in a bordered grid (the action cell one step lighter), each headed by a drawn 16px icon, then a facts row with a confidence meter (100 by 6px), priority and who decides. Under a hairline, "What the rule checks" in 12px `ink-3` and the rule's description in 13.5px `ink-2`, on every finding. A finding is titled by its rule's plain name; the rule id is a mono field in the title block, and a NextDNS reason shows by name with its id after it in 12.5px mono `ink-3`.
+
+The Decision panel is drawn twice and only one shows: beside the record above 1,180px, directly after the explanation at 1,180px and narrower.
 
 ### Confirm Dialog
-A 460px `panel-2` dialog with a `line-ink` border and the lift shadow, rising 8px into place over 200ms; the question in `ink-2`, actions right-aligned.
+A 460px `panel-2` dialog with a `line-ink` border and the lift shadow, rising 8px into place over 200ms. The title names the action as a question ("Mark this finding benign?"); the body in `ink-2` sets the domain as an outside name and says how to undo it. Focus opens on Cancel; the confirming button carries the action's own label. Actions right-aligned.
 
 ## Do's and Don'ts
 

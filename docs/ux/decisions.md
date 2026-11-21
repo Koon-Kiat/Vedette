@@ -27,3 +27,63 @@
 - Why: a browser reused a day-old stylesheet with new pages and broke the layout; a hard reload did not clear it.
 - Rejected: long-lived caching, and relying on the no-cache header alone.
 - Rests on: docs/ux/evaluation-dashboard.md, "After an upgrade the browser keeps the old stylesheet".
+
+## 2026-11-21 · The drawing-set evaluation read a disposable copy of the owner's database
+- Decided by: Claude (default)
+- Why: the pages were read against real volumes and real findings without touching the live database or the owner's login; triage was exercised on synthetic data.
+- Rejected: swapping the live dashboard's token, which ends the owner's session.
+- Rests on: docs/ux/evaluation-dashboard.md.
+
+## 2026-11-21 · The drawing-set evaluation covered Chromium, mouse, keyboard and emulated widths only
+- Decided by: Claude (default)
+- Why: the built-in browser is Chromium; screen-reader behaviour was judged from roles, names and live regions, not with NVDA, and narrow layouts from an emulated 375-pixel width.
+- Rejected: claiming screen-reader, Firefox or Safari coverage.
+- Rests on: docs/ux/evaluation-dashboard.md.
+
+## 2026-11-21 · Rules get plain names; the id stays beside them
+- Decided by: Claude (default)
+- Why: a finding's title was its rule id; Discord alerts, the digest, config.yaml and the CLI print the id, so it stays visible as the reference that matches them.
+- Rejected: replacing the id everywhere, which breaks the match with alerts; leaving ids as titles.
+- Rests on: docs/ux/evaluation-dashboard.md, "Findings are named by their rule's id"; docs/ux/copy-dashboard.md, Rule names.
+
+## 2026-11-21 · Mark benign's confirmation opens on Cancel
+- Decided by: Claude (default)
+- Why: the action silences the domain's future alerts on that profile; two presses of Enter should not do that.
+- Rejected: focus on the confirming button, the pattern for actions with no side effect.
+- Rests on: docs/ux/accessibility-dashboard.md, Operable.
+
+## 2026-11-21 · A retrying NextDNS API check reads "Retrying" and still counts as passing
+- Decided by: Claude (default)
+- Why: no alert has been raised inside the error window, so the menu's "checks OK" stays true, while the Health page stops showing "OK" beside an error.
+- Rejected: counting it as failing, which would contradict the alerts; leaving "OK".
+- Rests on: docs/ux/states-dashboard.md, Health; src/sentinel/health/monitor.py, `_api_check`.
+
+## 2026-11-21 · In a narrow window the finding page draws its Decision panel twice, one hidden
+- Decided by: Claude (default)
+- Why: reordering with CSS would put the decision before the evidence on screen but after it in the tab order; two copies, one `display: none`, keep screen order and tab order the same with no JavaScript.
+- Rejected: CSS `order` with `display: contents`; a sticky decision bar, which covers content in a short window.
+- Rests on: docs/ux/adaptation-narrow-window.md.
+
+## 2026-11-21 · Every findings list opens in triage order
+- Decided by: Claude (default)
+- Why: the Overview and J/K already used priority then time; the Findings page used time alone.
+- Rejected: time order on Findings, which buries a critical finding under newer low ones.
+- Rests on: docs/ux/navigation-findings-order.md.
+
+## 2026-11-21 · The order decision has no site-map diagram
+- Decided by: Claude (default)
+- Why: the structure of the dashboard did not change, only a default order.
+- Rejected: an HTML site map of unchanged pages.
+- Rests on: docs/ux/navigation-findings-order.md.
+
+## 2026-11-21 · The re-check after the fixes found one regression, fixed before release
+- Decided by: Claude (default)
+- Why: the plain rule names are longer than the ids, and the Rule column did not wrap, so the findings table ran past its panel at 1,440 pixels; the column now wraps between 150 and 180 pixels and the table fits at 1,280, 1,440 and 1,920.
+- Rejected: shortening the names to fit one line.
+- Rests on: docs/ux/evaluation-dashboard.md; src/sentinel/web/static/style.css, `.findings td.rule`.
+
+## 2026-11-21 · Every evaluation finding was re-checked in the browser
+- Decided by: Claude (default)
+- Why: each change was seen working: counts in step within half a second of a decision, the dialog opening on Cancel, Retrying on Health, the Decision panel after the explanation at 1,000 pixels, the folded filters at 375, triage order, reason names on the real-data copy, and no column moving after a decision.
+- Rejected: relying on the tests alone.
+- Rests on: tests/integration/test_web_triage_polish.py.

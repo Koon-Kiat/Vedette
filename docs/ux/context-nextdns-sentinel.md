@@ -11,7 +11,7 @@ The owner is technical (runs Docker, reads JSON logs), but triage must never req
 
 ## Product
 
-A local, server-rendered dashboard (FastAPI, Jinja2, htmx, uPlot) served by the pipeline at http://127.0.0.1:8080, reachable from this computer only, behind a login token. Pages: Overview, Live, Findings and a finding's page, Domains, Devices, Digests, Health, Evaluation. Two NextDNS profiles: `router`, which reports no devices, and `pc`, a laptop that reports device names and is often silent for long stretches [PRODUCT.md].
+A local, server-rendered dashboard (FastAPI, Jinja2, htmx, uPlot) served by the pipeline at http://127.0.0.1:8080, reachable from this computer only, behind a login token. Pages: Overview, Live, Findings and a finding's page, Domains, Devices, Digests, Health, Evaluation. Two NextDNS profiles: `router`, which reports no devices, and `pc`, a laptop that reports device names and is often silent for long stretches [PRODUCT.md]. One profile switch (both, router, pc) scopes every page, chart, table and the live feed, and every table sorts by its headings.
 
 ## Constraints
 
@@ -19,7 +19,8 @@ A local, server-rendered dashboard (FastAPI, Jinja2, htmx, uPlot) served by the 
 - Every name from DNS traffic is escaped and defanged and never becomes a link.
 - Every page works without JavaScript.
 - The owner's DNS history stays private: no real domain or device names in documents, commits or screenshots that leave the machine.
-- The visual world is the night chart recorded in DESIGN.md.
+- The visual world is the drawing set recorded in DESIGN.md: dark graphite, one ink per profile, every triage decision entered as a lettered revision.
+- Every control (select, checkbox, switch, dialog, sort heading) is drawn by the dashboard, not the browser, and keeps the native element underneath.
 
 ## Ethical stance
 

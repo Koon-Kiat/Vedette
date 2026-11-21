@@ -609,13 +609,16 @@ async def test_with_the_suffix_list_platform_customers_are_known_exactly(
         event(fqdn="x.abc.unlisted-cdn.example", root="abc.unlisted-cdn.example", n=2),
         # A registered domain of its own.
         event(fqdn="www.fresh-shop.example", root="fresh-shop.example", n=3),
+        # The private suffix itself, reported as the root of a customer's name.
+        event(fqdn="xkq7vbn2mtrp9zlwqqhr.pages.example", root="pages.example", n=4),
     ]
 
-    hosted, unlisted, own = await enricher.enrich_batch(batch, NOW)
+    hosted, unlisted, own, suffix = await enricher.enrich_batch(batch, NOW)
 
     assert hosted.is_platform is True
     assert unlisted.is_platform is True
     assert own.is_platform is False
+    assert suffix.is_platform is True
     asked = [str(call.request.url) for call in rdap.calls]
     assert asked == [f"{RDAP_BASE}domain/fresh-shop.example"]
 

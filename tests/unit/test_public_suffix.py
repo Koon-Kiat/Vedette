@@ -95,5 +95,24 @@ def test_a_root_longer_than_its_registered_domain_is_recognised(
     assert suffixes.longer_than_registered(name) is longer
 
 
+@pytest.mark.parametrize(
+    ("name", "private"),
+    [
+        # A wildcard makes every region a suffix of its own; NextDNS reports such
+        # a name as a root when a customer's name sits under it.
+        ("eu-west.compute.example-cloud.com", True),
+        ("github.io", True),
+        ("customer.github.io", True),
+        ("bbc.co.uk", False),
+        ("example.com", False),
+        ("shop.zz", False),
+    ],
+)
+def test_a_name_set_by_a_private_rule_is_recognised(
+    suffixes: SuffixRules, name: str, private: bool
+) -> None:
+    assert suffixes.under_private_rule(name) is private
+
+
 def test_an_empty_list_knows_no_platforms() -> None:
     assert SuffixRules([]).platform_suffix("customer.github.io") is None

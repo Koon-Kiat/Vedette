@@ -98,6 +98,16 @@ class SuffixRules:
                 best = found
         return best
 
+    def under_private_rule(self, name: str) -> bool:
+        """Whether the rule that sets ``name``'s suffix is a private one.
+
+        True for a customer name under a platform and for the platform's own
+        suffix, such as one region under a wildcard rule.
+        """
+        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        found = self._suffix(labels)
+        return found is not None and found[1]
+
     def longer_than_registered(self, name: str) -> bool:
         """Whether ``name`` has more labels than the domain registered under the list.
 
@@ -187,10 +197,9 @@ class PublicSuffixList:
     def is_platform_name(self, root: str) -> bool:
         """Whether a root NextDNS reported is a customer name on a hosting platform.
 
-        Either its suffix rule is a private one, or the root is longer than the
-        domain registered under the list, because NextDNS knows a platform the
-        list does not.
+        Either a private rule sets its suffix (the root is under a platform's
+        suffix, or is that suffix itself), or the root is longer than the domain
+        registered under the list, because NextDNS knows a platform the list
+        does not.
         """
-        return self._rules.platform_suffix(root) is not None or self._rules.longer_than_registered(
-            root
-        )
+        return self._rules.under_private_rule(root) or self._rules.longer_than_registered(root)

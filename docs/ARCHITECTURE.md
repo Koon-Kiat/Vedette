@@ -239,6 +239,14 @@ triage action. Pages work without JavaScript too: the forms post normally and
 redirect back. The server runs inside the pipeline process, on the same
 database engine, and stops with it.
 
+The code is split by part of the dashboard. `web/app.py` builds the app: the
+security headers, the host check, static files and the routers.
+`web/routes/` holds one module per part (login, overview, charts, live,
+findings, the read-only pages, error pages). What they share, the stores,
+sessions, page rendering and the request dependencies `SessionDep` and
+`ViewDep`, is one `Dashboard` object in `web/dashboard.py`, and the template
+filters live in `web/templating.py`.
+
 Everything shown can come from an attacker: domain names, device names,
 blocklist reasons and the model's text. So:
 
@@ -906,6 +914,13 @@ repository. Each decision that departs from it says so.
     fixed. The upgrade makes a build depend on when it runs, so CI and the
     release never reuse that stage from the cache; CI then scans the image
     with Trivy and fails on anything fixable and high or critical.
+96. **The dashboard's routes are modules, not closures.** Every route used to
+    be defined inside `create_app`, one function of 645 lines and a
+    cyclomatic complexity of 68, so any change touched it. The routes now sit
+    in `web/routes/`, one module per part, and reach the shared state through
+    FastAPI dependencies on a `Dashboard` object kept on `app.state`. The move
+    changed no behaviour: the 960 tests passed unchanged, and `app.py` went
+    from 1,009 lines to 81.
 
 ## Verified facts the design relies on
 

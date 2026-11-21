@@ -27,6 +27,10 @@
 
 ### Maintenance
 
+- The dashboard's routes moved out of one 645-line `create_app` into
+  `web/routes/`, one module per part, sharing a `Dashboard` object
+  (`web/dashboard.py`) and the template filters (`web/templating.py`).
+  Nothing a user sees changed.
 - Every image is pinned to its digest as well as its tag: the Python and uv
   images, the Dockerfile frontend, Ollama and gitleaks. Dependabot proposes
   new digests.

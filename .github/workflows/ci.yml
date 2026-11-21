@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, so a new advisory for a locked dependency (pip-audit) or a broken
+  # upstream image shows up without a push.
+  schedule:
+    - cron: "17 3 * * 1"
 
 # Actions are pinned to a release commit, not a tag that could be moved.
 permissions:
@@ -71,3 +75,19 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro"
           ghcr.io/gitleaks/gitleaks:v8.30.1
           git --redact --no-banner /repo
+
+  image:
+    name: docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the runtime image (not pushed)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

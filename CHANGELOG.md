@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Dependency updates and weekly CI
+
+- Dependabot proposes updates every Monday for the Python dependencies, the CI
+  actions, the Dockerfile's base images and the Ollama image, each once its
+  release is 14 days old.
+- CI also runs weekly, so pip-audit sees new advisories without a push, and
+  it now builds the image on every push and pull request.
+
 ### Renamed to Vedette, ready to publish
 
 The project was called NextDNS Sentinel. Its name no longer uses NextDNS's,

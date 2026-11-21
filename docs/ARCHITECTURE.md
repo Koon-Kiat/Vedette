@@ -825,6 +825,15 @@ repository. Each decision that departs from it says so.
     (decision 13). With the pinned actions, CI passed on GitHub on
     2026-11-21: lint, types and tests on Python 3.14 and 3.15, pip-audit
     and gitleaks.
+89. **CI also runs weekly and builds the image.** A new advisory for a locked
+    dependency shows up on a Monday without a push, and a change that breaks
+    the Dockerfile fails a pull request rather than the release.
+90. **Dependabot proposes updates weekly, once a release is 14 days old.**
+    The same two-week rule as for web dependencies (decision 57), applied
+    through Dependabot's cooldown to the Python lock, the CI actions, the
+    Dockerfile's base images and the Ollama image. Security updates skip the
+    wait. Minor and patch updates come grouped, one pull request per
+    ecosystem; a major update comes alone.
 
 ## Verified facts the design relies on
 
@@ -955,6 +964,11 @@ no name from your history or the feeds appears in it.
   tests.
 - Whether to pace history requests to stay under the undocumented rate limit,
   for example when several profiles backfill at once.
+- Settings to turn on once the repository is public, where they need no paid
+  licence: private vulnerability reporting (`SECURITY.md` points to it),
+  Dependabot alerts and security updates, secret scanning with push
+  protection, and CodeQL code scanning in its default setup (Python,
+  JavaScript and the workflows).
 
 ## Future work
 

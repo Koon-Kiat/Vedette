@@ -16,7 +16,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # github.workflow is the caller's name when the release workflow runs these
+  # checks, so a release never cancels, or is cancelled by, an ordinary run.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:

@@ -37,6 +37,7 @@ def finding(
 def database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
     monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_TIMEZONE", "Asia/Singapore")
     monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     return url
 

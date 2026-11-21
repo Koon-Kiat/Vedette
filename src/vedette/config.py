@@ -301,7 +301,7 @@ class Settings(BaseSettings):
     )
 
     profiles: list[ProfileConfig] = Field(default_factory=list)
-    timezone: str = "Asia/Singapore"
+    timezone: str = "UTC"
     ingest: IngestConfig = Field(default_factory=IngestConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     enrich: EnrichConfig = Field(default_factory=EnrichConfig)

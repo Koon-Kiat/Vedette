@@ -17,7 +17,7 @@ profiles:              # IDs are on each profile's Setup page in the NextDNS das
   - id: "PHONE_PROFILE_ID"
     label: "phone"
     enabled: false
-timezone: "Asia/Singapore"
+timezone: "UTC"              # your IANA time zone, e.g. "Europe/Berlin": the digest time and quiet hours use it
 ingest:
   backfill_days: 7
   raw: false

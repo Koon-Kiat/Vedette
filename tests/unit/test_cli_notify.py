@@ -62,6 +62,7 @@ def test_notify_test_reports_a_failure_without_secrets(ntfy: None) -> None:
 def test_digest_prints_a_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
     monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_TIMEZONE", "Asia/Singapore")
     monkeypatch.setenv(
         "VEDETTE_PROFILES",
         '[{"id": "abc123", "label": "router"}, {"id": "def456", "label": "pc"}]',

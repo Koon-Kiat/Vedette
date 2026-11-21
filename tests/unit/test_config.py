@@ -11,11 +11,11 @@ def write_yaml(tmp_path: Path, text: str) -> Path:
     return path
 
 
-def test_defaults_match_the_spec_when_no_file_is_given() -> None:
+def test_defaults_when_no_file_is_given() -> None:
     settings = load_settings()
 
     assert settings.profiles == []
-    assert settings.timezone == "Asia/Singapore"
+    assert settings.timezone == "UTC"
     assert settings.ingest.backfill_days == 7
     assert settings.ingest.raw is False
     assert settings.ingest.page_size == 1000

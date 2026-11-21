@@ -2,8 +2,12 @@
 
 ## Unreleased
 
-### Dependency updates and weekly CI
+### Releases and dependency updates
 
+- A version tag publishes a release: every CI check runs again, the image goes
+  to `ghcr.io` with a signed build-provenance attestation, and a GitHub
+  Release takes its notes from that version's section here. Set
+  `VEDETTE_IMAGE` in `.env` to run a released image instead of building one.
 - Dependabot proposes updates every Monday for the Python dependencies, the CI
   actions, the Dockerfile's base images and the Ollama image, each once its
   release is 14 days old.

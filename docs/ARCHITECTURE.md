@@ -834,6 +834,19 @@ repository. Each decision that departs from it says so.
     Dockerfile's base images and the Ollama image. Security updates skip the
     wait. Minor and patch updates come grouped, one pull request per
     ecosystem; a major update comes alone.
+91. **Releases come from a version tag.** `.github/workflows/release.yml`
+    runs on a `v*.*.*` tag. It first calls the CI workflow, so nothing is
+    published unless every check passes at that commit. It then refuses a
+    tag that differs from `version` in `pyproject.toml`, or a version with
+    no `## <version>` section in `CHANGELOG.md`. Only then does it push the
+    `runtime` image to `ghcr.io/<owner>/vedette` (the version, `major.minor`
+    and `latest`) with a build-provenance attestation that `gh attestation
+    verify` checks, and create the GitHub Release from that changelog
+    section. Started by hand, it builds the image and publishes nothing. The
+    image is for `linux/amd64` only, since Ollama needs an NVIDIA GPU here.
+    Compose keeps building locally unless `VEDETTE_IMAGE` names a released
+    image. That variable reaches the container through `.env` too, and the
+    settings loader ignores it; a test holds that.
 
 ## Verified facts the design relies on
 
@@ -968,7 +981,8 @@ no name from your history or the feeds appears in it.
   licence: private vulnerability reporting (`SECURITY.md` points to it),
   Dependabot alerts and security updates, secret scanning with push
   protection, and CodeQL code scanning in its default setup (Python,
-  JavaScript and the workflows).
+  JavaScript and the workflows). A first release's image is private until
+  its package is made public as well.
 
 ## Future work
 

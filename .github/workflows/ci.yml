@@ -8,6 +8,8 @@ on:
   # upstream image shows up without a push.
   schedule:
     - cron: "17 3 * * 1"
+  # The release workflow runs every check before it publishes.
+  workflow_call:
 
 # Actions are pinned to a release commit, not a tag that could be moved.
 permissions:

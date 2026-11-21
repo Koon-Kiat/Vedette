@@ -118,6 +118,36 @@ for the Python dependencies, the CI actions, the Dockerfile's base images and
 the Ollama image, each once its release is 14 days old; security updates are
 not delayed.
 
+## Releases
+
+Pushing a version tag that matches `version` in `pyproject.toml` (for example
+`v0.1.0`) runs every CI check again, then publishes the image to the GitHub
+Container Registry with a signed build-provenance attestation, and creates a
+GitHub Release whose notes are that version's section of `CHANGELOG.md`.
+
+To run a released image instead of building your own, add it to `.env`:
+
+```text
+VEDETTE_IMAGE=ghcr.io/koon-kiat/vedette:0.1.0
+```
+
+then:
+
+```powershell
+docker compose pull vedette
+docker compose up -d
+```
+
+Leave out `--build`, which would build locally under the released name.
+Check that the image was built by this repository's release workflow:
+
+```powershell
+gh attestation verify oci://ghcr.io/koon-kiat/vedette:0.1.0 --repo Koon-Kiat/Vedette
+```
+
+Only Vedette's own image is published. Ollama runs the official
+`ollama/ollama` image, and the model is still downloaded by `ollama-pull`.
+
 ## Getting alerts and the daily digest
 
 Pick one channel, put its secret in `.env`, set `notify.channel` in

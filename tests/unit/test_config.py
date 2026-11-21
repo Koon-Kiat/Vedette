@@ -11,6 +11,13 @@ def write_yaml(tmp_path: Path, text: str) -> Path:
     return path
 
 
+def test_the_compose_image_variable_is_not_a_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    # docker-compose.yml reads VEDETTE_IMAGE from .env, which also reaches the container.
+    monkeypatch.setenv("VEDETTE_IMAGE", "ghcr.io/example/vedette:0.1.0")
+
+    assert load_settings().timezone == "UTC"
+
+
 def test_defaults_when_no_file_is_given() -> None:
     settings = load_settings()
 

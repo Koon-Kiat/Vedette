@@ -29,6 +29,10 @@ dist/
 htmlcov/
 coverage.xml
 
+# Design-tool briefs (Impeccable, Intent): kept locally, not published
+/PRODUCT.md
+/DESIGN.md
+
 # Editors and OS
 .vscode/
 .idea/

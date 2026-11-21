@@ -25,6 +25,8 @@ and the repository was audited before going public.
   are gone.
 - The secret scan of the full history and a check for real profile ids,
   device names, domains, keys and the owner's address found nothing to remove.
+- `PRODUCT.md` and `DESIGN.md`, the briefs the design tools read, are
+  git-ignored and kept only on the owner's machine.
 
 ### Dashboard: triage polish
 
@@ -63,7 +65,7 @@ From a UX evaluation of the drawing set (`docs/ux/evaluation-dashboard.md`).
 
 ### Dashboard: the drawing set
 
-A new visual world, recorded in `DESIGN.md`: every page is a sheet in one
+A new visual world: every page is a sheet in one
 set of drawings, each NextDNS profile draws on its own layer in its own ink
 (router teal, pc violet), and every triage decision is entered as a revision
 in rose ink. Still dark only; inked decisions are kept.
@@ -227,8 +229,7 @@ An evaluation against usability heuristics, recorded in
 
 ### Dashboard redesign
 
-- A new visual system, "notices and chart corrections", recorded in
-  `DESIGN.md`:
+- A new visual system, "notices and chart corrections":
   - A navy navigation rail with the open-findings count and pipeline status.
   - Findings set as numbered notices, with the reason on high and critical
     rows and a bar showing when each was seen that day.

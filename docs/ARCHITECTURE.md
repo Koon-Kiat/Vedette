@@ -49,7 +49,7 @@ NextDNS API (per profile)
 | Health monitor | `src/vedette/health/` | Done: six kinds of check, alerts on change, `/healthz` |
 | Pipeline runner | `src/vedette/pipeline/runner.py` | Runs all six stages, `/healthz`, the dashboard and the hourly retention purge |
 | CLI | `src/vedette/cli.py` | `vedette run`, `findings`, `benign`, `backfill`, `import`, `notify --test`, `digest`, `purge`, `eval`, `--version` |
-| Dashboard | `src/vedette/web/`, `src/vedette/storage/dashboard.py`, `src/vedette/storage/triage.py` | Done: eight pages, triage with an audit log, token login; visual system in `DESIGN.md` |
+| Dashboard | `src/vedette/web/`, `src/vedette/storage/dashboard.py`, `src/vedette/storage/triage.py` | Done: eight pages, triage with an audit log, token login |
 | Evaluation | `src/vedette/eval/` | Done: datasets, offline detection, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
 
 ## How the collector avoids gaps and duplicates
@@ -683,9 +683,9 @@ repository. Each decision that departs from it says so.
 67. **The dashboard's visual system was redesigned.** The direction is
     "notices and chart corrections": a navy rail, a chart-white ground,
     magenta only for attention and decisions, and sloped type for every name
-    from outside. It was chosen from a design round, reviewed, and recorded in
-    `DESIGN.md`. At first it used the system font stack, because no font
-    download had been approved (decision 69 replaces that).
+    from outside. It was chosen from a design round and reviewed. At first
+    it used the system font stack, because no font download had been
+    approved (decision 69 replaces that).
 68. **Dark only, at the owner's request.** The world became the night chart:
     a navy ground (never black), a darker rail, layered navy surfaces,
     severity as tinted chips, and magenta still kept for attention and
@@ -791,8 +791,7 @@ repository. Each decision that departs from it says so.
     owner asked for a more professional and futuristic look, a way to see
     router, pc or both on every chart, sortable headings and controls of the
     dashboard's own. The world was chosen from a deal of directions, recorded
-    with its reasons in `.impeccable/surfaces/src-vedette-web.md`, and is
-    described in `DESIGN.md`. Profiles became layers with their own inks
+    with its reasons in `.impeccable/surfaces/src-vedette-web.md`. Profiles became layers with their own inks
     because that one idea answers the request for separation everywhere at
     once. The switch is global and remembered, not one control per panel, as
     the owner chose; its options carry open counts so scoping never hides a
@@ -814,6 +813,9 @@ repository. Each decision that departs from it says so.
     zone, which new users elsewhere would get without noticing: digests and
     quiet hours an hour or more off. `config.example.yaml` asks for an IANA
     zone. Tests that need a fixed zone still name Asia/Singapore themselves.
+87. **The design tools' briefs stay local.** `PRODUCT.md` and `DESIGN.md` are
+    read by the Impeccable and Intent design tools and are git-ignored, at
+    the owner's request.
 
 ## Verified facts the design relies on
 

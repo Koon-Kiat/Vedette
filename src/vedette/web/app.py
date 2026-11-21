@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dt_time
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import jinja2
@@ -341,9 +342,22 @@ def _is_htmx(request: Request) -> bool:
 
 
 def _safe_next(value: object) -> str:
-    """A redirect target inside the dashboard; anything else becomes the findings page."""
-    if isinstance(value, str) and value.startswith("/") and not value.startswith("//"):
-        if "\\" not in value and "\r" not in value and "\n" not in value:
+    """A redirect target inside the dashboard; anything else becomes the findings page.
+
+    Browsers delete tabs and line breaks from a URL, so ``/<tab>/evil.example``
+    would read as ``//evil.example``. Starlette percent-encodes the Location
+    header, which already prevents that, but this check does not rely on it:
+    control characters and spaces are refused outright.
+    """
+    if (
+        isinstance(value, str)
+        and value.startswith("/")
+        and not value.startswith("//")
+        and "\\" not in value
+        and not any(ord(char) <= 0x20 or ord(char) == 0x7F for char in value)
+    ):
+        parts = urlsplit(value)
+        if not parts.scheme and not parts.netloc:
             return value
     return "/findings"
 

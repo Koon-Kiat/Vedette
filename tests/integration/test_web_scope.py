@@ -57,10 +57,12 @@ async def test_back_to_both_and_bad_choices(filled: Store) -> None:
     async with logged_in(filled) as (client, _):
         unknown = await client.get("/scope?to=nope&next=/")
         away = await client.get("/scope?to=all&next=//evil.example/")
+        tabbed = await client.get("/scope?to=all&next=/%09/evil.example/")
         home = await client.get("/scope?to=all")
 
     assert unknown.status_code == 422
     assert away.headers["location"] == "/findings"  # never off the dashboard
+    assert tabbed.headers["location"] == "/findings", "a tab would leave //evil.example"
     assert home.headers["location"] == "/"
 
 

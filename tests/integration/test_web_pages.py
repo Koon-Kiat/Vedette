@@ -255,6 +255,11 @@ async def test_reopening_undoes_the_allowlist_entry(filled: Store) -> None:
     [
         ("/findings?status=open", "/findings?status=open"),
         ("//evil.example/", "/findings"),
+        # Browsers delete tabs and line breaks, which would leave //evil.example.
+        ("/\t/evil.example/", "/findings"),
+        ("/\n/evil.example/", "/findings"),
+        ("/\x00/evil.example/", "/findings"),
+        ("/ /evil.example/", "/findings"),
         ("https://evil.example/", "/findings"),
         ("", "/findings"),
     ],

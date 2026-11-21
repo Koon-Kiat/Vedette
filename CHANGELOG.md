@@ -14,6 +14,13 @@
   that. `vedette notify --test` is now recorded, so a good test after fixing
   the channel clears it.
 
+### Detection
+
+- Device names now go through the instruction-word pre-filter as well as
+  domain names, with a shorter word list (`ignore`, `instruction`, `override`
+  and a few others) so that names like "Mark's iPhone" stay quiet. A hit
+  raises the finding one step and lists the words in its evidence.
+
 ### A leaner, scanned image
 
 - The runtime image no longer ships pip, which bundled urllib3, msgpack and

@@ -648,9 +648,9 @@ repository. Each decision that departs from it says so.
     caught. Common words (`system`, `safe`, `mark`, `previous` and others)
     match only as whole words, so `ecosystem` or `marketplace` stay quiet. It
     applies only to findings that already exist: a word alone never creates a
-    finding, which keeps ordinary names out of the alerts. Device names are not
-    checked (the spec names labels). The rule engine runs it; only the
-    evaluation turns it off.
+    finding, which keeps ordinary names out of the alerts. Device names were
+    not checked at first, as the spec names labels (decision 97 adds them).
+    The rule engine runs it; only the evaluation turns it off.
 62. **What the retention purge removes.**
     - Processed events older than `retention.events_days`. Events still
       waiting for the rules are kept until processed.
@@ -921,6 +921,13 @@ repository. Each decision that departs from it says so.
     FastAPI dependencies on a `Dashboard` object kept on `app.state`. The move
     changed no behaviour: the 960 tests passed unchanged, and `app.py` went
     from 1,009 lines to 81.
+97. **Device names go through the pre-filter too.** A guest or a gadget on
+    the network can name itself, and its name reaches the model in a finding's
+    evidence. Device names often name people and products ("Mark's iPhone",
+    "Google Assistant"), so they are checked only for words with no business
+    in one (`ignore`, `instruction`, `disregard`, `override`, `jailbreak`,
+    `benign`, `whitelist`, `allowlist`), each at the start of a whole word.
+    A hit raises the finding one step, as for a domain.
 
 ## Verified facts the design relies on
 
@@ -1056,7 +1063,6 @@ no name from your history or the feeds appears in it.
 
 ## Future work
 
-- Run device names through the instruction-word pre-filter too.
 - Measure young-domain recall in the evaluation, with registration dates
   cached ahead of time for a fixed test set.
 - Optional abuse.ch feeds for users who register for a free key.

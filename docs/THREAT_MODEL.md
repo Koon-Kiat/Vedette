@@ -71,9 +71,9 @@ Mitigations:
 - **No tools.** The model has no tool calls. Ollama has no internet route and
   no write access to Vedette's data.
 - **Pre-filter.** Instruction-like words in labels (`ignore`, `instruction`,
-  `system`, `benign`, `override` and others) add the words to the evidence and
-  raise the severity one step. A hit never removes or hides a domain
-  (`rules/prefilter.py`).
+  `system`, `benign`, `override` and others), or in a finding's device name,
+  add the words to the evidence and raise the severity one step. A hit never
+  removes or hides a domain (`rules/prefilter.py`).
 - **Safe output.** Model text has HTML, markdown and links stripped, domains
   defanged, and length capped (`llm/guards.py` `sanitize_model_text`). Every
   domain in alerts, digests, the CLI and the dashboard is defanged and never a
@@ -88,8 +88,9 @@ Residual risk:
 - The pre-filter is a word list. Words it does not know, other languages and
   look-alike spellings pass it. That costs only the severity raise; the other
   defences still apply.
-- Device names are not run through the pre-filter: it looks at domain labels,
-  as the spec asks.
+- Device names are checked against a shorter word list than domain names
+  (`ignore`, `instruction`, `override` and a few others), because they often
+  name people and products; an instruction in other words passes.
 
 ### API key theft (Information disclosure)
 

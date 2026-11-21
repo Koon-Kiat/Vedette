@@ -75,6 +75,9 @@ Copy-Item config.example.yaml config.yaml
    docker compose logs -f vedette
    ```
 
+   This builds the image on your machine. To use a released image instead,
+   with no build, see "Releases" below.
+
 Stop it with `docker compose down`. Data lives in the named volumes
 `vedette-data` and `ollama-models` and survives restarts.
 

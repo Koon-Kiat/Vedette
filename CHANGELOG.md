@@ -62,6 +62,9 @@
 
 ### Maintenance
 
+- `docs/ux/README.md` lists the UX working documents and says where the
+  `PRODUCT.md` and `DESIGN.md` they cite are kept. The Quickstart points to the
+  released image for a start without a build.
 - The dashboard's routes moved out of one 645-line `create_app` into
   `web/routes/`, one module per part, sharing a `Dashboard` object
   (`web/dashboard.py`) and the template filters (`web/templating.py`).

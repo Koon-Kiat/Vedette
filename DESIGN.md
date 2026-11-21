@@ -1,5 +1,5 @@
 ---
-name: NextDNS Sentinel
+name: Vedette
 description: A local DNS watch dashboard drawn as one set of technical drawings, each profile on its own inked layer and every triage decision entered as a revision.
 colors:
   rail: "#0a0b0c"
@@ -207,7 +207,7 @@ components:
     padding: "22px 22px 18px"
 ---
 
-# Design System: NextDNS Sentinel
+# Design System: Vedette
 
 ## Overview
 

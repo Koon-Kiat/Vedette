@@ -12,14 +12,14 @@ import httpx
 import pytest
 import respx
 
-from sentinel.config import HealthConfig, ProfileConfig
-from sentinel.health.monitor import HealthMonitor, OllamaProbe
-from sentinel.health.server import start_health_server
-from sentinel.health.state import HealthState
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.storage.health import HealthStore
-from sentinel.storage.notifications import NotificationStore
-from sentinel.storage.store import Store
+from vedette.config import HealthConfig, ProfileConfig
+from vedette.health.monitor import HealthMonitor, OllamaProbe
+from vedette.health.server import start_health_server
+from vedette.health.state import HealthState
+from vedette.sources.nextdns import parse_log_entry
+from vedette.storage.health import HealthStore
+from vedette.storage.notifications import NotificationStore
+from vedette.storage.store import Store
 
 SGT = ZoneInfo("Asia/Singapore")
 T0 = datetime(2026, 3, 15, 4, 0, tzinfo=UTC)  # 12:00 in Singapore
@@ -202,11 +202,11 @@ async def test_a_profile_with_no_events_at_all_counts_from_service_start(
 # --- after a start-up --------------------------------------------------------------------
 
 
-async def test_silence_from_while_sentinel_was_off_is_not_reported(
+async def test_silence_from_while_vedette_was_off_is_not_reported(
     store: Store, kit_factory: Any
 ) -> None:
     kit = kit_factory(started_at=T0)
-    await add_event(store, T0 - timedelta(hours=13))  # stored before Sentinel stopped
+    await add_event(store, T0 - timedelta(hours=13))  # stored before Vedette stopped
 
     check = by_key(await kit.monitor.run_once())["events:abc123"]
     assert (check.ok, check.detail, check.pending) == (True, "Catching up after start-up", True)
@@ -281,7 +281,7 @@ async def test_api_errors_alert_only_once_they_have_lasted_the_window(
     retrying = by_key(await kit.monitor.run_once())["api:abc123"]
     assert retrying.ok
     assert retrying.detail.startswith("NextDNS answered with a server error since ")
-    assert retrying.detail.endswith(". Sentinel waits and tries again.")
+    assert retrying.detail.endswith(". Vedette waits and tries again.")
 
     kit.clock.now = T0 + timedelta(minutes=5)
     check = by_key(await kit.monitor.run_once())["api:abc123"]

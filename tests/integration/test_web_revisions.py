@@ -4,9 +4,9 @@ import re
 
 import pytest
 
-from sentinel.storage.store import Store
 from tests.integration.web_helpers import logged_in
 from tests.web_fixture import build_web_fixture
+from vedette.storage.store import Store
 
 
 @pytest.fixture

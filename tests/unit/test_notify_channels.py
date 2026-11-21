@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from sentinel.notify.channels import (
+from vedette.notify.channels import (
     DISCORD_MAX_CHUNKS,
     NTFY_MAX_BYTES,
     DeliveryError,
@@ -21,9 +21,9 @@ from sentinel.notify.channels import (
     OutgoingMessage,
     escape_discord,
 )
-from sentinel.rules.model import Severity
+from vedette.rules.model import Severity
 
-TOPIC = "sentinel-topic-not-real"
+TOPIC = "vedette-topic-not-real"
 TOKEN = "tk_not_a_real_token"  # noqa: S105 - fake value for these tests
 WEBHOOK = "https://discord.com/api/webhooks/123456789/not-a-real-webhook-token"
 PASSWORD = "not-a-real-password"  # noqa: S105 - fake value for these tests
@@ -31,7 +31,7 @@ PASSWORD = "not-a-real-password"  # noqa: S105 - fake value for these tests
 
 def message(body: str = "Body line one.\nBody line two.", **kw: Any) -> OutgoingMessage:
     values: dict[str, Any] = {
-        "title": "Sentinel test",
+        "title": "Vedette test",
         "body": body,
         "priority": Severity.HIGH,
         "tags": ("warning",),
@@ -67,7 +67,7 @@ async def test_ntfy_publishes_json_to_the_root_url(
     body = json.loads(request.content)
     assert body == {
         "topic": TOPIC,
-        "title": "Sentinel test",
+        "title": "Vedette test",
         "message": "Body line one.\nBody line two.",
         "priority": 4,
         "tags": ["warning"],
@@ -117,7 +117,7 @@ async def test_ntfy_long_messages_are_cut_below_the_attachment_limit(
 
     sent = json.loads(route.calls.last.request.content)["message"]
     assert len(sent.encode("utf-8")) <= NTFY_MAX_BYTES
-    assert sent.endswith("(cut short; run 'sentinel findings' for the rest)")
+    assert sent.endswith("(cut short; run 'vedette findings' for the rest)")
 
 
 @pytest.mark.parametrize(
@@ -194,7 +194,7 @@ async def test_discord_posts_without_mentions_or_link_previews(
     body = json.loads(route.calls.last.request.content)
     assert body["allowed_mentions"] == {"parse": []}
     assert body["flags"] == 4
-    assert body["content"].startswith("**Sentinel test**\n")
+    assert body["content"].startswith("**Vedette test**\n")
     assert "Body line one\\." in body["content"] or "Body line one." in body["content"]
 
 
@@ -346,7 +346,7 @@ def email_channel(security: str = "starttls", username: str = "me@example.org") 
         security=security,
         username=username,
         password=PASSWORD,
-        sender="sentinel@example.org",
+        sender="vedette@example.org",
         recipients=["me@example.org", "you@example.org"],
         smtp_class=FakeSMTP,
         smtp_ssl_class=FakeSMTP,
@@ -371,8 +371,8 @@ async def test_email_uses_starttls_with_certificate_checks_then_logs_in() -> Non
     assert verified(dict(smtp.calls)["starttls"])
     assert dict(smtp.calls)["login"] == ("me@example.org", PASSWORD)
     (sent,) = smtp.sent
-    assert sent["Subject"] == "[NextDNS Sentinel] Sentinel test"
-    assert sent["From"] == "sentinel@example.org"
+    assert sent["Subject"] == "[Vedette] Vedette test"
+    assert sent["From"] == "vedette@example.org"
     assert sent["To"] == "me@example.org, you@example.org"
     assert sent.get_content().strip() == "Body line one.\nBody line two."
     assert sent.get_content_type() == "text/plain"
@@ -406,7 +406,7 @@ async def test_email_subject_cannot_inject_headers() -> None:
     [
         (smtplib.SMTPAuthenticationError(535, b"bad credentials"), False),
         (smtplib.SMTPRecipientsRefused({"me@example.org": (550, b"no")}), False),
-        (smtplib.SMTPSenderRefused(550, b"no", "sentinel@example.org"), False),
+        (smtplib.SMTPSenderRefused(550, b"no", "vedette@example.org"), False),
         (ssl.SSLCertVerificationError("certificate verify failed"), False),
         (smtplib.SMTPServerDisconnected("gone"), True),
         (ConnectionRefusedError("refused"), True),

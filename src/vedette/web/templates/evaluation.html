@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "_titleblock.html" import titleblock with context %}
+{% macro pct(value) %}{{ "n/a" if value is none else value|pct }}{% endmacro %}
+{% block content %}
+{% call titleblock("Evaluation", "8 of 8", scoped=False) %}
+  <p class="lead">How well the rules and the local model hold up against known-good, known-bad and hostile names.</p>
+  {% if run %}<p class="stamp">Run {{ run.finished_at|local(tz) }}</p>{% endif %}
+{% endcall %}
+{% if not run %}
+<section class="block">
+  <p class="empty">No evaluation has run yet.</p>
+  <p>Run <code>vedette eval</code> to measure detection recall, false alerts per day, and the prompt-injection success rate with the defences on and off. The results will appear here.</p>
+</section>
+{% else %}
+{% set s = run.summary %}
+{% set h = s.history %}
+<section class="block" aria-labelledby="targets-title">
+  <h2 id="targets-title">Against the targets</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Measure</th><th>Target</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr class="{{ "ok" if h.alerts_per_day is not none and h.alerts_per_day <= 2 else "problem" if h.alerts_per_day is not none else "" }}"><td>False alerts per day, on your history</td><td>at most 2</td><td>{{ "n/a" if h.alerts_per_day is none else "%.2f"|format(h.alerts_per_day) }} <span class="note">{{ h.alerts }} high or critical finding{{ "" if h.alerts == 1 else "s" }} over {{ "%.1f"|format(h.days) }} days; {{ h.alerts_marked_benign }} marked benign</span></td></tr>
+      {% for row in s.injection %}
+      <tr class="{{ "ok" if row.defences and row.succeeded == 0 else "problem" if row.defences else "" }}"><td>Injection success, {{ row.model|text }}, thinking {{ "on" if row.think else "off" }}, defences {{ "on" if row.defences else "off" }}</td><td>{{ "0%" if row.defences else "comparison only" }}</td><td>{{ row.succeeded }} of {{ row["items"] }} ({{ pct(row.success_rate) }}){% if row.attempted_lowering %} <span class="note">The model tried to lower the priority {{ row.attempted_lowering }} times{% if row.defences %}; the floor guard stopped each one{% endif %}.</span>{% endif %}</td></tr>
+      {% else %}
+      <tr><td>Injection success</td><td>0% with defences on</td><td>The model was not run.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="block" aria-labelledby="detection-title">
+  <h2 id="detection-title">Detection</h2>
+  <div class="table-wrap">
+  <table class="sortable" id="t-detection">
+    <thead><tr><th>Dataset</th><th>Kind</th><th class="num">Items</th><th class="num">Flagged</th><th class="num">Rate</th><th class="num">High or critical</th></tr></thead>
+    <tbody>
+      {% for row in s.detection %}
+      <tr><td>{{ row.dataset|text }}{% if row.note %}<span class="note">{{ row.note|text }}</span>{% endif %}</td><td>{{ row.kind }}</td><td class="num">{{ row["items"]|num }}</td><td class="num">{{ row.flagged|num }}</td><td class="num">{{ pct(row.rate) }}</td><td class="num">{{ row.alerting|num }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<div class="trio">
+  <section class="block" aria-labelledby="schema-title">
+    <h2 id="schema-title">Model answers</h2>
+    {% if s.injection %}
+    <dl class="figures">
+      {% for row in s.injection %}
+      <div><dt>{{ row.model|text }}, thinking {{ "on" if row.think else "off" }}, defences {{ "on" if row.defences else "off" }}</dt><dd>{{ row.schema_failures }} of {{ row.responses }} failed the schema <span class="sub">p50 {{ "n/a" if row.p50_ms is none else row.p50_ms|secs }}, p95 {{ "n/a" if row.p95_ms is none else row.p95_ms|secs }}</span></dd></div>
+      {% endfor %}
+    </dl>
+    {% else %}
+    <p class="empty">The model was not run.</p>
+    {% endif %}
+  </section>
+  <section class="block" aria-labelledby="speed-title">
+    <h2 id="speed-title">Speed</h2>
+    <dl class="figures">
+      <div><dt>Event to finding, live</dt><dd>{% if h.event_to_finding.count %}p50 {{ "%.1f"|format(h.event_to_finding.p50) }} s, p95 {{ "%.1f"|format(h.event_to_finding.p95) }} s{% else %}no cases yet{% endif %}</dd></div>
+      <div><dt>Finding to alert queued</dt><dd>{% if h.finding_to_alert.count %}p50 {{ "%.1f"|format(h.finding_to_alert.p50) }} s, p95 {{ "%.1f"|format(h.finding_to_alert.p95) }} s{% else %}no cases yet{% endif %}</dd></div>
+    </dl>
+  </section>
+  <section class="block" aria-labelledby="load-title">
+    <h2 id="load-title">Model load</h2>
+    <dl class="figures">
+      <div><dt>Calls a day, last 7 days</dt><dd>{{ "n/a" if h.llm_calls_per_day is none else "%.1f"|format(h.llm_calls_per_day) }}</dd></div>
+      <div><dt>Cache hit rate</dt><dd>{{ pct(h.llm_cache_hit_rate) }}</dd></div>
+    </dl>
+  </section>
+</div>
+{% if s.errors %}
+<section class="block" aria-labelledby="problems-title">
+  <h2 id="problems-title">Problems during the run</h2>
+  <ul class="plain">{% for error in s.errors %}<li>{{ error|text }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+<p class="note">The full report, with every counted injection case and the limits of the method, is written by <code>vedette eval</code> to docs/EVALUATION.md.</p>
+{% endif %}
+{% endblock %}

@@ -821,7 +821,7 @@ wheels = [
 ]
 
 [[package]]
-name = "nextdns-sentinel"
+name = "vedette"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

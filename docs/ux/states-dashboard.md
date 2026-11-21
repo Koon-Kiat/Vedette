@@ -1,4 +1,4 @@
-# NextDNS Sentinel dashboard: open counts after a decision, and a retrying API check
+# Vedette dashboard: open counts after a decision, and a retrying API check
 
 ## State Inventory
 
@@ -14,4 +14,4 @@
 | State | Where | What the owner sees | What they can do | Recovery and timings | Severity |
 |---|---|---|---|---|---|
 | Retrying | NextDNS API check, inside `api_error_minutes` of the first error | State column "Retrying" in the warning colour. Detail as in docs/ux/copy-dashboard.md (Health: NextDNS API check), with the time of the first error in the dashboard's time zone. | Nothing is needed; the check settles on its own. | Clears to "OK" on the next successful request. Past `api_error_minutes` it becomes "Problem" and the health alert goes out, as today. Counts as passing in the menu's "checks OK" line, because no alert has been raised. | Minor |
-| Catching up | Events check for a profile, in the first ten minutes after Sentinel starts, while the collector reads what the profile sent meanwhile | State column "Catching up" in the warning colour; detail "Catching up after start-up". | Nothing is needed. | Clears to "OK" once the profile's newest event is recent, or to "Problem" when the grace ends without catching up. Counts as passing in the menu. | Minor |
+| Catching up | Events check for a profile, in the first ten minutes after Vedette starts, while the collector reads what the profile sent meanwhile | State column "Catching up" in the warning colour; detail "Catching up after start-up". | Nothing is needed. | Clears to "OK" once the profile's newest event is recent, or to "Problem" when the grace ends without catching up. Counts as passing in the menu. | Minor |

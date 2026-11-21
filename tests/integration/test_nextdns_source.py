@@ -3,16 +3,16 @@ from datetime import timedelta
 import httpx
 import pytest
 
-from sentinel.sources.base import (
+from tests.integration.conftest import SleepRecorder
+from tests.integration.fake_nextdns import API_KEY, T0, FakeNextDns
+from vedette.sources.base import (
     DnsEvent,
     SourceAuthError,
     SourceError,
     SourceUnavailable,
     StreamCursorRejected,
 )
-from sentinel.sources.nextdns import NextDnsSource, parse_log_entry
-from tests.integration.conftest import SleepRecorder
-from tests.integration.fake_nextdns import API_KEY, T0, FakeNextDns
+from vedette.sources.nextdns import NextDnsSource, parse_log_entry
 
 
 async def collect_backfill(

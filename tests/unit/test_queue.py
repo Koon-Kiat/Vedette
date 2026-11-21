@@ -1,4 +1,4 @@
-from sentinel.pipeline.queue import MemoryQueue
+from vedette.pipeline.queue import MemoryQueue
 
 
 async def test_messages_come_out_in_publish_order() -> None:

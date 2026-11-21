@@ -8,14 +8,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sentinel.config import ProfileConfig
-from sentinel.llm.schema import Analysis
-from sentinel.rules.model import Finding, Severity
-from sentinel.sources.base import DnsEvent
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.health import HealthCheck, HealthStore
-from sentinel.storage.store import Store
+from vedette.config import ProfileConfig
+from vedette.llm.schema import Analysis
+from vedette.rules.model import Finding, Severity
+from vedette.sources.base import DnsEvent
+from vedette.sources.nextdns import parse_log_entry
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.health import HealthCheck, HealthStore
+from vedette.storage.store import Store
 
 TZ = ZoneInfo("Asia/Singapore")
 PERIOD_END = datetime(2026, 3, 15, 0, 0, tzinfo=UTC)  # 08:00 in Singapore

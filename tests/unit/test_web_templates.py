@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.web import app as web_app
+from vedette.web import app as web_app
 
 WEB = Path(web_app.__file__).resolve().parent
 TEMPLATES = sorted((WEB / "templates").glob("*.html"))

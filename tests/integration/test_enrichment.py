@@ -7,15 +7,15 @@ import httpx
 import pytest
 import respx
 
-from sentinel.enrich.enricher import Enricher
-from sentinel.enrich.first_seen import FirstSeenTracker
-from sentinel.enrich.popularity import PopularityList
-from sentinel.enrich.rdap import DomainAges, RdapClient
-from sentinel.enrich.threat_intel import Feed, ThreatIntel
-from sentinel.storage.reference import ReferenceStore
-from sentinel.storage.store import Store
 from tests.unit.rule_helpers import T0, event
 from tests.unit.test_reference_parsing import tranco_zip
+from vedette.enrich.enricher import Enricher
+from vedette.enrich.first_seen import FirstSeenTracker
+from vedette.enrich.popularity import PopularityList
+from vedette.enrich.rdap import DomainAges, RdapClient
+from vedette.enrich.threat_intel import Feed, ThreatIntel
+from vedette.storage.reference import ReferenceStore
+from vedette.storage.store import Store
 
 NOW = T0 + timedelta(minutes=5)
 TRANCO_URL = "https://lists.test/top-1m.csv.zip"

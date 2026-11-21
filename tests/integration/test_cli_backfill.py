@@ -1,12 +1,12 @@
-"""``sentinel backfill`` reads history through the API and stores it once."""
+"""``vedette backfill`` reads history through the API and stores it once."""
 
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from sentinel.cli import app
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
+from vedette.cli import app
 
 runner = CliRunner()
 
@@ -14,8 +14,8 @@ runner = CliRunner()
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NEXTDNS_API_KEY", API_KEY)
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'b.db'}")
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'b.db'}")
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
 
 
 def test_backfill_stores_history_and_recognises_it_the_second_time(

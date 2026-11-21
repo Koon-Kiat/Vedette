@@ -1,4 +1,4 @@
-# NextDNS Sentinel dashboard: the Mark benign confirmation and outside names
+# Vedette dashboard: the Mark benign confirmation and outside names
 
 ## Accessibility Audit — Per WCAG Principle
 

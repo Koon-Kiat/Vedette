@@ -31,12 +31,12 @@ FROM python:3.14-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH
-RUN groupadd --gid 10001 sentinel \
-    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin sentinel \
+RUN groupadd --gid 10001 vedette \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin vedette \
     && mkdir -p /data /config \
-    && chown sentinel:sentinel /data
+    && chown vedette:vedette /data
 COPY --from=builder /opt/venv /opt/venv
 USER 10001:10001
 WORKDIR /data
-ENTRYPOINT ["sentinel"]
+ENTRYPOINT ["vedette"]
 CMD ["run"]

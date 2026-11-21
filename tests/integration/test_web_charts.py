@@ -5,12 +5,12 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from sentinel.rules.model import Finding, Severity
-from sentinel.storage.series import SeriesQueries
-from sentinel.storage.store import Store
 from tests.digest_fixture import PROFILES, _event
 from tests.integration.test_web_xss import audit
 from tests.integration.web_helpers import NOW, logged_in, make_client
+from vedette.rules.model import Finding, Severity
+from vedette.storage.series import SeriesQueries
+from vedette.storage.store import Store
 
 T0 = NOW - timedelta(minutes=10)  # on a whole minute
 HOSTILE = "<script>alert(1)</script>.evil.example"

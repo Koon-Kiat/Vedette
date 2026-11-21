@@ -4,16 +4,16 @@ import asyncio
 import contextlib
 from datetime import timedelta
 
-from sentinel.enrich.model import EnrichedEvent
-from sentinel.pipeline.processor import Batch, RuleWorker
-from sentinel.pipeline.queue import MemoryQueue
-from sentinel.rules.allowlist import Allowlist, AllowlistEntry
-from sentinel.rules.engine import RuleEngine
-from sentinel.rules.loader import load_rules
-from sentinel.storage.store import Store
-from sentinel.storage.triage import TriageStore
 from tests.integration.conftest import wait_until
 from tests.unit.rule_helpers import T0, enriched, event
+from vedette.enrich.model import EnrichedEvent
+from vedette.pipeline.processor import Batch, RuleWorker
+from vedette.pipeline.queue import MemoryQueue
+from vedette.rules.allowlist import Allowlist, AllowlistEntry
+from vedette.rules.engine import RuleEngine
+from vedette.rules.loader import load_rules
+from vedette.storage.store import Store
+from vedette.storage.triage import TriageStore
 
 
 def young(n: int) -> EnrichedEvent:

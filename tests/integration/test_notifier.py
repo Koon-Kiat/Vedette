@@ -7,15 +7,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from sentinel.llm.schema import Analysis
-from sentinel.notify.channels import Channel, DeliveryError, OutgoingMessage
-from sentinel.notify.schedule import QuietHours
-from sentinel.pipeline.notifier import AlertWorker, DeliveryWorker
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Finding, Severity
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.notifications import NotificationStore
-from sentinel.storage.store import Store
+from vedette.llm.schema import Analysis
+from vedette.notify.channels import Channel, DeliveryError, OutgoingMessage
+from vedette.notify.schedule import QuietHours
+from vedette.pipeline.notifier import AlertWorker, DeliveryWorker
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Finding, Severity
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.notifications import NotificationStore
+from vedette.storage.store import Store
 
 SGT = ZoneInfo("Asia/Singapore")
 NOON = datetime(2026, 3, 15, 4, 0, tzinfo=UTC)  # 12:00 in Singapore

@@ -10,10 +10,10 @@ import pytest
 import respx
 from structlog.testing import capture_logs
 
-from sentinel.config import load_settings
-from sentinel.pipeline.runner import Pipeline
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
+from vedette.config import load_settings
+from vedette.pipeline.runner import Pipeline
 
 TOKEN = "a-dashboard-token-of-enough-length-1234"  # noqa: S105 - fake value for tests
 
@@ -31,13 +31,13 @@ def port(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, router: respx.MockRout
     for name, value in {
         "NEXTDNS_API_KEY": API_KEY,
         "DASHBOARD_TOKEN": TOKEN,
-        "SENTINEL_STORAGE__DATABASE_URL": f"sqlite+aiosqlite:///{tmp_path / 'p.db'}",
-        "SENTINEL_PROFILES": '[{"id": "abc123", "label": "router"}]',
-        "SENTINEL_ENRICH__RDAP__ENABLED": "false",
-        "SENTINEL_ENRICH__THREAT_INTEL__FEEDS": "[]",
-        "SENTINEL_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
-        "SENTINEL_DASHBOARD__PORT": str(chosen),
-        "SENTINEL_HEALTH__HEALTHZ_PORT": str(free_port()),
+        "VEDETTE_STORAGE__DATABASE_URL": f"sqlite+aiosqlite:///{tmp_path / 'p.db'}",
+        "VEDETTE_PROFILES": '[{"id": "abc123", "label": "router"}]',
+        "VEDETTE_ENRICH__RDAP__ENABLED": "false",
+        "VEDETTE_ENRICH__THREAT_INTEL__FEEDS": "[]",
+        "VEDETTE_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
+        "VEDETTE_DASHBOARD__PORT": str(chosen),
+        "VEDETTE_HEALTH__HEALTHZ_PORT": str(free_port()),
     }.items():
         monkeypatch.setenv(name, value)
     router.get("https://lists.test/top.zip").respond(404)

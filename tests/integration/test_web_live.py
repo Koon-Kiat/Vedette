@@ -6,10 +6,10 @@ from typing import Any
 
 import pytest
 
-from sentinel.sources.base import DnsEvent, Reason
-from sentinel.storage.store import Store
 from tests.integration.web_helpers import NOW, logged_in, make_client
 from tests.web_fixture import build_web_fixture
+from vedette.sources.base import DnsEvent, Reason
+from vedette.storage.store import Store
 
 HOSTILE = "<script>alert(1)</script>.evil.example"
 FAST: dict[str, Any] = {
@@ -134,6 +134,6 @@ async def test_the_overview_has_the_live_parts(filled: Store) -> None:
     async with logged_in(filled) as (client, _):
         page = await client.get("/")
 
-    assert 'hx-trigger="sentinel:findings from:body"' in page.text
+    assert 'hx-trigger="vedette:findings from:body"' in page.text
     assert 'src="/static/live.js?v=' in page.text  # versioned by its content
     assert "live-site[.]example" in page.text

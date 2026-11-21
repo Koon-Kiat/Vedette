@@ -3,13 +3,13 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sentinel.enrich.lexical import lexical_features
-from sentinel.enrich.model import EnrichedEvent
-from sentinel.rules.allowlist import Allowlist, AllowlistEntry
-from sentinel.rules.engine import RuleEngine
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Finding
-from sentinel.sources.base import DnsEvent, Reason
+from vedette.enrich.lexical import lexical_features
+from vedette.enrich.model import EnrichedEvent
+from vedette.rules.allowlist import Allowlist, AllowlistEntry
+from vedette.rules.engine import RuleEngine
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Finding
+from vedette.sources.base import DnsEvent, Reason
 
 T0 = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)
 PROFILE = "abc123"

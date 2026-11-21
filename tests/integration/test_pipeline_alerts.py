@@ -10,11 +10,11 @@ import httpx
 import pytest
 import respx
 
-from sentinel.config import load_settings
-from sentinel.pipeline.runner import Pipeline
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
 from tests.unit.test_reference_parsing import tranco_zip
+from vedette.config import load_settings
+from vedette.pipeline.runner import Pipeline
 
 NTFY = "https://ntfy.example/"
 
@@ -31,23 +31,23 @@ def settings_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, router: respx.
     port = free_port()
     for name, value in {
         "NEXTDNS_API_KEY": API_KEY,
-        "SENTINEL_STORAGE__DATABASE_URL": f"sqlite+aiosqlite:///{tmp_path / 'p.db'}",
-        "SENTINEL_PROFILES": '[{"id": "abc123", "label": "router"}]',
-        "SENTINEL_INGEST__PAGE_SIZE": "10",
-        "SENTINEL_INGEST__BACKFILL_DAYS": "36500",
-        "SENTINEL_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
-        "SENTINEL_ENRICH__RDAP__ENABLED": "false",
-        "SENTINEL_ENRICH__THREAT_INTEL__FEEDS": '[{"name": "phish", "url": "https://feeds.test/p.txt"}]',
-        "SENTINEL_RULES__LEARNING_DAYS": "0",
-        "SENTINEL_LLM__BASE_URL": "http://ollama.test",
-        "SENTINEL_NOTIFY__CHANNEL": "ntfy",
-        "SENTINEL_NOTIFY__NTFY__URL": "https://ntfy.example",
+        "VEDETTE_STORAGE__DATABASE_URL": f"sqlite+aiosqlite:///{tmp_path / 'p.db'}",
+        "VEDETTE_PROFILES": '[{"id": "abc123", "label": "router"}]',
+        "VEDETTE_INGEST__PAGE_SIZE": "10",
+        "VEDETTE_INGEST__BACKFILL_DAYS": "36500",
+        "VEDETTE_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
+        "VEDETTE_ENRICH__RDAP__ENABLED": "false",
+        "VEDETTE_ENRICH__THREAT_INTEL__FEEDS": '[{"name": "phish", "url": "https://feeds.test/p.txt"}]',
+        "VEDETTE_RULES__LEARNING_DAYS": "0",
+        "VEDETTE_LLM__BASE_URL": "http://ollama.test",
+        "VEDETTE_NOTIFY__CHANNEL": "ntfy",
+        "VEDETTE_NOTIFY__NTFY__URL": "https://ntfy.example",
         "NTFY_TOPIC": "pipeline-test",
-        "SENTINEL_NOTIFY__QUIET_HOURS": "00:00-00:00",
-        "SENTINEL_NOTIFY__ANALYSIS_WAIT_SECONDS": "0",
+        "VEDETTE_NOTIFY__QUIET_HOURS": "00:00-00:00",
+        "VEDETTE_NOTIFY__ANALYSIS_WAIT_SECONDS": "0",
         # The fake server's events are from 2026-03-15, far in the past.
-        "SENTINEL_NOTIFY__ALERT_MAX_AGE_MINUTES": "10000000",
-        "SENTINEL_HEALTH__HEALTHZ_PORT": str(port),
+        "VEDETTE_NOTIFY__ALERT_MAX_AGE_MINUTES": "10000000",
+        "VEDETTE_HEALTH__HEALTHZ_PORT": str(port),
     }.items():
         monkeypatch.setenv(name, value)
     router.get("https://lists.test/top.zip").mock(

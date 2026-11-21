@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from sentinel.cli import app
-from sentinel.storage.store import Store
+from vedette.cli import app
+from vedette.storage.store import Store
 
 runner = CliRunner()
 FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "nextdns" / "export.csv"
@@ -13,10 +13,10 @@ FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "nextdns" / "exp
 
 @pytest.fixture
 def database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
-    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
     monkeypatch.setenv(
-        "SENTINEL_PROFILES",
+        "VEDETTE_PROFILES",
         '[{"id": "abc123", "label": "router"}, {"id": "def456", "label": "pc", "enabled": false}]',
     )
     return url
@@ -57,7 +57,7 @@ def test_importing_the_same_file_twice_adds_nothing(database: str) -> None:
 
 
 def test_import_follows_the_raw_setting(database: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SENTINEL_INGEST__RAW", "true")
+    monkeypatch.setenv("VEDETTE_INGEST__RAW", "true")
 
     result = runner.invoke(app, ["import", str(FIXTURE), "--profile", "pc"])
 

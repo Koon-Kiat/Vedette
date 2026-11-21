@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from sentinel.cli import app
-from sentinel.rules.model import Finding, Severity
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.store import Store
+from vedette.cli import app
+from vedette.rules.model import Finding, Severity
+from vedette.storage.migrate import run_migrations
+from vedette.storage.store import Store
 
 runner = CliRunner()
 WHEN = datetime(2026, 3, 15, 4, 30, 0, tzinfo=UTC)  # 12:30 in Asia/Singapore
@@ -35,9 +35,9 @@ def finding(
 
 @pytest.fixture
 def database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
-    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     return url
 
 
@@ -192,8 +192,8 @@ def test_profile_wide_findings_show_the_profile_label_not_its_id(database: str) 
 
 
 def seed_analysis(url: str, **overrides: Any) -> None:
-    from sentinel.llm.schema import Analysis
-    from sentinel.storage.analysis import AnalysisStore
+    from vedette.llm.schema import Analysis
+    from vedette.storage.analysis import AnalysisStore
 
     async def write() -> None:
         store = Store.open(url)

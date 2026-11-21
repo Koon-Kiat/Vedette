@@ -11,11 +11,11 @@ from datetime import timedelta
 import httpx
 from structlog.testing import capture_logs
 
-from sentinel.pipeline.collector import ProfileCollector
-from sentinel.sources.nextdns import NextDnsSource, parse_log_entry
-from sentinel.storage.store import Store
 from tests.integration.conftest import SleepRecorder, wait_until
 from tests.integration.fake_nextdns import T0, FakeNextDns
+from vedette.pipeline.collector import ProfileCollector
+from vedette.sources.nextdns import NextDnsSource, parse_log_entry
+from vedette.storage.store import Store
 
 NOW = T0 + timedelta(hours=1)
 

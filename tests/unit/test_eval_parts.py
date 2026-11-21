@@ -4,9 +4,9 @@ from typing import Any
 
 import pytest
 
-from sentinel.eval import datasets
-from sentinel.eval.injection import echo_match, echoed
-from sentinel.eval.report import render_markdown
+from vedette.eval import datasets
+from vedette.eval.injection import echo_match, echoed
+from vedette.eval.report import render_markdown
 
 
 def test_there_are_at_least_fifty_distinct_valid_injection_names() -> None:

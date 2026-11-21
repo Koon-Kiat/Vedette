@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 import structlog
 
-from sentinel.log import REDACTED, configure_logging, make_redactor
+from vedette.log import REDACTED, configure_logging, make_redactor
 
 SECRET = "not-a-real-secret-value"  # noqa: S105 - fake value used only by these tests
 
@@ -73,14 +73,14 @@ def test_structlog_output_is_one_redacted_json_object_per_line(
 ) -> None:
     configure_logging("INFO", secrets=(SECRET,))
 
-    structlog.get_logger("sentinel.test").info("fetched", url=f"https://x.test/{SECRET}", pages=2)
+    structlog.get_logger("vedette.test").info("fetched", url=f"https://x.test/{SECRET}", pages=2)
 
     lines = capsys.readouterr().out.strip().splitlines()
     assert len(lines) == 1
     record = json.loads(lines[0])
     assert record["event"] == "fetched"
     assert record["level"] == "info"
-    assert record["logger"] == "sentinel.test"
+    assert record["logger"] == "vedette.test"
     assert record["pages"] == 2
     assert record["url"] == f"https://x.test/{REDACTED}"
     assert record["timestamp"].endswith("Z")
@@ -107,8 +107,8 @@ def test_messages_below_the_configured_level_are_dropped(
 ) -> None:
     configure_logging("WARNING")
 
-    structlog.get_logger("sentinel.test").info("quiet")
-    structlog.get_logger("sentinel.test").warning("loud")
+    structlog.get_logger("vedette.test").info("quiet")
+    structlog.get_logger("vedette.test").warning("loud")
 
     lines = capsys.readouterr().out.strip().splitlines()
     assert [json.loads(line)["event"] for line in lines] == ["loud"]
@@ -120,7 +120,7 @@ def test_exceptions_are_rendered_and_redacted(capsys: pytest.CaptureFixture[str]
     try:
         raise RuntimeError(f"bad key {SECRET}")
     except RuntimeError:
-        structlog.get_logger("sentinel.test").exception("failed")
+        structlog.get_logger("vedette.test").exception("failed")
 
     out = capsys.readouterr().out
     record = json.loads(out.strip())

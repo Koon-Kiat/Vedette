@@ -5,10 +5,10 @@ import re
 import pytest
 from sqlalchemy import select
 
-from sentinel.storage.models import allowlist, audit_log, findings
-from sentinel.storage.store import Store
 from tests.integration.web_helpers import logged_in
 from tests.web_fixture import build_web_fixture
+from vedette.storage.models import allowlist, audit_log, findings
+from vedette.storage.store import Store
 
 RAW_NAMES = ("bad.example", "fresh-site.example", "ads.example", "c2-site.example", "site0.example")
 
@@ -151,7 +151,7 @@ async def test_digests_page_lists_and_shows_archived_digests(filled: Store) -> N
         assert digest_id
         detail = await client.get(f"/digests/{digest_id.group(1)}")
 
-    assert "Sentinel digest 2026-03-15: 1 critical, 2 high" in listing.text
+    assert "Vedette digest 2026-03-15: 1 critical, 2 high" in listing.text
     assert "pending" in listing.text
     assert "QUERIES AND BLOCKING" in detail.text
     assert_no_raw_names(detail.text)

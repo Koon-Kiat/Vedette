@@ -11,19 +11,19 @@ From a UX evaluation of the drawing set (`docs/ux/evaluation-dashboard.md`).
   it on the dashboard, in Discord alerts ("CRITICAL: Threat-feed domain
   allowed, ...") and in the digest; the id stays beside it (a finding's title
   block, the alert's Rule line, the end of each digest entry), where it
-  matches `sentinel findings --rule`. What the rule checks is on every finding's page,
+  matches `vedette findings --rule`. What the rule checks is on every finding's page,
   not only before the model has explained it.
 - Findings open in triage order, highest priority first and then most recently
   seen, as the Overview and J/K already did.
 - A decision updates every open count at once: the profile switch, the menu and
   the Overview link, through the decision's response (`HX-Trigger:
-  sentinel-counts`) and the live stats (`open_by_layer`).
+  vedette-counts`) and the live stats (`open_by_layer`).
 - Mark benign's confirmation opens on Cancel, is titled with the action, sets
   the domain as an outside name and says Reopen undoes it; the dialog's body is
   its accessible description.
 - Health shows "Retrying" for a NextDNS API check inside its error window and
   "Catching up" after a start-up, and says in words what NextDNS answered
-  ("NextDNS is rate-limiting Sentinel since 14:05. Sentinel waits and tries
+  ("NextDNS is rate-limiting Vedette since 14:05. Vedette waits and tries
   again."). The alert after the window ends with the HTTP status.
 - In a window 1,180px or narrower, a finding's Decision panel follows the
   explanation; at 860px or narrower the Findings filters fold behind one
@@ -46,7 +46,7 @@ in rose ink. Still dark only; inked decisions are kept.
 
 - One profile switch in the rail: Both, router or pc. It scopes every page,
   chart, table and the live feed, is remembered in a cookie
-  (`sentinel_scope`, `HttpOnly`, `SameSite=Strict`), and each option shows its
+  (`vedette_scope`, `HttpOnly`, `SameSite=Strict`), and each option shows its
   open findings, so a problem on a profile not shown is never hidden. A link
   to a finding on another profile still opens. New route: `/scope`.
 - Charts draw each profile shown as its own layer, stacked, with its blocked
@@ -105,14 +105,14 @@ in rose ink. Still dark only; inked decisions are kept.
   its severity raised one step. It never removes anything.
 - Retention: raw events are purged after 30 days and findings after 180, with
   their analyses, messages and decisions, by an hourly worker.
-  `sentinel purge` runs it now; `sentinel purge --all` wipes all local data.
-- The database and everything else Sentinel writes are owner-only (umask 077),
+  `vedette purge` runs it now; `vedette purge --all` wipes all local data.
+- The database and everything else Vedette writes are owner-only (umask 077),
   and existing files are tightened at start-up.
 - Ollama now runs as a non-root user with a read-only root filesystem; a
   one-shot `ollama-volume-owner` service hands it the model volume.
-- New command: `sentinel backfill` reads a period of history from the API
+- New command: `vedette backfill` reads a period of history from the API
   without disturbing the live stream.
-- New command: `sentinel eval`.
+- New command: `vedette eval`.
   - It measures detection recall on threat-feed, DGA and tunnelling names,
     false alerts on the top-sites list and on your own history, and the
     prompt-injection success rate on 60 crafted names with the defences on and
@@ -226,7 +226,7 @@ An evaluation against usability heuristics, recorded in
   and the rules pick it up within about 30 seconds; Reopen undoes it.
 - Every triage action is recorded in a new audit log, shown as the finding's
   history. Migration `0005` adds the audit log and the stored allowlist.
-- New command: `sentinel benign <finding>`.
+- New command: `vedette benign <finding>`.
 - Security: published on 127.0.0.1 only, token login with a one-time nonce
   and a throttle, `HttpOnly` `SameSite=Strict` session cookie, CSRF token on
   every write, strict Content-Security-Policy, `X-Frame-Options: DENY`, host
@@ -253,7 +253,7 @@ An evaluation against usability heuristics, recorded in
   NextDNS errors, the local model, the processing backlog and disk space, with
   alerts on change and "Resolved" messages.
 - `/healthz` on 127.0.0.1 inside the container, used by Docker's health check.
-- New commands: `sentinel notify --test` and `sentinel digest`.
+- New commands: `vedette notify --test` and `vedette digest`.
 - The collector reports to the health monitor; a quiet stream is no longer
   counted as an error.
 
@@ -268,12 +268,12 @@ An evaluation against usability heuristics, recorded in
 - One retry on an invalid or incomplete answer, then a template explanation.
   While Ollama is unreachable nothing is stored and the worker retries.
 - Verdict cache keyed by rule, target and a feature hash, with a TTL.
-- `sentinel findings` shows the explanation and any raised priority.
+- `vedette findings` shows the explanation and any raised priority.
 - `pytest --live` runs a smoke test against the real model.
 
 ### Log export import
 
-- `sentinel import FILE --profile NAME` loads a NextDNS dashboard log export.
+- `vedette import FILE --profile NAME` loads a NextDNS dashboard log export.
   Events get the same ids as their API twins, so nothing is stored twice.
 - The `imports/` folder is mounted read-only into the container for this.
 - Raw mode now includes the query type in event ids, fixing collisions between
@@ -287,7 +287,7 @@ An evaluation against usability heuristics, recorded in
 - Eight declarative rules in `rules.yaml` with severity floors, descriptions,
   thresholds and evidence fields; every rule works with and without device
   attribution. Allowlist per root, optionally per profile or device.
-- Findings are stored with de-duplication and listed by `sentinel findings`
+- Findings are stored with de-duplication and listed by `vedette findings`
   (filters, JSON output, defanged domains, control characters removed).
 - Enricher and rule-engine stages run in the pipeline; events are marked
   processed in the same transaction that stores their findings.
@@ -312,17 +312,17 @@ An evaluation against usability heuristics, recorded in
 
 ### Scaffold
 
-- Repository layout from the spec, packaged as `nextdns-sentinel` with the
-  `sentinel` command.
+- Repository layout from the spec, packaged as `vedette` with the
+  `vedette` command.
 - Configuration loading from `config.yaml`, environment variables
-  (`SENTINEL_` prefix, `__` nesting) and Docker secrets, with validation and
+  (`VEDETTE_` prefix, `__` nesting) and Docker secrets, with validation and
   one-line error messages. Secrets are refused in the YAML file.
 - JSON logging to stdout with redaction of sensitive keys, header mappings and
-  known secret values, for both Sentinel code and library logs.
+  known secret values, for both Vedette code and library logs.
 - Queue interface with an in-memory implementation.
-- `sentinel run` starts a pipeline of idle placeholder stages and shuts down
+- `vedette run` starts a pipeline of idle placeholder stages and shuts down
   cleanly on SIGINT or SIGTERM.
-- Docker Compose stack: hardened `sentinel` container, `ollama` with GPU access
+- Docker Compose stack: hardened `vedette` container, `ollama` with GPU access
   on an internal-only network, a one-shot `ollama-pull` helper, and a `dev`
   container for lint, type checks and tests.
 - CI workflow (ruff, mypy `--strict`, pytest on Python 3.14 and 3.15, pip-audit,

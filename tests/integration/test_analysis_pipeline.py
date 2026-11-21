@@ -11,14 +11,14 @@ import pytest
 import respx
 from structlog.testing import capture_logs
 
-from sentinel.config import load_settings
-from sentinel.llm.schema import Analysis
-from sentinel.pipeline.runner import Pipeline
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.store import Store, StoredFinding
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
 from tests.unit.test_reference_parsing import tranco_zip
+from vedette.config import load_settings
+from vedette.llm.schema import Analysis
+from vedette.pipeline.runner import Pipeline
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.store import Store, StoredFinding
 
 OLLAMA_CHAT = "http://ollama.test/api/chat"
 
@@ -28,15 +28,15 @@ def database_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, router: respx.
     url = f"sqlite+aiosqlite:///{tmp_path / 'pipeline.db'}"
     for name, value in {
         "NEXTDNS_API_KEY": API_KEY,
-        "SENTINEL_STORAGE__DATABASE_URL": url,
-        "SENTINEL_PROFILES": '[{"id": "abc123", "label": "router"}]',
-        "SENTINEL_INGEST__PAGE_SIZE": "10",
-        "SENTINEL_INGEST__BACKFILL_DAYS": "36500",
-        "SENTINEL_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
-        "SENTINEL_ENRICH__RDAP__ENABLED": "false",
-        "SENTINEL_ENRICH__THREAT_INTEL__FEEDS": '[{"name": "phish", "url": "https://feeds.test/p.txt"}]',
-        "SENTINEL_RULES__LEARNING_DAYS": "0",
-        "SENTINEL_LLM__BASE_URL": "http://ollama.test",
+        "VEDETTE_STORAGE__DATABASE_URL": url,
+        "VEDETTE_PROFILES": '[{"id": "abc123", "label": "router"}]',
+        "VEDETTE_INGEST__PAGE_SIZE": "10",
+        "VEDETTE_INGEST__BACKFILL_DAYS": "36500",
+        "VEDETTE_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
+        "VEDETTE_ENRICH__RDAP__ENABLED": "false",
+        "VEDETTE_ENRICH__THREAT_INTEL__FEEDS": '[{"name": "phish", "url": "https://feeds.test/p.txt"}]',
+        "VEDETTE_RULES__LEARNING_DAYS": "0",
+        "VEDETTE_LLM__BASE_URL": "http://ollama.test",
     }.items():
         monkeypatch.setenv(name, value)
     router.get("https://lists.test/top.zip").mock(

@@ -1,8 +1,8 @@
 import pytest
 
-from sentinel.config import load_settings
-from sentinel.notify.channels import Channel, DiscordChannel, EmailChannel, NtfyChannel
-from sentinel.notify.factory import build_channel
+from vedette.config import load_settings
+from vedette.notify.channels import Channel, DiscordChannel, EmailChannel, NtfyChannel
+from vedette.notify.factory import build_channel
 
 WEBHOOK = "https://discord.com/api/webhooks/123456789/not-a-real-token_value"
 
@@ -20,10 +20,10 @@ async def test_each_configured_channel_is_built(
 ) -> None:
     monkeypatch.setenv("NTFY_TOPIC", "topic")
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", WEBHOOK)
-    monkeypatch.setenv("SENTINEL_NOTIFY__EMAIL__HOST", "smtp.example.org")
-    monkeypatch.setenv("SENTINEL_NOTIFY__EMAIL__SENDER", "me@example.org")
-    monkeypatch.setenv("SENTINEL_NOTIFY__EMAIL__RECIPIENTS", '["me@example.org"]')
-    monkeypatch.setenv("SENTINEL_NOTIFY__CHANNEL", name)
+    monkeypatch.setenv("VEDETTE_NOTIFY__EMAIL__HOST", "smtp.example.org")
+    monkeypatch.setenv("VEDETTE_NOTIFY__EMAIL__SENDER", "me@example.org")
+    monkeypatch.setenv("VEDETTE_NOTIFY__EMAIL__RECIPIENTS", '["me@example.org"]')
+    monkeypatch.setenv("VEDETTE_NOTIFY__CHANNEL", name)
 
     channel = build_channel(load_settings())
 

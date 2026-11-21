@@ -3,12 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.config import load_settings
-from sentinel.pipeline.runner import Pipeline
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.storage.store import Store
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
+from vedette.config import load_settings
+from vedette.pipeline.runner import Pipeline
+from vedette.sources.nextdns import parse_log_entry
+from vedette.storage.store import Store
 
 
 async def test_pipeline_migrates_collects_and_stops_cleanly(
@@ -16,14 +16,14 @@ async def test_pipeline_migrates_collects_and_stops_cleanly(
 ) -> None:
     database_url = f"sqlite+aiosqlite:///{tmp_path / 'pipeline.db'}"
     monkeypatch.setenv("NEXTDNS_API_KEY", API_KEY)
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", database_url)
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", database_url)
     monkeypatch.setenv(
-        "SENTINEL_PROFILES",
+        "VEDETTE_PROFILES",
         '[{"id": "abc123", "label": "router"}, {"id": "off999", "label": "pc", "enabled": false}]',
     )
-    monkeypatch.setenv("SENTINEL_INGEST__PAGE_SIZE", "10")
+    monkeypatch.setenv("VEDETTE_INGEST__PAGE_SIZE", "10")
     # The fake server's entries have fixed past dates; make the window cover them.
-    monkeypatch.setenv("SENTINEL_INGEST__BACKFILL_DAYS", "36500")
+    monkeypatch.setenv("VEDETTE_INGEST__BACKFILL_DAYS", "36500")
     server.add_entries(25)
     stop = asyncio.Event()
 

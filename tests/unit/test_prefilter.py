@@ -4,13 +4,13 @@ from datetime import timedelta
 
 import pytest
 
-from sentinel.enrich.model import EnrichedEvent
-from sentinel.rules import prefilter
-from sentinel.rules.allowlist import Allowlist
-from sentinel.rules.engine import RuleEngine
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Severity
 from tests.unit.rule_helpers import PROFILE, enriched, event, fired
+from vedette.enrich.model import EnrichedEvent
+from vedette.rules import prefilter
+from vedette.rules.allowlist import Allowlist
+from vedette.rules.engine import RuleEngine
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Severity
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,7 @@ from email.utils import format_datetime
 
 import pytest
 
-from sentinel.retry import backoff_delay, parse_retry_after
+from vedette.retry import backoff_delay, parse_retry_after
 
 
 @pytest.mark.parametrize("attempt", range(8))

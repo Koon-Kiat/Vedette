@@ -8,13 +8,13 @@ import httpx
 import pytest
 from structlog.testing import capture_logs
 
-from sentinel.health.state import HealthState
-from sentinel.pipeline.collector import ProfileCollector
-from sentinel.sources.base import SourceUnavailable, StreamIdle
-from sentinel.sources.nextdns import NextDnsSource
-from sentinel.storage.store import Store
 from tests.integration.conftest import SleepRecorder, wait_until
 from tests.integration.fake_nextdns import T0, FakeNextDns
+from vedette.health.state import HealthState
+from vedette.pipeline.collector import ProfileCollector
+from vedette.sources.base import SourceUnavailable, StreamIdle
+from vedette.sources.nextdns import NextDnsSource
+from vedette.storage.store import Store
 
 NOW = T0 + timedelta(hours=1)
 

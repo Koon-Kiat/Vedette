@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.notify.digest import DigestBuilder, render_digest
-from sentinel.pipeline.notifier import DigestScheduler
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.storage.notifications import NotificationStore
-from sentinel.storage.store import Store
 from tests.digest_fixture import PERIOD_END, PERIOD_START, PROFILES, TZ, build_fixture
+from vedette.notify.digest import DigestBuilder, render_digest
+from vedette.pipeline.notifier import DigestScheduler
+from vedette.sources.nextdns import parse_log_entry
+from vedette.storage.notifications import NotificationStore
+from vedette.storage.store import Store
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "docs" / "example-digest.txt"
 
@@ -105,7 +105,7 @@ async def test_an_empty_database_gives_an_empty_but_valid_digest(builder: Digest
     digest = await builder.build(PERIOD_END)
 
     title, body = render_digest(digest)
-    assert title == "Sentinel digest 2026-03-15: no high or critical findings"
+    assert title == "Vedette digest 2026-03-15: no high or critical findings"
     assert "No findings in this period." in body
     assert "No health checks have run yet." in body
     assert "device attribution unavailable" not in body, "no traffic says nothing about devices"
@@ -119,7 +119,7 @@ async def test_rendered_digest_reads_well_and_is_safe(
 ) -> None:
     title, body = render_digest(await builder.build(PERIOD_END))
 
-    assert title == "Sentinel digest 2026-03-15: 1 critical, 2 high"
+    assert title == "Vedette digest 2026-03-15: 1 critical, 2 high"
     assert "Covers 2026-03-14 08:00 to 2026-03-15 08:00 (Asia/Singapore)" in body
     assert "1 critical, 2 high, 2 medium, 0 low" in body
     assert "7-day average: 0 critical, 0.1 high" in body
@@ -260,7 +260,7 @@ async def test_a_missed_digest_is_sent_late_but_only_once(
 
 
 def test_large_numbers_are_easy_to_read() -> None:
-    from sentinel.notify.digest import Digest, VolumeLine
+    from vedette.notify.digest import Digest, VolumeLine
 
     digest = Digest(
         period_start=PERIOD_START,

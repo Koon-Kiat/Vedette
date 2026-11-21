@@ -1,4 +1,4 @@
-# NextDNS Sentinel dashboard in a narrow window
+# Vedette dashboard in a narrow window
 
 ## Platform-specific adaptation specs
 

@@ -7,19 +7,19 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
-from sentinel.cli import app
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.store import Store
 from tests.digest_fixture import build_fixture
+from vedette.cli import app
+from vedette.storage.migrate import run_migrations
+from vedette.storage.store import Store
 
 runner = CliRunner()
-TOPIC = "sentinel-cli-test"
+TOPIC = "vedette-cli-test"
 
 
 @pytest.fixture
 def ntfy(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SENTINEL_NOTIFY__CHANNEL", "ntfy")
-    monkeypatch.setenv("SENTINEL_NOTIFY__NTFY__URL", "https://ntfy.example")
+    monkeypatch.setenv("VEDETTE_NOTIFY__CHANNEL", "ntfy")
+    monkeypatch.setenv("VEDETTE_NOTIFY__NTFY__URL", "https://ntfy.example")
     monkeypatch.setenv("NTFY_TOPIC", TOPIC)
 
 
@@ -60,10 +60,10 @@ def test_notify_test_reports_a_failure_without_secrets(ntfy: None) -> None:
 
 
 def test_digest_prints_a_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
     monkeypatch.setenv(
-        "SENTINEL_PROFILES",
+        "VEDETTE_PROFILES",
         '[{"id": "abc123", "label": "router"}, {"id": "def456", "label": "pc"}]',
     )
     run_migrations(url)
@@ -80,7 +80,7 @@ def test_digest_prints_a_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     result = runner.invoke(app, ["digest", "--at", "2026-03-15T08:00"])
 
     assert result.exit_code == 0, result.output
-    assert result.output.startswith("Sentinel digest 2026-03-15: 1 critical, 2 high")
+    assert result.output.startswith("Vedette digest 2026-03-15: 1 critical, 2 high")
     assert "QUERIES AND BLOCKING" in result.output
     assert "bad.example" not in result.output
 
@@ -88,7 +88,7 @@ def test_digest_prints_a_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 def test_digest_without_a_database_explains_itself(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'x.db'}")
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'x.db'}")
 
     result = runner.invoke(app, ["digest"])
 

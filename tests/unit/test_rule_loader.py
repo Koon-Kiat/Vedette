@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.rules.loader import RuleFileError, load_rules
-from sentinel.rules.model import Severity
+from vedette.rules.loader import RuleFileError, load_rules
+from vedette.rules.model import Severity
 
 
 def write(tmp_path: Path, text: str) -> Path:

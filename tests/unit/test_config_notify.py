@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.config import ConfigError, load_settings
+from vedette.config import ConfigError, load_settings
 
 WEBHOOK = "https://discord.com/api/webhooks/123456789/not-a-real-token_value"
 
@@ -36,19 +36,19 @@ def test_the_spec_placeholder_channel_means_none(tmp_path: Path) -> None:
 
 
 def test_ntfy_needs_a_topic_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SENTINEL_NOTIFY__CHANNEL", "ntfy")
+    monkeypatch.setenv("VEDETTE_NOTIFY__CHANNEL", "ntfy")
 
     with pytest.raises(ConfigError, match="NTFY_TOPIC is not set"):
         load_settings()
 
-    monkeypatch.setenv("NTFY_TOPIC", "sentinel-alerts_42")
+    monkeypatch.setenv("NTFY_TOPIC", "vedette-alerts_42")
     assert load_settings().ntfy_topic is not None
 
 
 def test_a_malformed_ntfy_topic_is_rejected_without_echoing_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SENTINEL_NOTIFY__CHANNEL", "ntfy")
+    monkeypatch.setenv("VEDETTE_NOTIFY__CHANNEL", "ntfy")
     monkeypatch.setenv("NTFY_TOPIC", "bad topic/../x")
 
     with pytest.raises(ConfigError) as excinfo:
@@ -82,7 +82,7 @@ def test_ntfy_url_must_be_https_unless_the_server_is_local(
 
 
 def test_discord_needs_a_real_webhook_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SENTINEL_NOTIFY__CHANNEL", "discord")
+    monkeypatch.setenv("VEDETTE_NOTIFY__CHANNEL", "discord")
 
     with pytest.raises(ConfigError, match="DISCORD_WEBHOOK_URL is not set"):
         load_settings()

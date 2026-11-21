@@ -1,6 +1,6 @@
 # Architecture
 
-NextDNS Sentinel is five stages joined by a queue, so each stage can restart,
+Vedette is five stages joined by a queue, so each stage can restart,
 retry and scale on its own. Deterministic code handles almost everything; the
 local LLM sees only the small, already-filtered remainder and can never lower
 or suppress what the rules decided.
@@ -32,25 +32,25 @@ NextDNS API (per profile)
 
 | Piece | Where | State |
 | --- | --- | --- |
-| Configuration | `src/sentinel/config.py` | Done: YAML + environment overrides + Docker secrets, validated |
-| Logging | `src/sentinel/log.py` | Done: JSON to stdout, secrets redacted |
-| Queue interface | `src/sentinel/pipeline/queue.py` | Done: `EventQueue` with an in-memory implementation |
-| Event model and source interface | `src/sentinel/sources/base.py` | Done: `DnsEvent`, `LogSource` |
-| NextDNS source | `src/sentinel/sources/nextdns.py` | Done: history paging, live stream, backoff |
-| Log export reader | `src/sentinel/sources/nextdns_export.py` | Done: `sentinel import` loads a dashboard CSV export |
-| Storage | `src/sentinel/storage/` | Done for events, collector state, findings, reference data, the stored allowlist, the audit log and evaluation runs: SQLite (WAL), Alembic migrations, retention purge, owner-only files |
-| Collector | `src/sentinel/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
-| Enrichment | `src/sentinel/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
-| Rules | `src/sentinel/rules/` | Done: eight declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
-| Enricher and rule workers | `src/sentinel/pipeline/processor.py` | Done |
-| Defanging | `src/sentinel/notify/defang.py` | Done: CLI, alerts and digests |
-| LLM analyst | `src/sentinel/llm/`, `src/sentinel/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
-| Notifier | `src/sentinel/notify/`, `src/sentinel/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
-| Health monitor | `src/sentinel/health/` | Done: six kinds of check, alerts on change, `/healthz` |
-| Pipeline runner | `src/sentinel/pipeline/runner.py` | Runs all six stages, `/healthz`, the dashboard and the hourly retention purge |
-| CLI | `src/sentinel/cli.py` | `sentinel run`, `findings`, `benign`, `backfill`, `import`, `notify --test`, `digest`, `purge`, `eval`, `--version` |
-| Dashboard | `src/sentinel/web/`, `src/sentinel/storage/dashboard.py`, `src/sentinel/storage/triage.py` | Done: seven pages, triage with an audit log, token login; visual system in `DESIGN.md` |
-| Evaluation | `src/sentinel/eval/` | Done: datasets, offline detection, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
+| Configuration | `src/vedette/config.py` | Done: YAML + environment overrides + Docker secrets, validated |
+| Logging | `src/vedette/log.py` | Done: JSON to stdout, secrets redacted |
+| Queue interface | `src/vedette/pipeline/queue.py` | Done: `EventQueue` with an in-memory implementation |
+| Event model and source interface | `src/vedette/sources/base.py` | Done: `DnsEvent`, `LogSource` |
+| NextDNS source | `src/vedette/sources/nextdns.py` | Done: history paging, live stream, backoff |
+| Log export reader | `src/vedette/sources/nextdns_export.py` | Done: `vedette import` loads a dashboard CSV export |
+| Storage | `src/vedette/storage/` | Done for events, collector state, findings, reference data, the stored allowlist, the audit log and evaluation runs: SQLite (WAL), Alembic migrations, retention purge, owner-only files |
+| Collector | `src/vedette/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
+| Enrichment | `src/vedette/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
+| Rules | `src/vedette/rules/` | Done: eight declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
+| Enricher and rule workers | `src/vedette/pipeline/processor.py` | Done |
+| Defanging | `src/vedette/notify/defang.py` | Done: CLI, alerts and digests |
+| LLM analyst | `src/vedette/llm/`, `src/vedette/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
+| Notifier | `src/vedette/notify/`, `src/vedette/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
+| Health monitor | `src/vedette/health/` | Done: six kinds of check, alerts on change, `/healthz` |
+| Pipeline runner | `src/vedette/pipeline/runner.py` | Runs all six stages, `/healthz`, the dashboard and the hourly retention purge |
+| CLI | `src/vedette/cli.py` | `vedette run`, `findings`, `benign`, `backfill`, `import`, `notify --test`, `digest`, `purge`, `eval`, `--version` |
+| Dashboard | `src/vedette/web/`, `src/vedette/storage/dashboard.py`, `src/vedette/storage/triage.py` | Done: seven pages, triage with an audit log, token login; visual system in `DESIGN.md` |
+| Evaluation | `src/vedette/eval/` | Done: datasets, offline detection, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
 
 ## How the collector avoids gaps and duplicates
 
@@ -107,11 +107,11 @@ from the last week, without producing findings.
 
 ### Rules
 
-Rules live in `src/sentinel/rules/rules.yaml`: id, plain name, severity floor,
+Rules live in `src/vedette/rules/rules.yaml`: id, plain name, severity floor,
 description, thresholds and evidence fields. The detector behind each id is
 code. A file named by `rules.file` in the config can override any value per
 rule id. The dashboard, alerts and the digest lead with the name and keep the
-id beside it, the reference `sentinel findings --rule` takes.
+id beside it, the reference `vedette findings --rule` takes.
 
 When an event has no device id, per-device rules count per profile, and the
 finding records that device attribution is unavailable. Rules that compare
@@ -194,7 +194,7 @@ After a start-up, a profile whose newest stored event predates the start is
 not judged for silence until its collector has caught up (a finished
 backfill, an idle stream, or a streamed event under 5 minutes old), or for at
 most 10 minutes. Until then the check reads "Catching up after start-up" and
-neither raises nor resolves an alert: the stored events end when Sentinel
+neither raises nor resolves an alert: the stored events end when Vedette
 stopped, so their age says nothing about the profile.
 
 A check that goes bad raises a health alert at once. It counts as recovered
@@ -322,7 +322,7 @@ uPlot 1.6.32 on a canvas, from `static/charts.js`.
 
 The rail's switch chooses which profiles every page shows: all of them, or
 one. `GET /scope?to=<all|profile id>&next=<path>` stores the choice in a
-`sentinel_scope` cookie (`HttpOnly`, `SameSite=Strict`, a year) and redirects
+`vedette_scope` cookie (`HttpOnly`, `SameSite=Strict`, a year) and redirects
 back; `next` goes through the same check as every other redirect, so it never
 leaves the dashboard, and an unknown profile gets a 422. A plain link does it,
 so it works without JavaScript; a cross-site request carries no session
@@ -384,7 +384,7 @@ test checks each file's SHA-256, as for htmx.
 
 | Service | Purpose | Network | Hardening |
 | --- | --- | --- | --- |
-| `sentinel` | The pipeline and the dashboard | `egress` (to api.nextdns.io) and `llm` | uid 10001, read-only root filesystem, all capabilities dropped, `no-new-privileges`; one published port, the dashboard on `127.0.0.1:8080` |
+| `vedette` | The pipeline and the dashboard | `egress` (to api.nextdns.io) and `llm` | uid 10001, read-only root filesystem, all capabilities dropped, `no-new-privileges`; one published port, the dashboard on `127.0.0.1:8080` |
 | `ollama` | Local model server with GPU | `llm` only (internal: no internet, no host port) | uid 10002, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
 | `ollama-volume-owner` | One-shot: hands the model volume to uid 10002 before Ollama starts | none | root with only `CHOWN` and `DAC_READ_SEARCH`, read-only root filesystem, `no-new-privileges` |
 | `ollama-pull` | One-shot model download (`setup` profile) | `egress` | uid 10002, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
@@ -392,13 +392,13 @@ test checks each file's SHA-256, as for htmx.
 
 ## Decisions
 
-1. **Repository root is this folder.** The spec's `nextdns-sentinel/` tree maps
+1. **Repository root is this folder.** The spec's `vedette/` tree maps
    onto the repository root.
 2. **Only dependencies in use are declared.** Each part of the spec's stack is
    added when the code that needs it lands, so the audited dependency set stays
    as small as possible.
 3. **`hatchling` builds the package.** A build backend is required to install
-   the `sentinel` console script; hatchling is small and widely used.
+   the `vedette` console script; hatchling is small and widely used.
 4. **`tzdata` and `pyyaml` are direct dependencies.** `python:3.14-slim` has no
    system time zone database, and the config loader parses YAML itself so it
    can refuse secrets placed in the file.
@@ -408,8 +408,8 @@ test checks each file's SHA-256, as for htmx.
 6. **Secrets never come from `config.yaml`.** The loader rejects
    `nextdns_api_key` in YAML outright. `NEXTDNS_API_KEY` is read from the
    environment or from a Docker secret of the same name.
-7. **Environment overrides use `SENTINEL_` and `__`.** For example
-   `SENTINEL_LLM__MODEL`. Lists take JSON. Unknown keys in the YAML file are
+7. **Environment overrides use `VEDETTE_` and `__`.** For example
+   `VEDETTE_LLM__MODEL`. Lists take JSON. Unknown keys in the YAML file are
    errors so that typos surface at start-up.
 8. **The notification channel is undecided.** `notify.channel` is kept as free
    text with the placeholder `NOTIFY_CHANNEL` and is not validated until the
@@ -438,7 +438,7 @@ test checks each file's SHA-256, as for htmx.
     newest-first history back in order, and makes the hand-off durable. The
     queue sits between the enricher and the rule engine.
 15. **Alembic manages the schema.** Migrations live in
-    `src/sentinel/storage/migrations` and run at start-up over a synchronous
+    `src/vedette/storage/migrations` and run at start-up over a synchronous
     connection. A test checks they match the table definitions.
 16. **One transaction per stream event.** Simple and exactly matches "persist
     the cursor with each committed batch". Batching is deferred until load
@@ -450,7 +450,7 @@ test checks each file's SHA-256, as for htmx.
     timestamp, domain or status are skipped and counted in a warning.
 19. **The stream reconnects after 5 minutes of silence.** NextDNS documents no
     heartbeat, so a quiet stream cannot be told apart from a dead connection.
-20. **`sentinel run` backfills automatically**; the manual `sentinel backfill`
+20. **`vedette run` backfills automatically**; the manual `vedette backfill`
     came with the hardening work (decision 65).
 
 21. **External lookups are kept to what the spec's enrichment requires, and
@@ -489,7 +489,7 @@ test checks each file's SHA-256, as for htmx.
     (decision 61).
 
 29. **History can also come from a log export; the stream stays on the API.**
-    `sentinel import` loads the dashboard's CSV export for a profile. It is an
+    `vedette import` loads the dashboard's CSV export for a profile. It is an
     extra way in, not a replacement: real-time alerts and unattended running
     need the stream. The file is not downloaded automatically, because the
     export is the raw view of the whole retention period.
@@ -514,7 +514,7 @@ test checks each file's SHA-256, as for htmx.
 35. **Model text is stored already sanitised and defanged.** Prose is defanged
     with `defang_text`, which brackets only dots inside names so that sentence
     punctuation survives.
-36. **`sentinel findings --min-severity` uses the effective priority**: the
+36. **`vedette findings --min-severity` uses the effective priority**: the
     analysis's if there is one, otherwise the rule's floor.
 37. **Every model call is recorded** (time, duration, findings, outcome) for
     the health page and the evaluation report to come.
@@ -530,7 +530,7 @@ test checks each file's SHA-256, as for htmx.
 41. **Alerts are for fresh findings.** Only findings whose last event is under
     an hour old (`notify.alert_max_age_minutes`) are alerted, so a first
     backfill or an imported file does not set off a burst of old alerts. They
-    still appear in `sentinel findings` and in the digest.
+    still appear in `vedette findings` and in the digest.
 42. **A short wait for the model.** A high or critical finding waits up to
     60 seconds (`notify.analysis_wait_seconds`) so the alert can carry the
     model's explanation; then it is sent without one. Spec: high and critical
@@ -560,7 +560,7 @@ test checks each file's SHA-256, as for htmx.
     is reported as `StreamIdle` and the collector reconnects without counting a
     failure.
 50. **The digest is built from stored data only** (events, findings, analyses,
-    health results), so `sentinel digest` can preview it from the command line,
+    health results), so `vedette digest` can preview it from the command line,
     and the archive keeps both the text as sent and the numbers as JSON.
 
 51. **The chart is server-drawn SVG, not a chart library.** This departs from
@@ -634,7 +634,7 @@ test checks each file's SHA-256, as for htmx.
       something "new"), the reference caches and evaluation runs. They hold no
       lookup times.
     The purge runs one minute after start-up and then hourly.
-63. **Owner-only files by umask and by repair.** `sentinel` sets umask 077
+63. **Owner-only files by umask and by repair.** `vedette` sets umask 077
     before anything else, so the database, its WAL and anything else it
     writes are created 0600. Migrations also tighten an existing file to 0600
     and its directory to 0700, which fixes databases created before this
@@ -647,7 +647,7 @@ test checks each file's SHA-256, as for htmx.
     changes metadata. `ollama-pull` runs as the same user. Checked live: the
     model listed, the GPU found, and the real-model smoke test passed with the
     model 100% on the GPU.
-65. **`sentinel backfill` adds history without touching the stream.** It reads
+65. **`vedette backfill` adds history without touching the stream.** It reads
     a window through the same history paging the collector uses and stores
     events idempotently. It does not move the stored stream cursor, so the live
     stream carries on unaffected. `--days` is capped at the event retention,
@@ -658,7 +658,7 @@ test checks each file's SHA-256, as for htmx.
       from the cache only (no RDAP), and first sightings go to a scratch
       database. The real database is only read, except for storing the
       result.
-    - **Defences off.** A naive analyst kept only in `sentinel/eval/`: names
+    - **Defences off.** A naive analyst kept only in `vedette/eval/`: names
       written into the instructions, no warning, no pre-filter, no floor
       guard, no sanitising. The JSON schema stays so a priority can be read;
       the report says so.
@@ -781,7 +781,7 @@ test checks each file's SHA-256, as for htmx.
     owner asked for a more professional and futuristic look, a way to see
     router, pc or both on every chart, sortable headings and controls of the
     dashboard's own. The world was chosen from a deal of directions, recorded
-    with its reasons in `.impeccable/surfaces/src-sentinel-web.md`, and is
+    with its reasons in `.impeccable/surfaces/src-vedette-web.md`, and is
     described in `DESIGN.md`. Profiles became layers with their own inks
     because that one idea answers the request for separation everywhere at
     once. The switch is global and remembered, not one control per panel, as
@@ -848,7 +848,7 @@ Checked on 2026-11-12 for enrichment:
 - The laptop profile does report a device id and name, unlike the router.
 - Live tests on 2026-11-19 against a local ntfy server (v2.36.0, a
   throwaway container on the internal network; nothing went to ntfy.sh):
-  - `sentinel notify --test` was stored by the server with the expected title,
+  - `vedette notify --test` was stored by the server with the expected title,
     priority 3 and timestamp.
   - Stopping Ollama with a 1-minute window: alert 76 seconds after the stop
     command (window plus one 10-second check); "Resolved" 10 seconds after it
@@ -881,7 +881,7 @@ token:
   and acknowledging a row worked, the console showed no CSP violations, and
   at 375 pixels wide no page scrolled sideways.
 
-The first `sentinel eval` on 2026-11-19 used qwen3:8b on your stored history:
+The first `vedette eval` on 2026-11-19 used qwen3:8b on your stored history:
 373,427 events over 19.9 days. All counts are in [EVALUATION.md](EVALUATION.md);
 no name from your history or the feeds appears in it.
 

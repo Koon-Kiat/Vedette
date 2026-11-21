@@ -1,20 +1,20 @@
-name: nextdns-sentinel
+name: vedette
 
 services:
-  sentinel:
+  vedette:
     build:
       context: .
       target: runtime
-    image: nextdns-sentinel:local
+    image: vedette:local
     restart: unless-stopped
     env_file:
       - path: .env
         required: true
     environment:
-      SENTINEL_CONFIG_FILE: /config/config.yaml
+      VEDETTE_CONFIG_FILE: /config/config.yaml
       # Listen on all interfaces inside the container; the port below is
       # published on this machine's loopback address only.
-      SENTINEL_DASHBOARD__HOST: 0.0.0.0
+      VEDETTE_DASHBOARD__HOST: 0.0.0.0
     ports:
       # Dashboard. Never write "8080:8080": that would expose it to your network.
       - "127.0.0.1:8080:8080"
@@ -25,8 +25,8 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - sentinel-data:/data
-      # Drop NextDNS log exports here to load them with `sentinel import`.
+      - vedette-data:/data
+      # Drop NextDNS log exports here to load them with `vedette import`.
       - ./imports:/imports:ro
     user: "10001:10001"
     read_only: true
@@ -125,7 +125,7 @@ services:
         ollama pull "$$MODEL"
     environment:
       HOME: /home/ollama
-      MODEL: ${SENTINEL_LLM__MODEL:-qwen3:8b}
+      MODEL: ${VEDETTE_LLM__MODEL:-qwen3:8b}
     volumes:
       - ollama-models:/home/ollama/.ollama
     depends_on:
@@ -144,7 +144,7 @@ services:
     build:
       context: .
       target: dev
-    image: nextdns-sentinel-dev:local
+    image: vedette-dev:local
     profiles: [dev]
     volumes:
       - .:/app
@@ -158,5 +158,5 @@ networks:
     internal: true
 
 volumes:
-  sentinel-data: {}
+  vedette-data: {}
   ollama-models: {}

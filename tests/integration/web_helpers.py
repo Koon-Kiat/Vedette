@@ -8,11 +8,11 @@ from typing import Any
 
 import httpx
 
-from sentinel.config import ProfileConfig
-from sentinel.rules.loader import load_rules
-from sentinel.storage.store import Store
-from sentinel.web.app import DashboardContext, create_app
 from tests.digest_fixture import PROFILES, TZ
+from vedette.config import ProfileConfig
+from vedette.rules.loader import load_rules
+from vedette.storage.store import Store
+from vedette.web.app import DashboardContext, create_app
 
 TOKEN = "test-dashboard-token-0123456789abcdef"  # noqa: S105 - fake value for tests
 BASE = "http://127.0.0.1"

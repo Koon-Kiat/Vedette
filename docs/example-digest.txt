@@ -1,6 +1,6 @@
-Subject: Sentinel digest 2026-03-15: 1 critical, 2 high
+Subject: Vedette digest 2026-03-15: 1 critical, 2 high
 
-NextDNS Sentinel daily digest
+Vedette daily digest
 Covers 2026-03-14 08:00 to 2026-03-15 08:00 (Asia/Singapore)
 
 FINDINGS
@@ -48,4 +48,4 @@ HEALTH
 - PROBLEM since 2026-03-15 05:00: No events from pc for 3 h 0 min
 All other checks OK (2).
 
-Details: sentinel findings
+Details: vedette findings

@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.llm.analyst import Analyst
-from sentinel.llm.ollama import OllamaClient
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Severity
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.store import Store, StoredFinding
+from vedette.llm.analyst import Analyst
+from vedette.llm.ollama import OllamaClient
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Severity
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.migrate import run_migrations
+from vedette.storage.store import Store, StoredFinding
 
 pytestmark = pytest.mark.live
 

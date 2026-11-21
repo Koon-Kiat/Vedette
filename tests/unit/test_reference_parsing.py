@@ -3,8 +3,8 @@ import zipfile
 
 import pytest
 
-from sentinel.enrich.popularity import parse_tranco
-from sentinel.enrich.threat_intel import candidates, parse_feed
+from vedette.enrich.popularity import parse_tranco
+from vedette.enrich.threat_intel import candidates, parse_feed
 
 
 def tranco_zip(text: str, name: str = "top-1m.csv") -> bytes:

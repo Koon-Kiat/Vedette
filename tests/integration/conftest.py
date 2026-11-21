@@ -6,10 +6,10 @@ import httpx
 import pytest
 import respx
 
-from sentinel.sources.nextdns import NextDnsSource
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.store import Store
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
+from vedette.sources.nextdns import NextDnsSource
+from vedette.storage.migrate import run_migrations
+from vedette.storage.store import Store
 
 
 class SleepRecorder:
@@ -54,7 +54,7 @@ async def source(server: FakeNextDns, sleeps: SleepRecorder) -> AsyncIterator[Ne
 
 @pytest.fixture
 def database_url(tmp_path: Path) -> str:
-    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
     run_migrations(url)
     return url
 

@@ -7,14 +7,14 @@ from datetime import timedelta
 
 import pytest
 
-from sentinel.rules.model import Finding, Severity
-from sentinel.storage.health import HealthCheck, HealthStore
-from sentinel.storage.live import LiveQueries
-from sentinel.storage.store import Store
-from sentinel.web.app import _average
 from tests.digest_fixture import PROFILES, _event
 from tests.integration.web_helpers import NOW, logged_in
 from tests.web_fixture import build_web_fixture
+from vedette.rules.model import Finding, Severity
+from vedette.storage.health import HealthCheck, HealthStore
+from vedette.storage.live import LiveQueries
+from vedette.storage.store import Store
+from vedette.web.app import _average
 
 RANKS = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
 
@@ -112,7 +112,7 @@ async def test_a_decision_carries_every_open_count(filled: Store) -> None:
             headers={"HX-Request": "true"},
         )
 
-    counts = json.loads(response.headers["HX-Trigger"])["sentinel-counts"]["layers"]
+    counts = json.loads(response.headers["HX-Trigger"])["vedette-counts"]["layers"]
     shown = dict(re.findall(r'data-live="open-layer-(\d)">(\d+) open', before))
     assert counts["0"] == int(shown["0"]) - 1
     assert counts["2"] == int(shown["2"]) - 1, "the pc profile's count drops"
@@ -145,7 +145,7 @@ async def test_a_retrying_api_check_reads_retrying(filled: Store) -> None:
                 "api:abc123",
                 "NextDNS API (router)",
                 True,
-                "NextDNS is rate-limiting Sentinel since 08:20. Sentinel waits and tries again.",
+                "NextDNS is rate-limiting Vedette since 08:20. Vedette waits and tries again.",
             ),
             HealthCheck("events:abc123", "Events from router", True, "OK"),
         ],
@@ -164,7 +164,7 @@ async def test_a_missing_finding_is_titled_in_words(filled: Store) -> None:
         response = await client.get("/findings/9999")
 
     assert response.status_code == 404
-    assert "<title>Finding 9999 not found · NextDNS Sentinel</title>" in response.text
+    assert "<title>Finding 9999 not found · Vedette</title>" in response.text
     assert "<h1>Finding 9999 not found</h1>" in response.text
     assert '<dt>Status</dt><dd class="figure">404</dd>' in response.text
 

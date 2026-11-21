@@ -5,9 +5,9 @@ import re
 
 import pytest
 
-from sentinel.storage.store import Store
 from tests.integration.web_helpers import logged_in
 from tests.web_fixture import build_web_fixture
+from vedette.storage.store import Store
 
 ROUTER, PC = "abc123", "def456"  # inks 1 and 2, in the order of the configuration
 
@@ -31,7 +31,7 @@ async def test_choosing_a_profile_is_remembered_and_scopes_the_findings(filled: 
     assert row_inks(both.text) == {"1", "2"}
     assert (switched.status_code, switched.headers["location"]) == (303, "/findings?status=all")
     cookie = switched.headers["set-cookie"].lower()
-    assert f"sentinel_scope={PC}" in cookie and "httponly" in cookie and "samesite=strict" in cookie
+    assert f"vedette_scope={PC}" in cookie and "httponly" in cookie and "samesite=strict" in cookie
     assert row_inks(pc_only.text) == {"2"}
     assert "pc only" in pc_only.text  # the title block says what the sheet shows
 

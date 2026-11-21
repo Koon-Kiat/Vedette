@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from sentinel import __version__
-from sentinel.cli import app
+from vedette import __version__
+from vedette.cli import app
 
 runner = CliRunner()
 
@@ -17,7 +17,7 @@ def test_version_flag_prints_the_version() -> None:
     result = runner.invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == f"sentinel {__version__}"
+    assert result.output.strip() == f"vedette {__version__}"
 
 
 def test_run_with_a_missing_config_file_exits_2_without_a_traceback(tmp_path: Path) -> None:
@@ -42,7 +42,7 @@ def test_run_starts_the_pipeline_and_exits_0_on_sigterm(
     repo_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("NEXTDNS_API_KEY", "k-cli-test-secret")
-    monkeypatch.setenv("SENTINEL_PROFILES", "[]")  # keep the collector idle: no network
+    monkeypatch.setenv("VEDETTE_PROFILES", "[]")  # keep the collector idle: no network
     timer = threading.Timer(0.5, os.kill, args=(os.getpid(), signal.SIGTERM))
     timer.start()
     try:

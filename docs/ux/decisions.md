@@ -14,13 +14,13 @@
 - Decided by: Claude (default)
 - Why: `stale_after_minutes` and `quiet_hours` already exist per profile; whether the laptop's long silence is a fault is the owner's call, and the check also drives alerts.
 - Rejected: silencing the check by default, or a new "expected quiet" setting.
-- Rests on: src/sentinel/config.py, ProfileConfig; docs/ux/context-nextdns-sentinel.md, Open questions.
+- Rests on: src/vedette/config.py, ProfileConfig; docs/ux/context-vedette.md, Open questions.
 
 ## 2026-11-20 · The login form keeps autocomplete off
 - Decided by: Claude (default)
 - Why: the existing form asks browsers not to store the token; the evaluation fix ties the error to the field without reopening that security choice.
 - Rejected: marking the field as a current password so a password manager can fill it.
-- Rests on: src/sentinel/web/templates/login.html.
+- Rests on: src/vedette/web/templates/login.html.
 
 ## 2026-11-20 · Our static files carry a content hash in their URL and are revalidated on every load
 - Decided by: Claude (default)
@@ -56,7 +56,7 @@
 - Decided by: Claude (default)
 - Why: no alert has been raised inside the error window, so the menu's "checks OK" stays true, while the Health page stops showing "OK" beside an error.
 - Rejected: counting it as failing, which would contradict the alerts; leaving "OK".
-- Rests on: docs/ux/states-dashboard.md, Health; src/sentinel/health/monitor.py, `_api_check`.
+- Rests on: docs/ux/states-dashboard.md, Health; src/vedette/health/monitor.py, `_api_check`.
 
 ## 2026-11-21 · In a narrow window the finding page draws its Decision panel twice, one hidden
 - Decided by: Claude (default)
@@ -80,7 +80,7 @@
 - Decided by: Claude (default)
 - Why: the plain rule names are longer than the ids, and the Rule column did not wrap, so the findings table ran past its panel at 1,440 pixels; the column now wraps between 150 and 180 pixels and the table fits at 1,280, 1,440 and 1,920.
 - Rejected: shortening the names to fit one line.
-- Rests on: docs/ux/evaluation-dashboard.md; src/sentinel/web/static/style.css, `.findings td.rule`.
+- Rests on: docs/ux/evaluation-dashboard.md; src/vedette/web/static/style.css, `.findings td.rule`.
 
 ## 2026-11-21 · Every evaluation finding was re-checked in the browser
 - Decided by: Claude (default)

@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, inspect
 
-from sentinel.rules.model import Finding, Severity
-from sentinel.sources.base import DnsEvent
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.models import metadata
-from sentinel.storage.store import Store
+from vedette.rules.model import Finding, Severity
+from vedette.sources.base import DnsEvent
+from vedette.sources.nextdns import parse_log_entry
+from vedette.storage.migrate import run_migrations
+from vedette.storage.models import metadata
+from vedette.storage.store import Store
 
 T0 = datetime(2026, 3, 15, 4, 0, 0, tzinfo=UTC)
 
@@ -35,7 +35,7 @@ def make_event(n: int, profile: str = "abc123") -> DnsEvent:
 
 @pytest.fixture
 def database_url(tmp_path: Path) -> str:
-    return f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
+    return f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def test_migrations_can_run_twice(database_url: str) -> None:
 async def test_database_uses_write_ahead_logging(store: Store, tmp_path: Path) -> None:
     await store.save_events([make_event(1)])
 
-    connection = sqlite3.connect(tmp_path / "sentinel.db")
+    connection = sqlite3.connect(tmp_path / "vedette.db")
     try:
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("wal",)
     finally:

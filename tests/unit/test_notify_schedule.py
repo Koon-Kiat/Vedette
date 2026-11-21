@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from sentinel.notify.schedule import QuietHours, latest_occurrence, next_occurrence
+from vedette.notify.schedule import QuietHours, latest_occurrence, next_occurrence
 
 SGT = ZoneInfo("Asia/Singapore")
 

@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from sentinel.storage.series import MAX_POINTS, MAX_SPAN, SeriesQueries, choose_step
+from vedette.storage.series import MAX_POINTS, MAX_SPAN, SeriesQueries, choose_step
 
 NOW = datetime(2026, 3, 15, 0, 30, tzinfo=UTC)
 

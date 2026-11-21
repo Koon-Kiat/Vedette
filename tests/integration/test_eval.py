@@ -11,18 +11,18 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
-from sentinel.cli import app
-from sentinel.config import load_settings
-from sentinel.eval import datasets
-from sentinel.eval.detection import Detector
-from sentinel.eval.injection import RecordingClient, run_defended, run_undefended
-from sentinel.eval.suite import run_suite
-from sentinel.rules.loader import load_rules
-from sentinel.storage.evaluation import EvalStore
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.models import popularity, threat_intel
-from sentinel.storage.store import Store
 from tests.integration.web_helpers import logged_in
+from vedette.cli import app
+from vedette.config import load_settings
+from vedette.eval import datasets
+from vedette.eval.detection import Detector
+from vedette.eval.injection import RecordingClient, run_defended, run_undefended
+from vedette.eval.suite import run_suite
+from vedette.rules.loader import load_rules
+from vedette.storage.evaluation import EvalStore
+from vedette.storage.migrate import run_migrations
+from vedette.storage.models import popularity, threat_intel
+from vedette.storage.store import Store
 
 NOW = datetime(2026, 11, 19, 8, 0, tzinfo=UTC)
 OLLAMA = "http://ollama.test"
@@ -145,9 +145,9 @@ async def test_the_guards_stop_lowering_but_obedient_text_is_still_counted(
 async def test_the_suite_runs_without_the_model_and_is_stored(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     run_migrations(url)
     store = Store.open(url)
     try:
@@ -173,9 +173,9 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
 def test_the_command_writes_the_report_and_feeds_the_dashboard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    url = f"sqlite+aiosqlite:///{tmp_path / 'sentinel.db'}"
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     output = tmp_path / "EVALUATION.md"
 
     result = CliRunner().invoke(app, ["eval", "--no-llm", "--output", str(output)])

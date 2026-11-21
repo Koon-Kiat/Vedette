@@ -15,17 +15,17 @@ from typing import Any
 
 import pytest
 
-from sentinel.llm.schema import Analysis
-from sentinel.notify.channels import OutgoingMessage
-from sentinel.rules.model import Finding, Severity
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.health import HealthCheck, HealthStore
-from sentinel.storage.notifications import NotificationStore
-from sentinel.storage.store import Store
-from sentinel.storage.triage import TriageStore
 from tests.digest_fixture import PERIOD_END, PERIOD_START, build_fixture
 from tests.integration.web_helpers import logged_in
+from vedette.llm.schema import Analysis
+from vedette.notify.channels import OutgoingMessage
+from vedette.rules.model import Finding, Severity
+from vedette.sources.nextdns import parse_log_entry
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.health import HealthCheck, HealthStore
+from vedette.storage.notifications import NotificationStore
+from vedette.storage.store import Store
+from vedette.storage.triage import TriageStore
 
 PAYLOADS = [
     "<script>alert(1)</script>",

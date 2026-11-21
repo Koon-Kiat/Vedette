@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.config import ConfigError, load_settings
+from vedette.config import ConfigError, load_settings
 
 
 def write_yaml(tmp_path: Path, text: str) -> Path:
@@ -19,7 +19,7 @@ def test_defaults_match_the_spec_when_no_file_is_given() -> None:
     assert settings.ingest.backfill_days == 7
     assert settings.ingest.raw is False
     assert settings.ingest.page_size == 1000
-    assert settings.storage.database_url == "sqlite+aiosqlite:////data/sentinel.db"
+    assert settings.storage.database_url == "sqlite+aiosqlite:////data/vedette.db"
     assert settings.llm.base_url == "http://ollama:11434"
     assert settings.llm.model == "qwen3:8b"
     assert settings.llm.think is False
@@ -63,7 +63,7 @@ def test_env_var_overrides_a_nested_yaml_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = write_yaml(tmp_path, "llm:\n  model: from-yaml\n  num_ctx: 4096\n")
-    monkeypatch.setenv("SENTINEL_LLM__MODEL", "from-env")
+    monkeypatch.setenv("VEDETTE_LLM__MODEL", "from-env")
 
     settings = load_settings(path)
 
@@ -72,13 +72,13 @@ def test_env_var_overrides_a_nested_yaml_value(
 
 
 def test_env_var_overrides_a_top_level_value(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SENTINEL_NEXTDNS_WRITE_ENABLED", "true")
+    monkeypatch.setenv("VEDETTE_NEXTDNS_WRITE_ENABLED", "true")
 
     assert load_settings().nextdns_write_enabled is True
 
 
 def test_env_var_overrides_the_profile_list_with_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
 
     settings = load_settings()
 
@@ -89,7 +89,7 @@ def test_config_file_path_comes_from_env_when_not_passed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = write_yaml(tmp_path, "timezone: Europe/London\n")
-    monkeypatch.setenv("SENTINEL_CONFIG_FILE", str(path))
+    monkeypatch.setenv("VEDETTE_CONFIG_FILE", str(path))
 
     assert load_settings().timezone == "Europe/London"
 

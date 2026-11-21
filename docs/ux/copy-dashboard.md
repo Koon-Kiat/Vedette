@@ -1,14 +1,14 @@
-# NextDNS Sentinel dashboard copy: rule names, confirmations, health and errors
+# Vedette dashboard copy: rule names, confirmations, health and errors
 
 ## Terminology
 
 | Term | Meaning to the owner | Not |
 |---|---|---|
 | Rule name | What a rule detects, in plain words; the title of every finding the rule raises. | detector, check type |
-| Rule id | The rule's fixed reference, as Discord alerts, the digest, config.yaml and `sentinel findings` print it. Shown beside the name, set as data. | slug, key |
+| Rule id | The rule's fixed reference, as Discord alerts, the digest, config.yaml and `vedette findings` print it. Shown beside the name, set as data. | slug, key |
 | What the rule checks | The rule's description from rules.yaml: what it looks for and why that matters. | definition, help text |
 | Reason | The NextDNS category or blocklist attached to a query, by the name NextDNS gives it; its id (`native:<vendor>`, `ads`) is secondary. | category id |
-| Rate limit | NextDNS refusing requests for a while because Sentinel asked too often. | HTTP 429, rateLimit |
+| Rate limit | NextDNS refusing requests for a while because Vedette asked too often. | HTTP 429, rateLimit |
 
 ## Copy Deck
 
@@ -37,7 +37,7 @@ A rule with no name set (a rule added later) shows its id in the name's place.
 |---|---|
 | Alert title | {PRIORITY}: {rule name}, {about} ({profile}) |
 | Alert rule line | Rule: {rule name} ({rule id}), severity floor {floor} |
-| Alert footer | Finding #{id}. More: sentinel findings --rule {rule id} |
+| Alert footer | Finding #{id}. More: vedette findings --rule {rule id} |
 | Digest entry, first line | {n}. {PRIORITY} {rule name}: {about} ({profile}, {device}) |
 | Digest entry, last line | {Explained by {model}. / Not explained by the local model.} Rule: {rule id}. |
 
@@ -50,7 +50,7 @@ Trigger: Mark benign on a finding whose rule allowlists its domain (young-domain
 | Part | String |
 |---|---|
 | Title | Mark this finding benign? |
-| Body | Sentinel stops flagging *{domain, defanged}* on {profile}. Reopen the finding to undo this. |
+| Body | Vedette stops flagging *{domain, defanged}* on {profile}. Reopen the finding to undo this. |
 | Confirm button | Mark benign |
 | Cancel button | Cancel |
 
@@ -62,14 +62,14 @@ Trigger: Mark benign on a finding whose rule allowlists its domain (young-domain
 
 | Status | `{phrase}` |
 |---|---|
-| 429 | NextDNS is rate-limiting Sentinel |
+| 429 | NextDNS is rate-limiting Vedette |
 | 401, 403 | NextDNS refused the API key |
 | 500 and above | NextDNS answered with a server error |
 | anything else | the recorded reason, unchanged |
 
 | State | Detail |
 |---|---|
-| Retrying, inside the error window | {phrase} since {HH:MM}. Sentinel waits and tries again. |
+| Retrying, inside the error window | {phrase} since {HH:MM}. Vedette waits and tries again. |
 | Failing, past the error window | NextDNS API failing for {duration} ({profile}): {phrase} (HTTP {status}) |
 
 The failing string is also the Discord health alert, so the status code stays at its end for diagnosis.

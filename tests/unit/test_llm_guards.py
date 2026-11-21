@@ -8,14 +8,14 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from sentinel.llm.cache import cache_key
-from sentinel.llm.fallback import template_analysis
-from sentinel.llm.guards import enforce_floor, sanitize_model_text, slug
-from sentinel.llm.prompts import SYSTEM_PROMPT, build_payload
-from sentinel.llm.schema import RESPONSE_SCHEMA, Verdict, parse_verdicts
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Severity
-from sentinel.storage.store import StoredFinding
+from vedette.llm.cache import cache_key
+from vedette.llm.fallback import template_analysis
+from vedette.llm.guards import enforce_floor, sanitize_model_text, slug
+from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
+from vedette.llm.schema import RESPONSE_SCHEMA, Verdict, parse_verdicts
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Severity
+from vedette.storage.store import StoredFinding
 
 WHEN = datetime(2026, 3, 15, 4, 30, tzinfo=UTC)
 SPECS = {spec.id: spec for spec in load_rules()}

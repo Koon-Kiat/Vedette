@@ -21,7 +21,7 @@ reads JSON logs) but the dashboard should not require reading code or logs.
 
 ## Product Purpose
 
-NextDNS Sentinel ingests the owner's NextDNS query logs, flags suspicious DNS
+Vedette ingests the owner's NextDNS query logs, flags suspicious DNS
 activity with deterministic rules, and uses a local language model only to
 explain and prioritise what the rules found. The dashboard is where the owner
 sees that activity and decides what each finding is.
@@ -57,7 +57,7 @@ are treated as attacker-controlled text everywhere, including on this page.
 - Pages: Overview, Live, Findings (filters: status, minimum priority, rule,
   device, day; triage actions), a finding's detail (explanation, evidence,
   cached domain facts, recent queries, revisions), Domains (24 hours or 7
-  days), Devices, Digests, Health, Evaluation (results of `sentinel eval`).
+  days), Devices, Digests, Health, Evaluation (results of `vedette eval`).
 - One profile switch (both, router, pc) scopes every page, chart, table and
   the live feed and is remembered; the owner asked for each device's view to
   be easy to separate. Every table sorts by its headings.
@@ -79,7 +79,7 @@ are treated as attacker-controlled text everywhere, including on this page.
 
 ## Brand Commitments
 
-The product name is "NextDNS Sentinel". There is no logo, mascot or brand
+The product name is "Vedette". There is no logo, mascot or brand
 palette. NextDNS is a third-party service; its marks are not used.
 
 ## Evidence on Hand

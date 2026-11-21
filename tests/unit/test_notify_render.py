@@ -4,11 +4,11 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sentinel.llm.schema import Analysis
-from sentinel.notify.render import alert_key, render_alert, render_health, render_test
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Severity
-from sentinel.storage.store import StoredFinding
+from vedette.llm.schema import Analysis
+from vedette.notify.render import alert_key, render_alert, render_health, render_test
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Severity
+from vedette.storage.store import StoredFinding
 
 SGT = ZoneInfo("Asia/Singapore")
 WHEN = datetime(2026, 3, 15, 4, 30, tzinfo=UTC)  # 12:30 in Singapore
@@ -63,7 +63,7 @@ def test_alert_title_names_priority_rule_and_defanged_target() -> None:
     assert "Rule: Threat-feed domain allowed (threat-intel-allowed), severity floor critical" in (
         sent.body
     )
-    assert sent.body.endswith("More: sentinel findings --rule threat-intel-allowed")
+    assert sent.body.endswith("More: vedette findings --rule threat-intel-allowed")
     assert sent.priority is Severity.CRITICAL
 
 

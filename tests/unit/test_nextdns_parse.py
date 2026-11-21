@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from sentinel.sources.nextdns import parse_log_entry
+from vedette.sources.nextdns import parse_log_entry
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "nextdns"
 

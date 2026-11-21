@@ -1,4 +1,4 @@
-# NextDNS Sentinel dashboard, the drawing set, every page
+# Vedette dashboard, the drawing set, every page
 
 ## Anti-Pattern Verdict
 
@@ -9,7 +9,7 @@ Clean.
 ### Minor
 
 **Findings are named by their rule's id**
-- **What happens:** A finding's page is headed by its rule id ("young-domain"), and the Findings table, the rule filter and the Overview use the same ids ("threat-intel-allowed", "new-destination-category"). What the rule checks appears only while the model has not explained the finding [/findings/2; src/sentinel/web/templates/finding.html; src/sentinel/rules/rules.yaml].
+- **What happens:** A finding's page is headed by its rule id ("young-domain"), and the Findings table, the rule filter and the Overview use the same ids ("threat-intel-allowed", "new-destination-category"). What the rule checks appears only while the model has not explained the finding [/findings/2; src/vedette/web/templates/finding.html; src/vedette/rules/rules.yaml].
 - **Why it matters:** At the moment of decision the owner reads a code name for what was detected and has no plain statement of what the rule looks for.
 - **Breaks:** match between system and the real world.
 - **Change:** Give each rule a plain name and use it as the finding's title everywhere, keep the id as a secondary reference that matches the Discord alerts, and show what the rule checks on every finding's page.
@@ -21,7 +21,7 @@ Clean.
 - **Change:** Refresh every open-findings count, the switch's included, whenever a decision is made and whenever the live counts update.
 
 **Mark benign's confirmation starts on the confirming button**
-- **What happens:** The dialog opens with focus on "Mark benign", is titled "Please confirm", and does not say that Reopen removes the allowlist entry it creates [/findings, synthetic data; src/sentinel/storage/triage.py, `reopen`].
+- **What happens:** The dialog opens with focus on "Mark benign", is titled "Please confirm", and does not say that Reopen removes the allowlist entry it creates [/findings, synthetic data; src/vedette/storage/triage.py, `reopen`].
 - **Why it matters:** Enter pressed twice allowlists the domain on that profile and silences its future alerts, and the owner is not told the step can be undone.
 - **Breaks:** error prevention; user control and freedom.
 - **Change:** Open the dialog on Cancel, title it with the action and the domain, and say that Reopen undoes it.
@@ -30,7 +30,7 @@ Clean.
 - **What happens:** Both NextDNS API checks read "OK" in the State column and "Recent errors: NextDNS answered HTTP 429 (rateLimit)" in the Detail column [/health, real data].
 - **Why it matters:** On the page meant to answer whether the pipeline needs attention, the owner cannot tell whether this check does, and the detail is a status code and an API keyword.
 - **Breaks:** match between system and the real world; help users recognize, diagnose, and recover from errors.
-- **Change:** Say in words that NextDNS asked Sentinel to slow down, when that last happened, and that collection continued.
+- **Change:** Say in words that NextDNS asked Vedette to slow down, when that last happened, and that collection continued.
 
 **Findings lists newest first, the Overview highest priority first**
 - **What happens:** Findings sorts by Last seen, so a critical finding sits below a medium one seen later; the Overview's "Needs a decision" sorts by priority [/findings, /, synthetic data].

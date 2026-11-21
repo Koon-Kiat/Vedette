@@ -1,8 +1,8 @@
 # Threat model
 
-STRIDE over the data flow of NextDNS Sentinel as built. Each threat lists the
+STRIDE over the data flow of Vedette as built. Each threat lists the
 mitigation in the code and the risk that remains. The evaluation suite
-(`sentinel eval`, results in [EVALUATION.md](EVALUATION.md)) measures the
+(`vedette eval`, results in [EVALUATION.md](EVALUATION.md)) measures the
 prompt-injection defences.
 
 ## What is protected
@@ -14,7 +14,7 @@ prompt-injection defences.
   dashboard token.
 - **The integrity of alerts**: a real problem must not be hidden, lowered or
   talked away, and a fake alert must not be easy to plant.
-- **This computer**: nothing Sentinel processes may run code or open a door
+- **This computer**: nothing Vedette processes may run code or open a door
   to it.
 
 ## Data flow and trust boundaries
@@ -49,7 +49,7 @@ resolve a name), the downloaded reference lists, and the model's own answers.
 | Dashboard | DNS rebinding, CSRF | XSS | audit trail | LAN exposure | | |
 | Database and host | | | | data theft | disk filling | container escape |
 
-The sections below cover each threat. Code references are to `src/sentinel/`.
+The sections below cover each threat. Code references are to `src/vedette/`.
 
 ### Log poisoning and prompt injection (Tampering, Elevation)
 
@@ -69,7 +69,7 @@ Mitigations:
   trusted rule text (`llm/fallback.py`). Free text from the model is never
   executed, rendered as HTML or used as a link.
 - **No tools.** The model has no tool calls. Ollama has no internet route and
-  no write access to Sentinel's data.
+  no write access to Vedette's data.
 - **Pre-filter.** Instruction-like words in labels (`ignore`, `instruction`,
   `system`, `benign`, `override` and others) add the words to the evidence and
   raise the severity one step. A hit never removes or hides a domain
@@ -108,7 +108,7 @@ Residual risk:
 - Anyone who can read `.env`, or run `docker inspect` on this computer, has
   the key. The key is not limited to reading logs: the same API can also
   change NextDNS settings (the spec's optional denylist push uses it), even
-  though Sentinel only reads.
+  though Vedette only reads.
 - The key is not rotated automatically.
 
 ### Notification channel spoofing (Spoofing, Information disclosure)
@@ -203,7 +203,7 @@ Mitigations:
 - **Audit.** Every triage action is written to an audit log in the same
   transaction as the change.
 - **Tests.** An XSS suite plants payloads in every field that reaches a page.
-- **Health details.** These are Sentinel's own wording, so there a dot between
+- **Health details.** These are Vedette's own wording, so there a dot between
   two digits stays a dot (`935.5 GB`); every other dot is still bracketed and
   every value is still escaped. Names from DNS traffic keep full defanging.
 - **Live feed.** The event stream needs the same session and stops when the
@@ -233,8 +233,8 @@ Mitigations:
   every file it creates owner-only, and start-up tightens existing files to
   0600 and the directory to 0700 (`storage/retention.py`).
 - **Retention.** A scheduled purge applies the retention settings, and
-  `sentinel purge --all` wipes all local data.
-- **Sentinel container.** Non-root (uid 10001), read-only root filesystem, all
+  `vedette purge --all` wipes all local data.
+- **Vedette container.** Non-root (uid 10001), read-only root filesystem, all
   capabilities dropped, `no-new-privileges`.
 - **Ollama container.** Non-root (uid 10002), read-only root filesystem, all
   capabilities dropped, `no-new-privileges`, on an internal network with no
@@ -260,5 +260,5 @@ Residual risk:
 
 - This computer and its Windows account are not compromised.
 - Docker Desktop and WSL2 isolate containers as documented.
-- NextDNS reports logs faithfully; Sentinel cannot detect lookups that bypass
+- NextDNS reports logs faithfully; Vedette cannot detect lookups that bypass
   NextDNS.

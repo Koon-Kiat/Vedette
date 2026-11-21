@@ -2,15 +2,15 @@
 
 from datetime import timedelta
 
-from sentinel.llm.schema import Analysis
-from sentinel.notify.channels import OutgoingMessage
-from sentinel.notify.digest import DigestBuilder, render_digest
-from sentinel.rules.model import Severity
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.notifications import NotificationStore
-from sentinel.storage.reference import DomainAgeRecord, FirstSeenRow, ReferenceStore
-from sentinel.storage.store import Store
 from tests.digest_fixture import PERIOD_END, PERIOD_START, PROFILES, TZ, _event, build_fixture
+from vedette.llm.schema import Analysis
+from vedette.notify.channels import OutgoingMessage
+from vedette.notify.digest import DigestBuilder, render_digest
+from vedette.rules.model import Severity
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.notifications import NotificationStore
+from vedette.storage.reference import DomainAgeRecord, FirstSeenRow, ReferenceStore
+from vedette.storage.store import Store
 
 
 async def build_web_fixture(store: Store) -> None:

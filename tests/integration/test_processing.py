@@ -7,12 +7,12 @@ import httpx
 import pytest
 import respx
 
-from sentinel.config import load_settings
-from sentinel.pipeline.runner import Pipeline
-from sentinel.storage.store import Store, StoredFinding
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
 from tests.unit.test_reference_parsing import tranco_zip
+from vedette.config import load_settings
+from vedette.pipeline.runner import Pipeline
+from vedette.storage.store import Store, StoredFinding
 
 TRANCO_URL = "https://lists.test/top-1m.csv.zip"
 FEED_URL = "https://feeds.test/phish.txt"
@@ -22,16 +22,16 @@ FEED_URL = "https://feeds.test/phish.txt"
 def database_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, router: respx.MockRouter) -> str:
     url = f"sqlite+aiosqlite:///{tmp_path / 'pipeline.db'}"
     monkeypatch.setenv("NEXTDNS_API_KEY", API_KEY)
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
-    monkeypatch.setenv("SENTINEL_INGEST__PAGE_SIZE", "10")
-    monkeypatch.setenv("SENTINEL_INGEST__BACKFILL_DAYS", "36500")
-    monkeypatch.setenv("SENTINEL_ENRICH__POPULARITY__URL", TRANCO_URL)
-    monkeypatch.setenv("SENTINEL_ENRICH__RDAP__ENABLED", "false")
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_INGEST__PAGE_SIZE", "10")
+    monkeypatch.setenv("VEDETTE_INGEST__BACKFILL_DAYS", "36500")
+    monkeypatch.setenv("VEDETTE_ENRICH__POPULARITY__URL", TRANCO_URL)
+    monkeypatch.setenv("VEDETTE_ENRICH__RDAP__ENABLED", "false")
     monkeypatch.setenv(
-        "SENTINEL_ENRICH__THREAT_INTEL__FEEDS", f'[{{"name": "phish", "url": "{FEED_URL}"}}]'
+        "VEDETTE_ENRICH__THREAT_INTEL__FEEDS", f'[{{"name": "phish", "url": "{FEED_URL}"}}]'
     )
-    monkeypatch.setenv("SENTINEL_RULES__LEARNING_DAYS", "0")
+    monkeypatch.setenv("VEDETTE_RULES__LEARNING_DAYS", "0")
     router.get(TRANCO_URL).mock(
         return_value=httpx.Response(200, content=tranco_zip("1,site1.example\r\n"))
     )

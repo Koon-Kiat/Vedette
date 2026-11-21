@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from sentinel.rules.allowlist import AllowlistEntry
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Finding, Severity
 from tests.unit.rule_helpers import HOME_IP, PROFILE, engine, enriched, event, fired
+from vedette.rules.allowlist import AllowlistEntry
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Finding, Severity
 
 MODES = [pytest.param("D1", id="device-attributed"), pytest.param(None, id="profile-only")]
 RANDOM_LABEL = "xkq7vbn2mtrp9zlw"

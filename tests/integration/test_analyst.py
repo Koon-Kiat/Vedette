@@ -10,15 +10,15 @@ import pytest
 import respx
 from sqlalchemy import text
 
-from sentinel.llm import analyst as analyst_module
-from sentinel.llm.analyst import Analyst
-from sentinel.llm.ollama import OllamaClient, OllamaUnavailable
-from sentinel.llm.prompts import SYSTEM_PROMPT, build_payload
-from sentinel.llm.schema import Analysis
-from sentinel.rules.loader import load_rules
-from sentinel.rules.model import Finding, Severity
-from sentinel.storage.analysis import AnalysisStore
-from sentinel.storage.store import Store, StoredFinding
+from vedette.llm import analyst as analyst_module
+from vedette.llm.analyst import Analyst
+from vedette.llm.ollama import OllamaClient, OllamaUnavailable
+from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
+from vedette.llm.schema import Analysis
+from vedette.rules.loader import load_rules
+from vedette.rules.model import Finding, Severity
+from vedette.storage.analysis import AnalysisStore
+from vedette.storage.store import Store, StoredFinding
 
 OLLAMA = "http://ollama.test"
 T0 = datetime(2026, 3, 15, 4, 30, tzinfo=UTC)

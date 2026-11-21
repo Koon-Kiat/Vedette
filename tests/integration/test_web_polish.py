@@ -4,12 +4,12 @@ from datetime import timedelta
 
 import pytest
 
-from sentinel.config import ProfileConfig
-from sentinel.storage.health import HealthCheck, HealthStore
-from sentinel.storage.store import Store
 from tests.digest_fixture import PROFILES, _event
 from tests.integration.web_helpers import NOW, hidden, logged_in, make_client
 from tests.web_fixture import build_web_fixture
+from vedette.config import ProfileConfig
+from vedette.storage.health import HealthCheck, HealthStore
+from vedette.storage.store import Store
 
 
 @pytest.fixture

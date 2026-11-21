@@ -1,4 +1,4 @@
-"""Retention: the scheduled purge, ``sentinel purge`` and owner-only files."""
+"""Retention: the scheduled purge, ``vedette purge`` and owner-only files."""
 
 import asyncio
 import stat
@@ -11,10 +11,10 @@ from sqlalchemy import func, select
 from structlog.testing import capture_logs
 from typer.testing import CliRunner
 
-from sentinel.cli import app
-from sentinel.pipeline.retention import RetentionWorker
-from sentinel.storage.migrate import run_migrations
-from sentinel.storage.models import (
+from vedette.cli import app
+from vedette.pipeline.retention import RetentionWorker
+from vedette.storage.migrate import run_migrations
+from vedette.storage.models import (
     allowlist,
     audit_log,
     digests,
@@ -25,8 +25,8 @@ from sentinel.storage.models import (
     metadata,
     notifications,
 )
-from sentinel.storage.retention import purge_all, purge_expired, restrict_permissions
-from sentinel.storage.store import Store
+from vedette.storage.retention import purge_all, purge_expired, restrict_permissions
+from vedette.storage.store import Store
 
 NOW = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
 OLD_EVENT = NOW - timedelta(days=31)
@@ -258,7 +258,7 @@ async def test_the_worker_logs_what_it_removed(store: Store) -> None:
 def test_the_database_is_made_owner_only(tmp_path: Path) -> None:
     folder = tmp_path / "data"
     folder.mkdir(mode=0o755)
-    database = folder / "sentinel.db"
+    database = folder / "vedette.db"
     url = f"sqlite+aiosqlite:///{database}"
     run_migrations(url)
     database.chmod(0o644)
@@ -270,7 +270,7 @@ def test_the_database_is_made_owner_only(tmp_path: Path) -> None:
     assert stat.S_IMODE(folder.stat().st_mode) == 0o700
 
 
-# --- sentinel purge ----------------------------------------------------------------------
+# --- vedette purge ----------------------------------------------------------------------
 
 runner = CliRunner()
 
@@ -278,8 +278,8 @@ runner = CliRunner()
 @pytest.fixture
 def cli_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     url = f"sqlite+aiosqlite:///{tmp_path / 'cli.db'}"
-    monkeypatch.setenv("SENTINEL_STORAGE__DATABASE_URL", url)
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     return url
 
 

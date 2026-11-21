@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the developer's real settings and secrets out of every test."""
     for name in list(os.environ):
-        if name.startswith("SENTINEL_") or name == "NEXTDNS_API_KEY":
+        if name.startswith("VEDETTE_") or name == "NEXTDNS_API_KEY":
             monkeypatch.delenv(name)
 
 

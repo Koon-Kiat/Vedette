@@ -2,9 +2,9 @@
 
 import pytest
 
-from sentinel.storage.store import Store
 from tests.digest_fixture import build_fixture
 from tests.integration.web_helpers import TOKEN, Clock, hidden, logged_in_csrf, login, make_client
+from vedette.storage.store import Store
 
 WRONG = "not-the-token"
 CSP = (
@@ -36,7 +36,7 @@ async def test_the_login_page_sets_a_one_time_nonce(filled: Store) -> None:
     assert page.status_code == 200
     assert hidden(page.text, "login_nonce")
     cookie = page.headers["set-cookie"]
-    assert "sentinel_login=" in cookie
+    assert "vedette_login=" in cookie
     assert "HttpOnly" in cookie
     assert "SameSite=strict" in cookie or "SameSite=Strict" in cookie
 
@@ -47,7 +47,7 @@ async def test_a_wrong_token_is_refused(filled: Store) -> None:
         after = await client.get("/")
 
     assert response.status_code == 401
-    assert "sentinel_session" not in response.headers.get("set-cookie", "")
+    assert "vedette_session" not in response.headers.get("set-cookie", "")
     assert "not right" in response.text
     assert after.status_code == 303
 
@@ -66,7 +66,7 @@ async def test_the_right_token_starts_a_session_with_a_safe_cookie(filled: Store
 
     assert (response.status_code, response.headers["location"]) == (303, "/")
     cookies = response.headers.get_list("set-cookie")
-    session = next(c for c in cookies if c.startswith("sentinel_session="))
+    session = next(c for c in cookies if c.startswith("vedette_session="))
     assert "HttpOnly" in session
     assert "samesite=strict" in session.lower()
     assert "Path=/" in session

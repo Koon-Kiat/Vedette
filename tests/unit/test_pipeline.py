@@ -3,8 +3,8 @@ import asyncio
 import pytest
 from structlog.testing import capture_logs
 
-from sentinel.config import load_settings
-from sentinel.pipeline.runner import STAGE_NAMES, Pipeline
+from vedette.config import load_settings
+from vedette.pipeline.runner import STAGE_NAMES, Pipeline
 
 
 def test_the_pipeline_has_the_stages_from_the_architecture() -> None:
@@ -43,7 +43,7 @@ async def test_pipeline_start_log_lists_enabled_profiles_by_label_only(
     stop = asyncio.Event()
     stop.set()
     monkeypatch.setenv(
-        "SENTINEL_PROFILES",
+        "VEDETTE_PROFILES",
         '[{"id": "abc123", "label": "router", "enabled": true},'
         ' {"id": "def456", "label": "pc", "enabled": false}]',
     )
@@ -60,7 +60,7 @@ async def test_collector_idles_with_a_clear_reason_when_no_api_key_is_set(
 ) -> None:
     stop = asyncio.Event()
     stop.set()
-    monkeypatch.setenv("SENTINEL_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
 
     with capture_logs() as logs:
         await Pipeline(load_settings()).run(stop)

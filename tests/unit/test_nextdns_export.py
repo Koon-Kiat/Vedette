@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from sentinel.sources.nextdns import parse_log_entry
-from sentinel.sources.nextdns_export import ExportFormatError, read_export
+from vedette.sources.nextdns import parse_log_entry
+from vedette.sources.nextdns_export import ExportFormatError, read_export
 
 FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "nextdns" / "export.csv"
 HEADER = (

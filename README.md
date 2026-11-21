@@ -1,4 +1,4 @@
-# NextDNS Sentinel
+# Vedette
 
 A self-hosted pipeline that ingests NextDNS query logs, flags suspicious DNS
 activity with deterministic rules, uses a **local** LLM (Ollama) only to explain
@@ -22,7 +22,7 @@ watches the whole pipeline. Alerts go out once you choose a notification
 channel; until then they are kept and listed but not sent. A dashboard on
 http://127.0.0.1:8080, reachable from this computer only, shows all of it and
 lets you triage findings. Old data is purged on a schedule, every container
-runs as a non-root user, and `sentinel eval` measures how well the rules and
+runs as a non-root user, and `vedette eval` measures how well the rules and
 the prompt-injection defences hold up
 ([docs/EVALUATION.md](docs/EVALUATION.md),
 [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)). See
@@ -59,18 +59,18 @@ Copy-Item config.example.yaml config.yaml
 
    ```powershell
    docker compose up --build -d
-   docker compose logs -f sentinel
+   docker compose logs -f vedette
    ```
 
 Stop it with `docker compose down`. Data lives in the named volumes
-`sentinel-data` and `ollama-models` and survives restarts.
+`vedette-data` and `ollama-models` and survives restarts.
 
 ## Configuration
 
 - `config.yaml` holds all non-secret settings; `config.example.yaml` documents
   each one with its default.
-- Any value can be overridden by an environment variable: prefix `SENTINEL_` and
-  put `__` between nesting levels, for example `SENTINEL_LLM__MODEL=qwen3:8b`.
+- Any value can be overridden by an environment variable: prefix `VEDETTE_` and
+  put `__` between nesting levels, for example `VEDETTE_LLM__MODEL=qwen3:8b`.
 - Secrets come only from environment variables or Docker secrets, never from
   `config.yaml`. `.env.example` lists every variable.
 
@@ -113,7 +113,7 @@ is sent.
 Check that messages arrive:
 
 ```powershell
-docker compose exec sentinel sentinel notify --test
+docker compose exec vedette vedette notify --test
 ```
 
 What you will receive:
@@ -130,7 +130,7 @@ What you will receive:
   any time (nothing is sent or stored):
 
   ```powershell
-  docker compose exec sentinel sentinel digest
+  docker compose exec vedette vedette digest
   ```
 
 - **Health messages** when a profile goes quiet (2 hours by default), NextDNS
@@ -154,10 +154,10 @@ or switch the silence check off for it:
 ## Seeing findings
 
 ```powershell
-docker compose exec sentinel sentinel findings
-docker compose exec sentinel sentinel findings --min-severity high
-docker compose exec sentinel sentinel findings --rule young-domain --limit 20
-docker compose exec sentinel sentinel findings --json
+docker compose exec vedette vedette findings
+docker compose exec vedette vedette findings --min-severity high
+docker compose exec vedette vedette findings --rule young-domain --limit 20
+docker compose exec vedette vedette findings --json
 ```
 
 Each finding shows when it was last seen, its priority, the rule, what it is
@@ -176,7 +176,7 @@ The dashboard stays off until it has a login token.
 1. Generate a token:
 
    ```powershell
-   docker compose run --rm --no-deps --entrypoint python sentinel -c "import secrets; print(secrets.token_urlsafe(32))"
+   docker compose run --rm --no-deps --entrypoint python vedette -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
 
 2. Put it in `.env` as `DASHBOARD_TOKEN=...` (at least 24 characters), then
@@ -250,7 +250,7 @@ Triage:
 
 Every action is recorded with its time in the finding's history. Mark a
 finding benign from the command line with
-`docker compose exec sentinel sentinel benign 42` (it asks first; add `--yes`
+`docker compose exec vedette vedette benign 42` (it asks first; add `--yes`
 to skip the question).
 
 The port is published on `127.0.0.1` only, so other machines on your network
@@ -278,11 +278,11 @@ to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
 
 - Add known-good domains under `allowlist:` in `config.yaml`. An entry covers
   the root and its subdomains and may be limited to a `profile` or `device`.
-- Or mark a domain finding benign in the dashboard or with `sentinel benign`,
+- Or mark a domain finding benign in the dashboard or with `vedette benign`,
   which allowlists its root for that profile (see "Dashboard").
 - To change a threshold, copy the rule's `id` and the `params` to change into
   a YAML file, mount it into the container and set `rules.file` to its path.
-  The defaults are in `src/sentinel/rules/rules.yaml`.
+  The defaults are in `src/vedette/rules/rules.yaml`.
 
 ## Loading history from a log export (optional)
 
@@ -297,7 +297,7 @@ API.
 3. Run:
 
    ```powershell
-   docker compose exec sentinel sentinel import /imports/yourfile.csv --profile pc
+   docker compose exec vedette vedette import /imports/yourfile.csv --profile pc
    ```
 
 Events the collector already has are recognised and not stored twice, so
@@ -308,8 +308,8 @@ To read a period of history from the API instead (for example after the
 service was off for longer than the stream can catch up), run:
 
 ```powershell
-docker compose exec sentinel sentinel backfill --days 3
-docker compose exec sentinel sentinel backfill --profile pc --days 7
+docker compose exec vedette vedette backfill --days 3
+docker compose exec vedette vedette backfill --profile pc --days 7
 ```
 
 Events already stored are recognised and not stored twice, and the live
@@ -325,7 +325,7 @@ API deliver the raw view too.
 
 ## Keeping and wiping your data
 
-Your DNS history is personal data and stays in the `sentinel-data` volume, in
+Your DNS history is personal data and stays in the `vedette-data` volume, in
 files only the service's own user can read. By default raw events are kept
 for 30 days and findings for 180 (`retention` in `config.yaml`). Once an hour
 the pipeline deletes anything older, together with what came from it: the
@@ -335,9 +335,9 @@ Allowlist entries you made by marking findings benign stay in force.
 Delete expired data now, or everything:
 
 ```powershell
-docker compose exec sentinel sentinel purge
-docker compose stop sentinel
-docker compose run --rm sentinel purge --all
+docker compose exec vedette vedette purge
+docker compose stop vedette
+docker compose run --rm vedette purge --all
 ```
 
 `purge --all` deletes every event, finding, digest, decision and cache, and
@@ -347,7 +347,7 @@ disable the profiles in `config.yaml` or remove `NEXTDNS_API_KEY`.
 
 ## Measuring how well it works
 
-`sentinel eval` runs known-good names (the top-sites list and a sample of your
+`vedette eval` runs known-good names (the top-sites list and a sample of your
 own history), known-bad names (threat-feed domains and synthetic DGA and
 tunnelling names) and 60 crafted prompt-injection names through the real rules
 and the local model, with the defences on and off. It writes a report and
@@ -355,7 +355,7 @@ fills the dashboard's Evaluation page. Names from your history and the feeds
 are only counted, never printed. It talks only to the local model.
 
 ```powershell
-docker compose run --rm -v "${PWD}/docs:/out" sentinel eval --output /out/EVALUATION.md
+docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md
 ```
 
 (bash: `-v "$PWD/docs:/out"`.) It takes a while: every injection round asks
@@ -378,7 +378,7 @@ published to your machine or network. Docker's health check uses it, so
 To read it:
 
 ```powershell
-docker compose exec sentinel python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8081/healthz').read().decode())"
+docker compose exec vedette python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8081/healthz').read().decode())"
 ```
 
 It returns `ok` or `degraded` with every check's result. If you change
@@ -402,7 +402,7 @@ It returns `ok` or `degraded` with every check's result. If you change
 - **`notify_channel_not_configured`:** no channel is set, so alerts are kept
   but not sent. See "Getting alerts and the daily digest".
 - **`notification_failed`:** the channel refused a message (wrong topic,
-  webhook deleted, bad mail password). Run `sentinel notify --test` to see why.
+  webhook deleted, bad mail password). Run `vedette notify --test` to see why.
 - **`popularity_refresh_failed` or `threat_feed_refresh_failed`:** a download
   failed. The previous copy stays in use and the download is retried hourly.
   With no top-sites list at all, the `young-domain` and `dga-like` rules stay

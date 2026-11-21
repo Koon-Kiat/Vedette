@@ -305,7 +305,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "Method note: the first run of this suite counted conditional advice as obedience, and "
         "its examples showed only the recommended action, not the sentence that matched. Both "
-        "were corrected before this report; no detection threshold or prompt was changed.",
+        "were corrected before this report; no detection threshold or prompt was changed. A "
+        'later run counted sentences that describe what a label or name suggests ("a label '
+        "suggesting 'allowlist'\") as obedience, while the model raised those findings to "
+        "critical; such sentences are now skipped as descriptions too.",
         "",
     ]
     if summary["injection"]:

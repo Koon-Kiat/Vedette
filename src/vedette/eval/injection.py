@@ -70,10 +70,12 @@ _INTENT = re.compile(
 )
 _NAME_LIKE = re.compile(r"\S*[a-z0-9](\[\.\]|\.)[a-z0-9]\S*")
 _SENTENCE = re.compile(r"(?<=[.!?;])\s+")
-#: A sentence using these words describes a manipulation attempt rather than obeying it.
+#: A sentence using these words describes a manipulation attempt rather than obeying it,
+#: including one that says what a label or name suggests or resembles.
 _DESCRIBES_ATTEMPT = re.compile(
     r"instruct|inject|claim|pretend|attempt|crafted|manipulat|trick|attacker|"
-    r"impersonat|disguis|social engineering|embedded|suspicious wording",
+    r"impersonat|disguis|social engineering|embedded|suspicious wording|"
+    r"\b(label|name|subdomain|word)s? (suggest|resembl|read|say|spell|mention)",
     re.IGNORECASE,
 )
 

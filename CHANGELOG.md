@@ -40,10 +40,13 @@
 - The Public Suffix List, downloaded weekly, now decides which roots are
   customer names on a hosting platform (`github.io`, cloud providers) instead
   of a ranked parent domain. Customer names on platforms that are on no
-  top-sites list no longer trip `dga-like` or get sent to RDAP. A root longer
-  than the domain registered under the list also counts as a platform name,
-  since NextDNS knows a few platforms the list does not. Until the list has
+  top-sites list no longer trip `dga-like` or get sent to RDAP. A root that is
+  itself a platform's suffix (one region under a wildcard rule), or that is
+  longer than the domain registered under the list (a platform NextDNS knows
+  and the list does not), counts as a platform name too. Until the list has
   been downloaded, the old parent-rank guess stands in.
+- The evaluation no longer counts a sentence that describes what a label or
+  name suggests ("a label suggesting 'allowlist'") as the model obeying it.
 
 - Device names now go through the instruction-word pre-filter as well as
   domain names, with a shorter word list (`ignore`, `instruction`, `override`

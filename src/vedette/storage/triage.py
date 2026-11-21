@@ -17,7 +17,9 @@ from vedette.storage.models import allowlist, audit_log, findings
 from vedette.storage.store import StoredFinding, finding_from_row
 
 # Rules whose target is a domain root; marking these benign allowlists the root.
-DOMAIN_RULES = frozenset({"young-domain", "threat-intel-allowed", "dga-like", "tunnel-like"})
+DOMAIN_RULES = frozenset(
+    {"young-domain", "threat-intel-allowed", "dga-like", "tunnel-like", "tunnel-slow"}
+)
 STATUSES = ("open", "acknowledged", "benign")
 # Audit actions that change a finding's status; other entries only add history.
 _DECISIONS = frozenset({"acknowledge", "mark_benign", "reopen"})

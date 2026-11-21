@@ -11,7 +11,7 @@ import hashlib
 import random
 import re
 import string
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
@@ -155,6 +155,56 @@ def tunnel_sessions(
     return fast, slow
 
 
+def sustained_tunnel_sessions(rng: random.Random | None = None) -> list[TunnelSession]:
+    """Slow but sustained tunnels: a lookup a minute for two hours, 120 in all."""
+    rng = rng or random.Random(SEED + 2)  # noqa: S311 - repeatable test names, not secrets
+    sessions = []
+    for index in range(10):
+        root = (
+            f"s{index:02d}{''.join(rng.choice(string.ascii_lowercase) for _ in range(6))}.example"
+        )
+        fqdns = []
+        for _ in range(120):
+            data = "".join(rng.choice("0123456789abcdef") for _ in range(64))
+            fqdns.append(f"{data[:48]}.{data[48:]}.{root}")
+        sessions.append(TunnelSession(root=root, fqdns=tuple(fqdns), minutes=120))
+    return sessions
+
+
+@dataclass(frozen=True, slots=True)
+class BurstSession:
+    """One device looking up many names on different domains within a few minutes."""
+
+    names: tuple[Name, ...]
+    minutes: float
+
+
+def dga_bursts(rng: random.Random | None = None) -> tuple[list[BurstSession], list[BurstSession]]:
+    """Bursts of 30 generated domains in 5 minutes: random characters, and dictionary words.
+
+    Each burst is new to its device, as a generated domain is.
+    """
+    rng = rng or random.Random(SEED + 3)  # noqa: S311 - repeatable test names, not secrets
+    alphabet = string.ascii_lowercase + string.digits
+    tlds = ("com", "net", "info", "xyz", "top")
+
+    def random_root() -> str:
+        size = rng.randint(7, 19)
+        label = rng.choice(string.ascii_lowercase) + "".join(
+            rng.choice(alphabet) for _ in range(size)
+        )
+        return f"{label}.{rng.choice(tlds)}"
+
+    def word_root() -> str:
+        return f"{''.join(rng.sample(_WORDS, rng.randint(2, 3)))}.{rng.choice(tlds)}"
+
+    def burst(make: Callable[[], str]) -> BurstSession:
+        roots = list(dict.fromkeys(make() for _ in range(40)))[:30]
+        return BurstSession(names=tuple(Name(fqdn=root, root=root) for root in roots), minutes=5)
+
+    return [burst(random_root) for _ in range(10)], [burst(word_root) for _ in range(10)]
+
+
 # --- sets drawn from local data ---------------------------------------------------------
 
 
@@ -203,3 +253,22 @@ async def feed_domains(engine: AsyncEngine, count: int = 500) -> list[Name]:
         rows = await connection.execute(select(threat_intel.c.domain).distinct())
         domains = [row.domain for row in rows if valid_dns_name(row.domain)]
     return [Name(fqdn=name, root=root_of(name)) for name in _stable_sample(domains, count)]
+
+
+def dated_domains(
+    rng: random.Random | None = None,
+) -> tuple[list[tuple[Name, int]], list[tuple[Name, int]]]:
+    """Domains with a given registration age in days: 40 young (under 30) and 40 old.
+
+    The names are built from words, so the random-name rule stays out of it.
+    """
+    rng = rng or random.Random(SEED + 4)  # noqa: S311 - repeatable test names, not secrets
+    tlds = ("com", "net", "info", "shop", "online")
+
+    def name(tag: str) -> Name:
+        root = f"{'-'.join(rng.sample(_WORDS, 2))}-{tag}.{rng.choice(tlds)}"
+        return Name(fqdn=f"www.{root}", root=root)
+
+    young = [(name("new"), rng.randint(0, 29)) for _ in range(40)]
+    old = [(name("est"), rng.randint(60, 4000)) for _ in range(40)]
+    return young, old

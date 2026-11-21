@@ -22,12 +22,13 @@ from vedette.enrich.popularity import PopularityList
 from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges
 from vedette.enrich.threat_intel import ThreatIntel
-from vedette.eval.datasets import Name, TunnelSession
-from vedette.rules.allowlist import Allowlist
+from vedette.eval.datasets import BurstSession, Name, TunnelSession
+from vedette.rules.allowlist import Allowlist, AllowlistEntry
 from vedette.rules.engine import RuleEngine
 from vedette.rules.model import RuleSpec, Severity
 from vedette.sources.base import DnsEvent
-from vedette.storage.reference import ReferenceStore
+from vedette.storage.reference import DomainAgeRecord, ReferenceStore
+from vedette.storage.store import Store
 from vedette.storage.triage import DOMAIN_RULES
 
 PROFILE = "eval"
@@ -51,6 +52,20 @@ class DetectionResult:
     def rate(self) -> float | None:
         """Flagged items as a share of all items; ``None`` for an empty set."""
         return self.flagged / self.items if self.items else None
+
+
+@dataclass(slots=True)
+class ReplayResult:
+    """What the current rules raise when the stored history is run through them again."""
+
+    events: int = 0
+    days: float = 0.0
+    findings: dict[str, int] = field(default_factory=dict)  # per rule
+    alerting: dict[str, int] = field(default_factory=dict)  # per rule, high or critical
+
+    def per_day(self, count: int) -> float | None:
+        """A count spread over the days replayed; ``None`` without a day of history."""
+        return count / self.days if self.days >= 1 else None
 
 
 class Detector:
@@ -91,11 +106,11 @@ class Detector:
         """Whether a top-sites list is available locally."""
         return self._popularity.known
 
-    def _enricher(self) -> Enricher:
+    def _enricher(self, ages: ReferenceStore | None = None) -> Enricher:
         return Enricher(
             popularity=self._popularity,
             threat_intel=self._threats,
-            ages=DomainAges(self._reference, None),
+            ages=DomainAges(ages or self._reference, None),
             first_seen=FirstSeenTracker(self._scratch, {}),
             rdap_max_event_age=timedelta(0),
             rdap_max_lookups_per_batch=0,
@@ -111,13 +126,20 @@ class Detector:
         )
 
     async def _evaluate(
-        self, items: Sequence[Sequence[tuple[str, str, float]]], *, feeds: bool, prefilter: bool
+        self,
+        items: Sequence[Sequence[tuple[str, str, float]]],
+        *,
+        feeds: bool,
+        prefilter: bool,
+        counted: frozenset[str] = DOMAIN_RULES,
+        ages: ReferenceStore | None = None,
     ) -> list[list[tuple[str, Severity]]]:
-        """Findings (rule, severity) of the domain rules, per item.
+        """Findings (rule, severity) of the ``counted`` rules, per item.
 
-        Each item is a list of (fqdn, root, seconds after the item's start).
+        Each item is a list of (fqdn, root, seconds after the item's start), from
+        a device of its own, so items never add up to a burst between them.
         """
-        enricher = self._enricher()
+        enricher = self._enricher(ages)
         engine = self._engine(prefilter=prefilter)
         start = self._now - timedelta(hours=6)
         owner: dict[str, int] = {}
@@ -135,7 +157,7 @@ class Detector:
                         fqdn=fqdn,
                         root=root,
                         status="default",
-                        device_id=DEVICE,
+                        device_id=f"{DEVICE}-{index}",
                         source="eval",
                     )
                 )
@@ -148,7 +170,7 @@ class Detector:
                 if not feeds:
                     seen = seen.model_copy(update={"threat_feeds": (), "threat_match": None})
                 for finding in engine.evaluate(seen):
-                    if finding.rule_id in DOMAIN_RULES:
+                    if finding.rule_id in counted:
                         results[owner[finding.event_id]].append((finding.rule_id, finding.severity))
         return results
 
@@ -197,3 +219,87 @@ class Detector:
         ]
         found = await self._evaluate(items, feeds=True, prefilter=True)
         return self._summarise(dataset, "malicious", found, note)
+
+    async def bursts(self, dataset: str, bursts: Sequence[BurstSession]) -> DetectionResult:
+        """Each burst's lookups spread evenly over its duration, from one device."""
+        items = [
+            [
+                (name.fqdn, name.root, burst.minutes * 60 * number / max(len(burst.names), 1))
+                for number, name in enumerate(burst.names)
+            ]
+            for burst in bursts
+        ]
+        found = await self._evaluate(
+            items, feeds=True, prefilter=True, counted=DOMAIN_RULES | {"dga-burst"}
+        )
+        return self._summarise(dataset, "malicious", found, "")
+
+    async def replay(
+        self,
+        store: Store,
+        profile_ids: Sequence[str],
+        *,
+        allowlist: Sequence[AllowlistEntry],
+        learning: timedelta,
+    ) -> ReplayResult:
+        """Run every stored event through the current rules again, counting what fires.
+
+        Each profile is replayed in order with fresh rule state and fresh first
+        sightings, after the same learning period as the running service.
+        Names are only counted.
+        """
+        result = ReplayResult()
+        findings: Counter[str] = Counter()
+        alerting: Counter[str] = Counter()
+        span = timedelta(0)
+        for profile_id in profile_ids:
+            enricher = self._enricher()
+            engine = RuleEngine(
+                self._specs,
+                allowlist=Allowlist(allowlist, labels={profile_id: profile_id}),
+                learning=learning,
+            )
+            first: datetime | None = None
+            last: datetime | None = None
+            async for chunk in store.iter_events(profile_id):
+                first = first or chunk[0].ts
+                last = chunk[-1].ts
+                result.events += len(chunk)
+                for seen in await enricher.enrich_batch(chunk, self._now):
+                    for finding in engine.evaluate(seen):
+                        findings[finding.rule_id] += 1
+                        if finding.severity.rank >= Severity.HIGH.rank:
+                            alerting[finding.rule_id] += 1
+            if first is not None and last is not None:
+                span = max(span, last - first)
+        result.days = span.total_seconds() / 86400
+        result.findings = dict(sorted(findings.items()))
+        result.alerting = dict(sorted(alerting.items()))
+        return result
+
+    async def dated(
+        self, dataset: str, kind: str, names: Sequence[tuple[Name, int]], *, note: str = ""
+    ) -> DetectionResult:
+        """One lookup per name, with each root's registration age given in days.
+
+        The ages go into the scratch database's cache, so the young-domain rule
+        is judged on dates it would have learned from the registry.
+        """
+        await self._scratch.save_domain_ages(
+            [
+                DomainAgeRecord(
+                    root=name.root,
+                    status="found",
+                    registered_at=self._now - timedelta(days=age),
+                    fetched_at=self._now,
+                )
+                for name, age in names
+            ]
+        )
+        found = await self._evaluate(
+            [[(name.fqdn, name.root, 0.0)] for name, _ in names],
+            feeds=True,
+            prefilter=True,
+            ages=self._scratch,
+        )
+        return self._summarise(dataset, kind, found, note)

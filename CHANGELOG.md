@@ -24,6 +24,19 @@
 
 ### Detection
 
+- Two new rules for patterns over time. **Slow DNS tunnelling**
+  (`tunnel-slow`) counts different long subdomains of one domain over six
+  hours, so a tunnel sending a lookup a minute adds up. **Burst of new
+  unknown domains** (`dga-burst`) fires when a device looks up more than 20
+  domains it has never queried, none on the top-sites list, within ten
+  minutes, which is how generated domains look whatever their letters. Both
+  start at medium.
+- `vedette eval` now replays all of your stored history through the rules as
+  they are now and reports how often each would fire, and adds timed sets
+  for the new rules and dated sets that measure `young-domain`. On 16.6 days
+  of real history the new rules raised nothing, and they caught every
+  sustained tunnel and every burst in the synthetic sets.
+
 - The Public Suffix List, downloaded weekly, now decides which roots are
   customer names on a hosting platform (`github.io`, cloud providers) instead
   of a ranked parent domain. Customer names on platforms that are on no

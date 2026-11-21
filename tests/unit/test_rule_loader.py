@@ -84,4 +84,4 @@ def test_a_missing_override_file_is_an_error(tmp_path: Path) -> None:
 
 
 def test_packaged_rules_load_without_an_override() -> None:
-    assert len(by_id()) == 8
+    assert len(by_id()) == 10

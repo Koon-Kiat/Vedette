@@ -468,13 +468,15 @@ def test_new_category_is_quiet_while_the_profile_is_still_being_learned(device: 
 # --- behaviour shared by all rules ------------------------------------------------
 
 
-def test_the_rule_file_defines_exactly_the_eight_rules_with_their_severity_floors() -> None:
+def test_the_rule_file_defines_exactly_the_ten_rules_with_their_severity_floors() -> None:
     assert {spec.id: spec.severity for spec in load_rules()} == {
         "new-device": Severity.MEDIUM,
         "young-domain": Severity.HIGH,
         "threat-intel-allowed": Severity.CRITICAL,
         "dga-like": Severity.MEDIUM,
         "tunnel-like": Severity.HIGH,
+        "tunnel-slow": Severity.MEDIUM,
+        "dga-burst": Severity.MEDIUM,
         "volume-spike": Severity.LOW,
         "blocked-burst": Severity.MEDIUM,
         "new-destination-category": Severity.LOW,

@@ -62,6 +62,10 @@ class RuleEngine:
         self._blocked: dict[_Subject, deque[datetime]] = defaultdict(deque)
         self._tunnel: dict[tuple[_Subject, str], deque[tuple[datetime, str]]] = defaultdict(deque)
         self._tunnel_names: dict[tuple[_Subject, str], Counter[str]] = defaultdict(Counter)
+        self._slow: dict[tuple[_Subject, str], deque[tuple[datetime, str]]] = defaultdict(deque)
+        self._slow_names: dict[tuple[_Subject, str], Counter[str]] = defaultdict(Counter)
+        # New unknown roots per device, for dga-burst: (time, root), oldest first.
+        self._new_roots: dict[_Subject, deque[tuple[datetime, str]]] = defaultdict(deque)
         self._emitted: dict[str, datetime] = {}
         self._observed = 0
 
@@ -108,18 +112,25 @@ class RuleEngine:
                 self._tunnel_names[key][fqdn] += 1
                 self._trim_tunnel(key, ts - timedelta(minutes=tunnel.params["window_minutes"]))
 
+        slow = self._specs.get("tunnel-slow")
+        if slow is not None and root:
+            features = lexical_features(fqdn, root)
+            if features.subdomain_length >= slow.params["min_subdomain_length"]:
+                key = (subject, root)
+                self._slow[key].append((ts, fqdn))
+                self._slow_names[key][fqdn] += 1
+                _trim(
+                    self._slow[key],
+                    self._slow_names[key],
+                    ts - timedelta(minutes=slow.params["window_minutes"]),
+                )
+
         self._observed += 1
         if self._observed % _PRUNE_EVERY == 0:
             self._prune(ts)
 
     def _trim_tunnel(self, key: tuple[_Subject, str], cutoff: datetime) -> None:
-        window = self._tunnel[key]
-        names = self._tunnel_names[key]
-        while window and window[0][0] < cutoff:
-            _, name = window.popleft()
-            names[name] -= 1
-            if names[name] <= 0:
-                del names[name]
+        _trim(self._tunnel[key], self._tunnel_names[key], cutoff)
 
     def _prune(self, now: datetime) -> None:
         """Drop state too old to matter, so memory stays bounded."""
@@ -129,6 +140,17 @@ class RuleEngine:
         ]:
             del self._tunnel[key]
             self._tunnel_names.pop(key, None)
+        slow = self._specs.get("tunnel-slow")
+        slow_horizon = now - timedelta(minutes=slow.params["window_minutes"] if slow else 60)
+        for key in [
+            k for k, window in self._slow.items() if not window or window[-1][0] < slow_horizon
+        ]:
+            del self._slow[key]
+            self._slow_names.pop(key, None)
+        for subject in [
+            s for s, window in self._new_roots.items() if not window or window[-1][0] < horizon
+        ]:
+            del self._new_roots[subject]
         for subject in [
             s for s, window in self._blocked.items() if not window or window[-1] < horizon
         ]:
@@ -161,6 +183,8 @@ class RuleEngine:
             self._threat_intel,
             self._dga_like,
             self._tunnel_like,
+            self._tunnel_slow,
+            self._dga_burst,
             self._volume_spike,
             self._blocked_burst,
             self._new_category,
@@ -353,6 +377,62 @@ class RuleEngine:
         target = event.device_id or event.profile_id
         return self._once(self._finding(spec, item, target, evidence))
 
+    def _tunnel_slow(self, item: EnrichedEvent) -> list[Finding]:
+        spec = self._specs.get("tunnel-slow")
+        event = item.event
+        if spec is None or not event.root:
+            return []
+        key = ((event.profile_id, event.device_id), event.root)
+        unique = len(self._slow_names.get(key, ()))
+        if unique <= spec.params["min_unique_subdomains"]:
+            return []
+        ignore_below = spec.params.get("ignore_rank_below")
+        ranks = [r for r in (item.popularity_rank, item.platform_rank) if r is not None]
+        rank = min(ranks, default=None)
+        if ignore_below is not None and rank is not None and rank <= ignore_below:
+            return []
+        if self._allowed(item):
+            return []
+        evidence = {
+            "root": event.root,
+            "unique_subdomains": unique,
+            "window_minutes": spec.params["window_minutes"],
+            "sample_fqdn": event.fqdn,
+        }
+        return self._once(self._finding(spec, item, event.root, evidence))
+
+    def _dga_burst(self, item: EnrichedEvent) -> list[Finding]:
+        spec = self._specs.get("dga-burst")
+        event = item.event
+        new = item.new_root_for_device if event.device_id is not None else item.new_root_for_profile
+        if (
+            spec is None
+            or not event.root
+            or not new
+            or not item.popularity_known
+            or item.popularity_rank is not None
+            or item.is_platform
+            or self._learning_now(event.profile_id, event.ts)
+            or self._allowed(item)
+        ):
+            return []
+        subject: _Subject = (event.profile_id, event.device_id)
+        window = self._new_roots[subject]
+        window.append((event.ts, event.root))
+        cutoff = event.ts - timedelta(minutes=spec.params["window_minutes"])
+        while window and window[0][0] < cutoff:
+            window.popleft()
+        roots = list(dict.fromkeys(root for _, root in window))
+        if len(roots) <= spec.params["min_new_roots"]:
+            return []
+        evidence = {
+            "new_roots_in_window": len(roots),
+            "window_minutes": spec.params["window_minutes"],
+            "sample_roots": roots[-5:],
+        }
+        target = event.device_id or event.profile_id
+        return self._once(self._finding(spec, item, target, evidence))
+
     def _blocked_burst(self, item: EnrichedEvent) -> list[Finding]:
         spec = self._specs.get("blocked-burst")
         event = item.event
@@ -396,3 +476,12 @@ class RuleEngine:
 
 def _hour(ts: datetime) -> datetime:
     return ts.replace(minute=0, second=0, microsecond=0)
+
+
+def _trim(window: deque[tuple[datetime, str]], names: Counter[str], cutoff: datetime) -> None:
+    """Drop lookups older than ``cutoff`` from a window and its name counts."""
+    while window and window[0][0] < cutoff:
+        _, name = window.popleft()
+        names[name] -= 1
+        if names[name] <= 0:
+            del names[name]

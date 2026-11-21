@@ -41,7 +41,7 @@ NextDNS API (per profile)
 | Storage | `src/vedette/storage/` | Done for events, collector state, findings, reference data, the stored allowlist, the audit log and evaluation runs: SQLite (WAL), Alembic migrations, retention purge, owner-only files |
 | Collector | `src/vedette/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
 | Enrichment | `src/vedette/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
-| Rules | `src/vedette/rules/` | Done: eight declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
+| Rules | `src/vedette/rules/` | Done: ten declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
 | Enricher and rule workers | `src/vedette/pipeline/processor.py` | Done |
 | Defanging | `src/vedette/notify/defang.py` | Done: CLI, alerts and digests |
 | LLM analyst | `src/vedette/llm/`, `src/vedette/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
@@ -618,8 +618,8 @@ repository. Each decision that departs from it says so.
     port publishing needs that; exposure is decided by publishing on
     `127.0.0.1` only. Checked live (see "Verified facts").
 56. **Mark benign on a domain rule allowlists the root for that profile.** The
-    rules `young-domain`, `threat-intel-allowed`, `dga-like` and `tunnel-like`
-    are about a domain; the entry covers the root and its subdomains on the
+    rules `young-domain`, `threat-intel-allowed`, `dga-like`, `tunnel-like` and
+    `tunnel-slow` are about a domain; the entry covers the root and its subdomains on the
     finding's profile, not other profiles. For the other rules, Benign only
     changes the status. Reopen removes the entry. Other findings already
     recorded keep their status. The rule worker reloads the allowlist
@@ -952,6 +952,29 @@ repository. Each decision that departs from it says so.
     weekly, stored in `public_suffixes` and matched in memory with the list's
     own algorithm (wildcards, exceptions, internationalised rules in ASCII).
     Until a copy exists, the parent-rank guess stands in.
+100. **Two rules for patterns over time, measured on real traffic first.** The
+    evaluation found three gaps: tunnels slower than 30 long subdomains in
+    10 minutes went uncaught, `dga-like` flagged 8% of dictionary-word DGA
+    names, and young-domain recall was not measured. Lowering thresholds to
+    pass the synthetic sets would have been tuning to the test and would
+    have added false alerts the evaluation could not see. Instead:
+    - `tunnel-slow` counts the same long subdomains over six hours (more
+      than 60 fires), so a tunnel sending a lookup a minute adds up.
+    - `dga-burst` counts the domains a device looks up for the first time
+      that no top-sites list knows and that are not platform names (more
+      than 20 in ten minutes fires). That is how generated domains look in
+      use, whatever their letters; it does not depend on the names at all.
+    - Both start at medium, so they reach the digest; the model can raise
+      them.
+    - `vedette eval` gained timed sets for them, dated sets that measure
+      `young-domain` with registration dates given, and a replay of the whole
+      stored history through the current rules. Each item now comes from a
+      device of its own, so a list of names never adds up to a burst.
+    The thresholds were set before any measurement. On a copy of the owner's
+    16.6 days (497,306 events), the replay raised no finding from either new
+    rule, while they caught 10 of 10 sustained tunnels and 10 of 10 bursts
+    of random or dictionary-word names, and `young-domain` flagged 40 of 40
+    young and 0 of 40 older dated domains.
 
 ## Verified facts the design relies on
 
@@ -1087,7 +1110,7 @@ no name from your history or the feeds appears in it.
 
 ## Future work
 
-- Measure young-domain recall in the evaluation, with registration dates
-  cached ahead of time for a fixed test set.
+- Measure how often the registry lookup finds a young domain's date in real
+  use; the evaluation measures the young-domain rule with dates given.
 - Optional abuse.ch feeds for users who register for a free key.
 - Batch stream writes if catch-up after long outages needs to be faster.

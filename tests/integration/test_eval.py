@@ -168,6 +168,32 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
         "Threat-feed domains",
     ]
     json.dumps(summary)  # stored as JSON
+    rows = {row["dataset"]: row for row in summary["detection"]}
+    assert rows["Tunnels, a lookup a minute for 2 hours"]["by_rule"]["tunnel-slow"] == 10
+    assert rows["Bursts of 30 dictionary-word domains"]["by_rule"]["dga-burst"] == 10
+    assert rows["Young domains, registration dates given"]["flagged"] == 40
+    assert rows["Older domains, registration dates given"]["flagged"] == 0
+    assert summary["replay"]["events"] == 0, "no stored history to replay"
+
+
+async def test_the_suite_reports_a_missing_list_and_an_unreachable_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_LLM__BASE_URL", OLLAMA)
+    run_migrations(url)  # no top-sites list stored
+
+    with respx.mock(assert_all_called=False) as web:
+        web.post(f"{OLLAMA}/api/chat").mock(side_effect=httpx.ConnectError("refused"))
+        summary = await run_suite(
+            load_settings(), load_rules(), models=["qwen3:8b"], thinks=[False], now=NOW
+        )
+
+    assert summary["injection"] == []
+    assert any("No top-sites list is stored yet" in error for error in summary["errors"])
+    assert any("qwen3:8b: the local model could not be used" in e for e in summary["errors"])
 
 
 def test_the_command_writes_the_report_and_feeds_the_dashboard(

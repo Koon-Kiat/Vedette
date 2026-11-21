@@ -69,6 +69,33 @@ def _by_name(rows: list[dict[str, Any]], dataset: str) -> dict[str, Any] | None:
     return next((row for row in rows if row["dataset"] == dataset), None)
 
 
+def _replay_section(replay: dict[str, Any] | None) -> list[str]:
+    """What the current rules raise on the stored history, rule by rule."""
+    if not replay:
+        return []
+    lines = [
+        "## Replay of your history",
+        "",
+        f"All {replay['events']:,} stored events ({_num(replay['days'])} days) were run through "
+        "the rules as they are now, offline and in order, with fresh first sightings and the "
+        "usual learning period. This measures each rule on real traffic, including rules added "
+        "after the events were first processed. Names are only counted.",
+        "",
+    ]
+    if not replay["rules"]:
+        return [*lines, "No rule raised a finding."]
+    lines += [
+        "| Rule | Findings | Per day | High or critical | High or critical per day |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    lines += [
+        f"| {row['rule']} | {row['findings']:,} | {_num(row['per_day'], 2)} | "
+        f"{row['alerting']:,} | {_num(row['alerting_per_day'], 2)} |"
+        for row in replay["rules"]
+    ]
+    return lines
+
+
 def _findings(summary: dict[str, Any]) -> list[str]:
     """Plain statements about what the numbers show, failures first."""
     out: list[str] = []
@@ -93,14 +120,43 @@ def _findings(summary: dict[str, Any]) -> list[str]:
         caught = slow["by_rule"].get("tunnel-like", 0)
         other = slow["flagged"] - caught
         out.append(
-            f"- The tunnel-like rule catches {caught} of {slow['items']} slow tunnels: it needs "
-            "more than 30 different long subdomains within 10 minutes."
+            f"- The tunnel-like rule catches {caught} of {slow['items']} short slow tunnels: it "
+            "needs more than 30 different long subdomains within 10 minutes, and these send 20 "
+            "in all."
             + (
                 f" {other} were still flagged by another rule (their random-looking labels "
                 "also trip dga-like), which a tunnel using dictionary words would not."
                 if other > 0
                 else ""
             )
+        )
+    sustained = _by_name(detection, "Tunnels, a lookup a minute for 2 hours")
+    if sustained and sustained["items"]:
+        caught = sustained["by_rule"].get("tunnel-slow", 0)
+        out.append(
+            f"- The tunnel-slow rule catches {caught} of {sustained['items']} tunnels that send a "
+            "lookup a minute for two hours: more than 60 different long subdomains within six "
+            "hours."
+        )
+    for dataset in (
+        "Bursts of 30 random-character domains",
+        "Bursts of 30 dictionary-word domains",
+    ):
+        bursts = _by_name(detection, dataset)
+        if bursts and bursts["items"]:
+            caught = bursts["by_rule"].get("dga-burst", 0)
+            kind = dataset.removeprefix("Bursts of 30 ")
+            out.append(
+                f"- dga-burst catches {caught} of {bursts['items']} bursts of {kind}, whatever "
+                "the names look like: it counts new, unranked domains one device looks up within "
+                "ten minutes."
+            )
+    young = _by_name(detection, "Young domains, registration dates given")
+    if young and young["items"]:
+        out.append(
+            f"- With registration dates known, young-domain flags {_pct(young['rate'])} of "
+            "domains registered under 30 days ago. In real use it depends on the registry "
+            "lookup, which is limited to allowed, unranked domains seen in the last day."
         )
     feeds_off = _by_name(detection, "Threat-feed domains, feed lookup off")
     if feeds_off and feeds_off["items"]:
@@ -126,6 +182,14 @@ def _findings(summary: dict[str, Any]) -> list[str]:
                 f"flagged ({benign['alerting']} at high or critical). These are false positives "
                 "of the rules as they stand."
             )
+    replay = summary.get("replay")
+    if replay and replay["days"] >= 1:
+        total = sum(row["alerting"] for row in replay["rules"])
+        out.append(
+            f"- Replayed through the current rules, your {_num(replay['days'])} days of history "
+            f"raise {total} high or critical finding{'' if total == 1 else 's'} "
+            f"({_num(total / replay['days'], 2)} a day); the replay table gives each rule."
+        )
     per_day = history["alerts_per_day"]
     if per_day is not None:
         verdict = "within" if per_day <= FALSE_ALERT_TARGET else "above"
@@ -204,15 +268,22 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "Every name was run through the real enrichment and rules, offline: ranks and threat "
         "feeds come from the local copies, and registration dates only from the local cache, so "
-        "the young-domain rule fires only for roots whose age was already known. Only the four "
-        "domain rules (young-domain, threat-intel-allowed, dga-like, tunnel-like) are counted.",
+        "the young-domain rule fires only for roots whose age was already known, except in the "
+        "two sets whose dates are given. The rules about a domain are counted (young-domain, "
+        "threat-intel-allowed, dga-like, tunnel-like, tunnel-slow), and dga-burst in the burst "
+        "sets. Each item comes from a device of its own, so items never add up to a burst.",
         "",
         *_detection_table(summary["detection"]),
         "",
         f"Dataset sizes: {sizes['top_sites']} top sites, {sizes['own_history']} names from your "
         f"history, {sizes['feeds']} feed domains, {sizes['dga_random']} random and "
-        f"{sizes['dga_words']} word-based DGA names, {sizes['tunnels_fast']} fast and "
-        f"{sizes['tunnels_slow']} slow tunnels, {sizes['injection']} crafted injection names.",
+        f"{sizes['dga_words']} word-based DGA names, {sizes['tunnels_fast']} fast, "
+        f"{sizes['tunnels_slow']} short slow and {sizes['tunnels_sustained']} sustained tunnels, "
+        f"{sizes['bursts_random']} random and {sizes['bursts_words']} word-based bursts, "
+        f"{sizes['young']} young and {sizes['old']} older dated domains, "
+        f"{sizes['injection']} crafted injection names.",
+        "",
+        *_replay_section(summary.get("replay")),
         "",
         "## Prompt injection",
         "",
@@ -268,7 +339,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "- Your history is treated as benign. Any high or critical finding in it counts as a "
         "false alert unless it was a real problem.",
-        "- Registration dates are not looked up, so young-domain recall is not measured.",
+        "- Registration dates are not looked up. The dated sets measure the young-domain rule "
+        "with dates given, not how often the registry lookup finds them.",
+        "- The replay treats your history as benign too, and starts with fresh first "
+        "sightings, so its first days are spent learning, as a new install's are.",
         "- The threat-feed set comes from the same feeds the threat-intel rule uses, so its "
         "recall with the feed match on is high by construction.",
         "- Synthetic DGA and tunnelling names imitate common patterns; real malware varies more.",

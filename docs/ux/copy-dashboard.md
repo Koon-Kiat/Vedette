@@ -23,6 +23,8 @@ Shown as the finding's title on its page, in the Rule column of every findings t
 | `threat-intel-allowed` | Threat-feed domain allowed |
 | `dga-like` | Random-looking domain name |
 | `tunnel-like` | Possible DNS tunnelling |
+| `tunnel-slow` | Slow DNS tunnelling |
+| `dga-burst` | Burst of new unknown domains |
 | `volume-spike` | Query volume spike |
 | `blocked-burst` | Burst of blocked queries |
 | `new-destination-category` | New category or blocklist |

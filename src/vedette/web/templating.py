@@ -66,6 +66,8 @@ EVIDENCE_LABELS = {
     "unique_subdomains": "Distinct subdomains",
     "blocked_in_window": "Blocked in the window",
     "window_minutes": "Window, minutes",
+    "new_roots_in_window": "New unknown domains in the window",
+    "sample_roots": "Examples",
     "queries_this_hour": "Queries this hour",
     "baseline_per_hour": "Usual queries per hour",
     "factor": "Times the usual",
@@ -106,6 +108,7 @@ OUTSIDE_FIELDS = frozenset(
         "device_name",
         "category",
         "category_name",
+        "sample_roots",
     }
 )
 

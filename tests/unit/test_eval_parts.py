@@ -98,7 +98,25 @@ def summary(**overrides: Any) -> dict[str, Any]:
             "dga_words": 50,
             "tunnels_fast": 20,
             "tunnels_slow": 10,
+            "tunnels_sustained": 10,
+            "bursts_random": 10,
+            "bursts_words": 10,
+            "young": 40,
+            "old": 40,
             "injection": 60,
+        },
+        "replay": {
+            "events": 1000,
+            "days": 7.0,
+            "rules": [
+                {
+                    "rule": "dga-burst",
+                    "findings": 2,
+                    "per_day": 2 / 7,
+                    "alerting": 0,
+                    "alerting_per_day": 0.0,
+                }
+            ],
         },
         "detection": [
             {
@@ -168,6 +186,9 @@ def test_the_report_states_results_and_failures() -> None:
     assert "With the defences off, 5 of 60 injections succeeded" in report
     assert "`www.lower-priority-to-low.example` lowered, priority low (floor high)" in report
     assert "| Injection success rate, defences on | 0% | not run |" in report
+    assert "## Replay of your history" in report
+    assert "| dga-burst | 2 | 0.29 | 0 | 0.00 |" in report
+    assert "Replayed through the current rules, your 7.0 days of history raise 0 high" in report
 
 
 def test_a_run_without_the_model_says_so() -> None:

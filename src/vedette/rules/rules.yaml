@@ -73,6 +73,35 @@ rules:
       ignore_rank_below: 10000    # skip roots this popular (large CDNs); null disables
     evidence: [root, unique_subdomains, window_minutes, sample_fqdn]
 
+  - id: tunnel-slow
+    name: Slow DNS tunnelling
+    severity: medium
+    dedupe: daily
+    description: >-
+      One device queried many different long subdomains of a single domain
+      over a few hours. A tunnel that sends a query a minute stays under the
+      fast tunnelling rule, but its subdomains add up here.
+    params:
+      min_unique_subdomains: 60   # fires when the count exceeds this
+      window_minutes: 360
+      min_subdomain_length: 30    # characters in front of the root
+      ignore_rank_below: 10000    # skip roots this popular (large CDNs); null disables
+    evidence: [root, unique_subdomains, window_minutes, sample_fqdn]
+
+  - id: dga-burst
+    name: Burst of new unknown domains
+    severity: medium
+    dedupe: hourly
+    description: >-
+      One device looked up many domains it had never queried before, none of
+      them on the top-sites list, within a few minutes. Malware that generates
+      domain names tries dozens of them to find its server, whatever the names
+      look like.
+    params:
+      min_new_roots: 20           # fires when the count exceeds this
+      window_minutes: 10
+    evidence: [new_roots_in_window, window_minutes, sample_roots]
+
   - id: volume-spike
     name: Query volume spike
     severity: low

@@ -4,7 +4,7 @@ import shutil
 import tempfile
 from collections.abc import Sequence
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from vedette.llm.ollama import OllamaUnavailable
 from vedette.rules.model import RuleSpec
 from vedette.storage.migrate import run_migrations
 from vedette.storage.store import Store
+from vedette.storage.triage import TriageStore
 
 log = structlog.get_logger(__name__)
 
@@ -66,6 +67,9 @@ async def run_suite(
         feeds = await datasets.feed_domains(store.engine)
         dga_random, dga_words = datasets.dga_names()
         fast, slow = datasets.tunnel_sessions()
+        sustained = datasets.sustained_tunnel_sessions()
+        bursts_random, bursts_words = datasets.dga_bursts()
+        young, old = datasets.dated_domains()
         injection = datasets.injection_names()
 
         async with Detector(store.engine, scratch.engine, specs, now) as detector:
@@ -89,8 +93,27 @@ async def run_suite(
                 await detector.names("Dictionary-word DGA names", "malicious", dga_words),
                 await detector.sessions("Tunnels, 40 lookups in 5 minutes", fast),
                 await detector.sessions("Tunnels, 20 lookups in 10 minutes", slow),
+                await detector.sessions("Tunnels, a lookup a minute for 2 hours", sustained),
+                await detector.bursts("Bursts of 30 random-character domains", bursts_random),
+                await detector.bursts("Bursts of 30 dictionary-word domains", bursts_words),
+                await detector.dated(
+                    "Young domains, registration dates given",
+                    "malicious",
+                    young,
+                    note="measures the rule; the registry lookup is not part of it",
+                ),
+                await detector.dated("Older domains, registration dates given", "benign", old),
                 await detector.names("Crafted injection names", "malicious", injection),
             ]
+            replay = await detector.replay(
+                store,
+                profile_ids,
+                allowlist=[
+                    *settings.allowlist,
+                    *await TriageStore(store.engine).allowlist_entries(),
+                ],
+                learning=timedelta(days=settings.rules.learning_days),
+            )
         history = await history_metrics(store.engine, profile_ids, now)
 
         results: list[InjectionResult] = []
@@ -150,6 +173,11 @@ async def run_suite(
             "dga_words": len(dga_words),
             "tunnels_fast": len(fast),
             "tunnels_slow": len(slow),
+            "tunnels_sustained": len(sustained),
+            "bursts_random": len(bursts_random),
+            "bursts_words": len(bursts_words),
+            "young": len(young),
+            "old": len(old),
             "injection": len(injection),
         },
         "detection": [_detection(result) for result in detection],
@@ -157,6 +185,20 @@ async def run_suite(
             **asdict(history),
             "alerts_per_day": history.alerts_per_day,
             "llm_calls_per_day": history.llm_calls_per_day,
+        },
+        "replay": {
+            "events": replay.events,
+            "days": round(replay.days, 1),
+            "rules": [
+                {
+                    "rule": rule,
+                    "findings": count,
+                    "per_day": replay.per_day(count),
+                    "alerting": replay.alerting.get(rule, 0),
+                    "alerting_per_day": replay.per_day(replay.alerting.get(rule, 0)),
+                }
+                for rule, count in replay.findings.items()
+            ],
         },
         "injection": [_injection(result) for result in results],
         "injection_names": [name.fqdn for name in injection],

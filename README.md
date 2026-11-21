@@ -20,7 +20,7 @@ with.
 
 Collection and detection work: `docker compose up` backfills the last 7 days
 of each enabled profile's NextDNS logs into a local SQLite database, follows
-the live stream, enriches every event with local context and runs eight
+the live stream, enriches every event with local context and runs ten
 deterministic rules. A local model (Ollama) then explains each finding and
 may raise its priority, never lower it. High and critical findings become
 instant alerts, a digest is produced every morning, and a health monitor
@@ -317,7 +317,7 @@ Triage:
 
 - **Acknowledge:** you have seen it.
 - **Benign:** it is not a problem. For a domain finding (`young-domain`,
-  `threat-intel-allowed`, `dga-like`, `tunnel-like`) the domain's root is also
+  `threat-intel-allowed`, `dga-like`, `tunnel-like`, `tunnel-slow`) the domain's root is also
   allowlisted for that profile, so those rules stop flagging it within about
   30 seconds. Findings already recorded are left as they are.
 - **Reopen:** undoes either, and removes the allowlist entry that Benign added.
@@ -428,11 +428,14 @@ disable the profiles in `config.yaml` or remove `NEXTDNS_API_KEY`.
 ## Measuring how well it works
 
 `vedette eval` runs known-good names (the top-sites list and a sample of your
-own history), known-bad names (threat-feed domains and synthetic DGA and
-tunnelling names) and 60 crafted prompt-injection names through the real rules
-and the local model, with the defences on and off. It writes a report and
-fills the dashboard's Evaluation page. Names from your history and the feeds
-are only counted, never printed. It talks only to the local model.
+own history), known-bad names (threat-feed domains, synthetic DGA names and
+bursts, fast, slow and sustained tunnels, and domains with given registration
+dates) and 60 crafted prompt-injection names through the real rules and the
+local model, with the defences on and off. It also replays all of your stored
+history through the rules as they are now, which shows how often each rule
+would fire on your own traffic. It writes a report and fills the dashboard's
+Evaluation page. Names from your history and the feeds are only counted, never
+printed. It talks only to the local model.
 
 ```powershell
 docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md

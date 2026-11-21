@@ -20,6 +20,12 @@ REQUIRED_PARAMS: dict[str, dict[str, type | tuple[type, ...]]] = {
         "window_minutes": int,
         "min_subdomain_length": int,
     },
+    "tunnel-slow": {
+        "min_unique_subdomains": int,
+        "window_minutes": int,
+        "min_subdomain_length": int,
+    },
+    "dga-burst": {"min_new_roots": int, "window_minutes": int},
     "volume-spike": {
         "factor": (int, float),
         "baseline_hours": int,

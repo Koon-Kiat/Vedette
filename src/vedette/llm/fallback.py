@@ -29,6 +29,14 @@ _ACTIONS = {
         "Identify the device and the program making these queries; block the domain if you "
         "do not recognise it."
     ),
+    "tunnel-slow": (
+        "Identify the device and the program making these queries; block the domain if you "
+        "do not recognise it."
+    ),
+    "dga-burst": (
+        "Check the device for malware: look at which program made these lookups and scan "
+        "it; the sample domains show what it was trying."
+    ),
     "volume-spike": (
         "Check what the device was doing at that time; investigate further if the burst "
         "was unexpected."

@@ -293,6 +293,28 @@ class Store:
             rows = (await connection.execute(statement)).all()
         return [to_event(row) for row in rows]
 
+    async def iter_events(
+        self, profile_id: str, *, chunk: int = 2000
+    ) -> AsyncIterator[list[DnsEvent]]:
+        """Every stored event of a profile in chunks, oldest first (for the evaluation)."""
+        position: tuple[datetime, str] | None = None
+        while True:
+            statement = (
+                select(events)
+                .where(events.c.profile_id == profile_id)
+                .order_by(events.c.ts, events.c.event_id)
+                .limit(chunk)
+            )
+            if position is not None:
+                statement = statement.where(tuple_(events.c.ts, events.c.event_id) > position)
+            async with self._engine.connect() as connection:
+                rows = (await connection.execute(statement)).all()
+            if rows:
+                yield [to_event(row) for row in rows]
+            if len(rows) < chunk:
+                return
+            position = (rows[-1].ts, rows[-1].event_id)
+
     # --- processing ---------------------------------------------------------------
 
     async def fetch_unprocessed(self, profile_id: str, *, limit: int) -> list[DnsEvent]:

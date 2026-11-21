@@ -61,6 +61,9 @@ markers = [
 [tool.coverage.run]
 source = ["vedette"]
 branch = true
+# Alembic loads migration scripts by path, which coverage does not credit. Every test
+# database is built by them, and a test checks they match the table definitions.
+omit = ["*/storage/migrations/*"]
 
 [tool.ruff]
 line-length = 100

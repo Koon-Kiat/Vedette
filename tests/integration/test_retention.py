@@ -255,6 +255,37 @@ async def test_the_worker_logs_what_it_removed(store: Store) -> None:
     assert entry["rows"] == 8 and entry["events"] == 1
 
 
+async def test_the_worker_waits_purges_hourly_and_survives_a_failure(store: Store) -> None:
+    await seed(store)
+    waits: list[float] = []
+    calls = {"count": 0}
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+        if len(waits) == 3:
+            raise asyncio.CancelledError
+
+    worker = RetentionWorker(
+        store.engine, events_days=30, findings_days=180, clock=lambda: NOW, sleep=sleep
+    )
+    real_purge = worker.purge_once
+
+    async def flaky_purge() -> int:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("database is locked")
+        return await real_purge()
+
+    worker.purge_once = flaky_purge  # type: ignore[method-assign]
+    with capture_logs() as logs, pytest.raises(asyncio.CancelledError):
+        await worker.run()
+
+    assert waits == [60.0, 3600.0, 3600.0], "a minute after start-up, then hourly"
+    (failed,) = [e for e in logs if e["event"] == "retention_purge_failed"]
+    assert failed["error"] == "RuntimeError" and "locked" in failed["detail"]
+    assert [e["rows"] for e in logs if e["event"] == "retention_purged"] == [8]
+
+
 def test_the_database_is_made_owner_only(tmp_path: Path) -> None:
     folder = tmp_path / "data"
     folder.mkdir(mode=0o755)

@@ -1,14 +1,20 @@
 # Vedette
 
-A self-hosted pipeline that ingests NextDNS query logs, flags suspicious DNS
-activity with deterministic rules, uses a **local** LLM (Ollama) only to explain
-and prioritise what the rules surface, and sends a daily digest plus real-time
-alerts.
+A vedette is a sentry posted ahead of the outposts to watch and warn. This one
+watches your NextDNS query logs: a self-hosted pipeline that flags suspicious
+DNS activity with deterministic rules, uses a **local** LLM (Ollama) only to
+explain and prioritise what the rules surface, and sends a daily digest plus
+real-time alerts.
 
 - **Cheap:** no paid APIs and no cloud LLM.
 - **Private:** DNS history and analysis stay on your machine.
 - **Hardened:** domain names are attacker-controlled text; the LLM stage is
   built to resist prompt injection, and rules alone decide whether an alert fires.
+
+Vedette is an independent project. It is not made, endorsed or supported by
+NextDNS Inc.; it reads your own account's logs through the public NextDNS API
+with your API key. "NextDNS" is used here only to say which service it works
+with.
 
 ## Status
 
@@ -31,9 +37,16 @@ the prompt-injection defences hold up
 
 ## Requirements
 
+- A NextDNS account and its API key.
 - Windows 11 with WSL2 and Docker Desktop (WSL2 backend), running.
-- An NVIDIA GPU with a current Windows driver, for Ollama.
+- An NVIDIA GPU with a current Windows driver, for Ollama. `docker-compose.yml`
+  reserves an NVIDIA GPU for the `ollama` service, so without one that service
+  does not start as configured.
 - Nothing else is installed on the host: Python, uv and every tool run in Docker.
+
+Vedette has been run only on Windows 11 with Docker Desktop. Linux with Docker
+Engine and the NVIDIA Container Toolkit should work the same way, but has not
+been tested.
 
 ## Quickstart (Windows 11 + Docker Desktop)
 
@@ -196,12 +209,14 @@ the dashboard itself; nothing is loaded from the internet. It uses the whole
 width of wide and ultrawide screens: from 2,240 pixels the Overview and Live
 pages set their panels side by side instead of in one long column.
 
-**Profiles shown.** The switch at the top of the menu shows both profiles,
-or only the router or only the pc, on every page, chart, table and the live
-feed; the browser remembers the choice. Each profile keeps its own colour
-everywhere (router teal, pc violet), and each option shows how many findings
-are open on it, so nothing waits unseen on the profile you are not looking
-at. Digests, Health and Evaluation always cover every profile.
+**Profiles shown.** With more than one enabled profile, the switch at the
+top of the menu shows all of them, or only one, on every page, chart, table
+and the live feed; the browser remembers the choice. Each profile keeps its
+own colour everywhere, in the order of `config.yaml` (the first teal, the
+second violet), and each option shows how many findings are open on it,
+updated as soon as you triage one, so nothing waits unseen on a profile you
+are not looking at. Digests, Health and Evaluation always cover every
+profile.
 
 **Tables** sort by any column: click a heading, and click again to reverse.
 On a finding's page, J and K move to the next and previous open finding.
@@ -237,7 +252,7 @@ each query joins its bar as it arrives. You can work with them directly:
 | Devices | Devices seen in the last 7 days, or a note that the profile reports none |
 | Digests | Every digest that was produced, as it was sent |
 | Health | Each health check, the newest event per profile, queue sizes, and the local model's calls, latency and cache hit rate |
-| Evaluation | Results of the evaluation suite, once it exists |
+| Evaluation | Results of the last `vedette eval` run, or how to start one |
 
 Triage:
 
@@ -384,6 +399,11 @@ docker compose exec vedette python -c "import urllib.request; print(urllib.reque
 It returns `ok` or `degraded` with every check's result. If you change
 `health.healthz_port`, change the port in the health check in
 `docker-compose.yml` too.
+
+## Reporting a security problem
+
+See [SECURITY.md](SECURITY.md). Please do not open a public issue for a
+vulnerability.
 
 ## Troubleshooting
 

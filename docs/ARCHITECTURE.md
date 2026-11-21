@@ -49,7 +49,7 @@ NextDNS API (per profile)
 | Health monitor | `src/vedette/health/` | Done: six kinds of check, alerts on change, `/healthz` |
 | Pipeline runner | `src/vedette/pipeline/runner.py` | Runs all six stages, `/healthz`, the dashboard and the hourly retention purge |
 | CLI | `src/vedette/cli.py` | `vedette run`, `findings`, `benign`, `backfill`, `import`, `notify --test`, `digest`, `purge`, `eval`, `--version` |
-| Dashboard | `src/vedette/web/`, `src/vedette/storage/dashboard.py`, `src/vedette/storage/triage.py` | Done: seven pages, triage with an audit log, token login; visual system in `DESIGN.md` |
+| Dashboard | `src/vedette/web/`, `src/vedette/storage/dashboard.py`, `src/vedette/storage/triage.py` | Done: eight pages, triage with an audit log, token login; visual system in `DESIGN.md` |
 | Evaluation | `src/vedette/eval/` | Done: datasets, offline detection, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
 
 ## How the collector avoids gaps and duplicates
@@ -151,9 +151,10 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 | No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
 | Safe output | `sanitize_model_text`: HTML, markdown and links removed, names defanged, length capped; applied again on display |
 
-Not done yet: the deterministic pre-filter that flags instruction-like words in
-labels, and measuring the injection success rate. Both belong to the hardening
-and evaluation work.
+Before this stage, the rule engine's instruction-word pre-filter raises a
+finding whose name carries instruction words (decision 61). `vedette eval`
+measures how often crafted names steer the model, with these defences on and
+off (decision 66).
 
 ## How alerts, digests and health messages are sent
 
@@ -336,7 +337,10 @@ things stay whole on purpose:
 
 - **The rail** counts open findings for every profile, and each option of
   the switch shows its own, so a problem on a profile not shown is still in
-  sight. The live stream's open count follows the rail.
+  sight. The live stream's open count follows the rail. A triage action's
+  response carries every count in an `HX-Trigger` event
+  (`vedette-counts`), so the rail and the switch change at once rather than
+  at the next five-second tick.
 - **A finding's page** is looked up across every profile, so a link from an
   alert or a digest always opens; its next and previous links follow the
   switch.
@@ -363,8 +367,11 @@ without it:
   so times and priorities sort by value; numbers sort as numbers. A table
   that htmx refreshes (the decisions on the Overview) keeps its sort.
 - **Confirm.** htmx's `hx-confirm` opens a native `<dialog>` drawn by the
-  dashboard instead of `window.confirm`; the action button repeats the
-  action's name.
+  dashboard instead of `window.confirm`. Its title comes from the trigger's
+  `data-confirm-title`, its question from a `<template class="confirm-body">`
+  in the form when there is one (so a domain keeps its outside-name
+  marking) and otherwise from the `hx-confirm` text, and focus starts on
+  Cancel. The action button repeats the action's name.
 - **Keys.** On a finding's page, J and K follow the next and previous open
   finding links.
 
@@ -392,8 +399,11 @@ test checks each file's SHA-256, as for htmx.
 
 ## Decisions
 
-1. **Repository root is this folder.** The spec's `vedette/` tree maps
-   onto the repository root.
+"The spec" below is the original project brief, which is not part of this
+repository. Each decision that departs from it says so.
+
+1. **Repository root is this folder.** The spec's project tree maps onto
+   the repository root.
 2. **Only dependencies in use are declared.** Each part of the spec's stack is
    added when the code that needs it lands, so the audited dependency set stays
    as small as possible.
@@ -413,7 +423,7 @@ test checks each file's SHA-256, as for htmx.
    errors so that typos surface at start-up.
 8. **The notification channel is undecided.** `notify.channel` is kept as free
    text with the placeholder `NOTIFY_CHANNEL` and is not validated until the
-   notifier is built.
+   notifier is built. (Decision 40 replaces this.)
 9. **Ollama has no route to the internet.** It sits on an `internal` Compose
    network. Models are downloaded by the one-shot `ollama-pull` service, which
    has internet access, shares the model volume, and exits. `OLLAMA_NO_CLOUD`
@@ -790,6 +800,20 @@ test checks each file's SHA-256, as for htmx.
     shows all its rows (findings at most 200), and the server's order stays
     the default. Dark only and the inked decisions were kept at the owner's
     request.
+85. **The project is called Vedette.** It began as "NextDNS Sentinel". Ahead of
+    publishing the repository, the owner chose a name that does not use
+    NextDNS's: the name belongs to NextDNS Inc., whose terms say nothing about
+    third parties using it, and "DNS Sentinel" was ruled out because a
+    commercial DNS-analytics product called DNSentinel exists. A vedette is a
+    mounted sentry posted ahead of the outposts. Everything was renamed to
+    match: the command, the Python package and module, the `VEDETTE_`
+    settings prefix, the cookies and the Docker names. NextDNS is still named
+    where it describes the service Vedette reads, such as `NEXTDNS_API_KEY`
+    and the README's note that the project is independent.
+86. **The default time zone is UTC.** The spec set Asia/Singapore, the owner's
+    zone, which new users elsewhere would get without noticing: digests and
+    quiet hours an hour or more off. `config.example.yaml` asks for an IANA
+    zone. Tests that need a fixed zone still name Asia/Singapore themselves.
 
 ## Verified facts the design relies on
 
@@ -915,13 +939,10 @@ no name from your history or the feeds appears in it.
   should be off by default.
 - Rule thresholds are first guesses. They are to be judged by the evaluation
   suite, not tuned on the same week of data they were first run on.
-- The notification channel (ntfy, Discord webhook or email) is not chosen, so
-  delivery has been proven only against a local ntfy server.
-- The laptop profile has sent nothing for 19 days and is reported as a health
-  problem. Give it `stale_after_minutes` or `quiet_hours`, or disable it.
+- The owner's install sends to Discord, where digests have been delivered;
+  ntfy has been proven only against a local ntfy server, and e-mail only in
+  tests.
 - No Git remote exists yet, so the CI workflow has not run on GitHub.
-- `DASHBOARD_TOKEN` is not set in `.env` yet, so the dashboard is off until
-  you add one.
 - Whether to pace history requests to stay under the undocumented rate limit,
   for example when several profiles backfill at once.
 

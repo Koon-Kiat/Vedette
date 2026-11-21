@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Renamed to Vedette, ready to publish
+
+The project was called NextDNS Sentinel. Its name no longer uses NextDNS's,
+and the repository was audited before going public.
+
+- Everything carries the new name: the `vedette` command
+  (`docker compose exec vedette vedette findings`), the Python package and
+  module, the `VEDETTE_` settings prefix (was `SENTINEL_`), the cookies, the
+  Compose project, service, images and the `vedette-data` volume, and the
+  default database file `/data/vedette.db`. Existing data moves by copying the
+  old volumes into the new ones; the old ones are left in place.
+- The README says Vedette is independent of NextDNS Inc., what it has been
+  tested on, and where to report a security problem: the new `SECURITY.md`.
+- The default time zone is UTC, not Asia/Singapore; `config.example.yaml`
+  asks for your own.
+- `.env.example` documents `VEDETTE_DASHBOARD__HOST`, the last setting it
+  left out.
+- Stale passages corrected: the pre-filter and the injection measurement are
+  done, the dashboard has eight pages, the confirmation dialog and live open
+  counts are described as they now work, and open points that were settled
+  are gone.
+- The secret scan of the full history and a check for real profile ids,
+  device names, domains, keys and the owner's address found nothing to remove.
+
 ### Dashboard: triage polish
 
 From a UX evaluation of the drawing set (`docs/ux/evaluation-dashboard.md`).

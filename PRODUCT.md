@@ -46,7 +46,7 @@ are treated as attacker-controlled text everywhere, including on this page.
 - Two NextDNS profiles today: `router`, which reports no device information
   (device attribution unavailable), and `pc`, a laptop profile that reports
   device ids and names and is often silent for hours.
-- The daily digest arrives at 08:00 Asia/Singapore, or late at start-up when
+- The daily digest arrives at 08:00 local time, or late at start-up when
   the computer was off then; digests, instant alerts for fresh high and
   critical findings, and health messages go to the owner's Discord channel.
 - Scale: the router profile produces tens of thousands of queries a day;
@@ -80,7 +80,8 @@ are treated as attacker-controlled text everywhere, including on this page.
 ## Brand Commitments
 
 The product name is "Vedette". There is no logo, mascot or brand
-palette. NextDNS is a third-party service; its marks are not used.
+palette. NextDNS is a third-party service: it is named only to say what
+Vedette reads, and its logo and branding are not used.
 
 ## Evidence on Hand
 

@@ -129,8 +129,8 @@ Residual risk:
 - Anyone holding a leaked Discord webhook URL can post into the channel.
 - A spoofed message can say anything. Check the dashboard before acting on a
   surprising alert.
-- No channel is configured yet, so this part is untested against the real
-  service.
+- Delivery has run against the real Discord and a local ntfy server. The
+  public ntfy.sh and e-mail have been tested only against stand-ins.
 
 ### Denial of service by log flooding (Denial of service)
 

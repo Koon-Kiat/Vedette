@@ -8,8 +8,10 @@ From a UX evaluation of the drawing set (`docs/ux/evaluation-dashboard.md`).
 
 - Every rule has a plain name (`name` in `rules.yaml`, optional in an
   override file; the id stands in when it is missing). Findings are titled by
-  it everywhere; the id stays in a finding's title block, where it matches the
-  Discord alerts and the CLI. What the rule checks is on every finding's page,
+  it on the dashboard, in Discord alerts ("CRITICAL: Threat-feed domain
+  allowed, ...") and in the digest; the id stays beside it (a finding's title
+  block, the alert's Rule line, the end of each digest entry), where it
+  matches `sentinel findings --rule`. What the rule checks is on every finding's page,
   not only before the model has explained it.
 - Findings open in triage order, highest priority first and then most recently
   seen, as the Overview and J/K already did.

@@ -31,6 +31,18 @@ A rule with no name set (a rule added later) shows its id in the name's place.
 
 **Finding page, under the explanation, every finding:** "What the rule checks" as a label, then the rule's description from rules.yaml. Replaces the description shown only for findings not analysed yet.
 
+### Alerts and the digest
+
+| Where | String |
+|---|---|
+| Alert title | {PRIORITY}: {rule name}, {about} ({profile}) |
+| Alert rule line | Rule: {rule name} ({rule id}), severity floor {floor} |
+| Alert footer | Finding #{id}. More: sentinel findings --rule {rule id} |
+| Digest entry, first line | {n}. {PRIORITY} {rule name}: {about} ({profile}, {device}) |
+| Digest entry, last line | {Explained by {model}. / Not explained by the local model.} Rule: {rule id}. |
+
+`{about}` is the reason's name for a new-category-or-blocklist finding, as on the dashboard.
+
 ### Mark benign confirmation
 
 Trigger: Mark benign on a finding whose rule allowlists its domain (young-domain, threat-intel-allowed, dga-like, tunnel-like).
@@ -80,6 +92,3 @@ A new-category-or-blocklist finding shows the reason's name where the evidence r
 
 The status code stays in the title block's fields as "Status {code}".
 
-## Open Questions
-
-- Should Discord alerts and the daily digest lead with the rule's name too, or keep the id they print today?

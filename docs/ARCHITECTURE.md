@@ -107,9 +107,11 @@ from the last week, without producing findings.
 
 ### Rules
 
-Rules live in `src/sentinel/rules/rules.yaml`: id, severity floor, description,
-thresholds and evidence fields. The detector behind each id is code. A file
-named by `rules.file` in the config can override any value per rule id.
+Rules live in `src/sentinel/rules/rules.yaml`: id, plain name, severity floor,
+description, thresholds and evidence fields. The detector behind each id is
+code. A file named by `rules.file` in the config can override any value per
+rule id. The dashboard, alerts and the digest lead with the name and keep the
+id beside it, the reference `sentinel findings --rule` takes.
 
 When an event has no device id, per-device rules count per profile, and the
 finding records that device attribution is unavailable. Rules that compare

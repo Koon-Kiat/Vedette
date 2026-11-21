@@ -87,3 +87,9 @@
 - Why: each change was seen working: counts in step within half a second of a decision, the dialog opening on Cancel, Retrying on Health, the Decision panel after the explanation at 1,000 pixels, the folded filters at 375, triage order, reason names on the real-data copy, and no column moving after a decision.
 - Rejected: relying on the tests alone.
 - Rests on: tests/integration/test_web_triage_polish.py.
+
+## 2026-11-21 · Discord alerts and the digest lead with the rule's name
+- Decided by: the designer
+- Why: the dashboard titles findings by name; alerts and digests are where most findings are first read.
+- Rejected: keeping the id as the lead in messages.
+- Rests on: docs/ux/copy-dashboard.md, Alerts and the digest.

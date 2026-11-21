@@ -7,33 +7,33 @@ FINDINGS
 1 critical, 2 high, 2 medium, 0 low, 0 info
 7-day average: 0 critical, 0.1 high, 0 medium, 0 low, 0 info
 
-1. CRITICAL threat-intel-allowed: bad[.]example (router, device attribution unavailable)
+1. CRITICAL Threat-feed domain allowed: bad[.]example (router, device attribution unavailable)
    1 finding, 3 events, last 2026-03-14 10:02 (Asia/Singapore)
    A device on the router profile reached bad[.]example, which a phishing feed lists.
    Do: Find the device that made the query and scan it for malware.
-   Explained by qwen3:8b.
+   Explained by qwen3:8b. Rule: threat-intel-allowed.
 
-2. HIGH volume-spike: router (router, device attribution unavailable)
+2. HIGH Query volume spike: router (router, device attribution unavailable)
    1 finding, 1 event, last 2026-03-14 18:00 (Asia/Singapore)
    The router made five times its usual number of lookups in one hour.
    Do: Check which device was busy at that time.
-   Explained by qwen3:8b.
+   Explained by qwen3:8b. Rule: volume-spike.
 
-3. HIGH young-domain: fresh-site[.]example (pc, device D1)
+3. HIGH Newly registered domain: fresh-site[.]example (pc, device D1)
    1 finding, 1 event, last 2026-03-14 13:00 (Asia/Singapore)
    The laptop visited fresh-site[.]example, registered five days ago.
    Do: Check whether the laptop's user meant to visit this site.
-   Explained by qwen3:8b.
+   Explained by qwen3:8b. Rule: young-domain.
 
-4. MEDIUM new-device: D2 (pc, device D2)
+4. MEDIUM New device: D2 (pc, device D2)
    1 finding, 1 event, last 2026-03-15 04:00 (Asia/Singapore)
    A device id that has never been seen on this profile appeared (or, when NextDNS reports no devices, a client IP never seen before). An unknown device on the network may be a guest, a new purchase, or an intruder.
-   Not explained by the local model.
+   Not explained by the local model. Rule: new-device.
 
-5. MEDIUM dga-like: c2-site[.]example (pc, device D1)
+5. MEDIUM Random-looking domain name: c2-site[.]example (pc, device D1)
    1 finding, 1 event, last 2026-03-14 16:00 (Asia/Singapore)
    An allowed query used a long, random-looking label on a domain outside the top-sites list. Malware often generates such names to find its command-and-control server.
-   Not explained by the local model.
+   Not explained by the local model. Rule: dga-like.
 
 NEW DEVICES
 - pc: D2 (Kitchen tablet), first seen 2026-03-15 04:00 (Asia/Singapore)

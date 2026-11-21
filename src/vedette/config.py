@@ -46,6 +46,7 @@ _SECRET_FIELDS = frozenset(
         "discord_webhook_url",
         "smtp_password",
         "dashboard_token",
+        "heartbeat_url",
     }
 )
 _DISCORD_WEBHOOK = re.compile(
@@ -56,6 +57,27 @@ _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _CLOCK = r"([01]\d|2[0-3]):[0-5]\d"
 
 NonEmptyStr = Annotated[str, Field(min_length=1)]
+
+
+def _check_secure_url(value: str, *, allow_query: bool) -> None:
+    """Refuse a URL that is not https, unless its host is on the local Docker network.
+
+    The messages never repeat the URL, which may carry a secret.
+    """
+    parts = urlsplit(value)
+    host = parts.hostname or ""
+    internal = "." not in host or host in _LOCAL_HOSTS
+    if parts.scheme not in ("https", "http") or not host:
+        raise ValueError("must be an https:// URL")
+    if parts.scheme == "http" and not internal:
+        raise ValueError(
+            "must use https; plain http is allowed only for a server on the local "
+            "Docker network (a name without dots, such as http://ntfy)"
+        )
+    if parts.username or parts.password or parts.fragment:
+        raise ValueError("must not contain a user name, password or fragment")
+    if parts.query and not allow_query:
+        raise ValueError("must not contain a query")
 
 
 class ConfigError(Exception):
@@ -189,18 +211,7 @@ class NtfyConfig(_Section):
     @field_validator("url")
     @classmethod
     def _secure_url(cls, value: str) -> str:
-        parts = urlsplit(value)
-        host = parts.hostname or ""
-        internal = "." not in host or host in _LOCAL_HOSTS
-        if parts.scheme not in ("https", "http") or not host:
-            raise ValueError("must be an https:// URL")
-        if parts.scheme == "http" and not internal:
-            raise ValueError(
-                "must use https; plain http is allowed only for a server on the local "
-                "Docker network (a name without dots, such as http://ntfy)"
-            )
-        if parts.username or parts.password or parts.query or parts.fragment:
-            raise ValueError("must not contain a user name, password, query or fragment")
+        _check_secure_url(value, allow_query=False)
         return value.rstrip("/")
 
 
@@ -265,6 +276,8 @@ class HealthConfig(_Section):
     backlog_minutes: int = Field(default=15, ge=1)
     max_disk_percent: int = Field(default=90, ge=1, le=100)
     healthz_port: int = Field(default=8081, ge=1, le=65535)
+    # How often to ping HEARTBEAT_URL, when it is set.
+    heartbeat_minutes: int = Field(default=5, ge=1, le=60)
 
 
 class DashboardConfig(_Section):
@@ -334,6 +347,11 @@ class Settings(BaseSettings):
     dashboard_token: SecretStr | None = Field(
         default=None, validation_alias=AliasChoices("DASHBOARD_TOKEN", "dashboard_token")
     )
+    # A dead man's switch (healthchecks.io, Uptime Kuma and the like), pinged while
+    # Vedette runs and its alerts get out: silence there means trouble here.
+    heartbeat_url: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("HEARTBEAT_URL", "heartbeat_url")
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -351,6 +369,7 @@ class Settings(BaseSettings):
         "discord_webhook_url",
         "smtp_password",
         "dashboard_token",
+        "heartbeat_url",
         mode="before",
     )
     @classmethod
@@ -400,6 +419,15 @@ class Settings(BaseSettings):
                 raise ValueError("notify.email.username is set but SMTP_PASSWORD is not")
         return self
 
+    @model_validator(mode="after")
+    def _heartbeat_is_secure(self) -> Self:
+        if self.heartbeat_url is not None:
+            try:
+                _check_secure_url(self.heartbeat_url.get_secret_value(), allow_query=True)
+            except ValueError as exc:
+                raise ValueError(f"heartbeat_url (HEARTBEAT_URL) {exc}") from None
+        return self
+
     def secret_values(self) -> list[str]:
         """Every secret that is set, for scrubbing from logs."""
         secrets = (
@@ -409,6 +437,7 @@ class Settings(BaseSettings):
             self.discord_webhook_url,
             self.smtp_password,
             self.dashboard_token,
+            self.heartbeat_url,
         )
         return [secret.get_secret_value() for secret in secrets if secret is not None]
 

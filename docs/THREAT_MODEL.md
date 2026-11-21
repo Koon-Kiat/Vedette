@@ -127,6 +127,9 @@ Residual risk:
   learns it can read the alerts or send fake ones. Use a long random topic and
   `NTFY_TOKEN`, or self-host.
 - Anyone holding a leaked Discord webhook URL can post into the channel.
+- Anyone holding a leaked `HEARTBEAT_URL` can ping it, hiding an outage from
+  the dead man's switch. It is handled like the other secrets: environment or
+  Docker secret only, redacted from logs, never in an error message.
 - A spoofed message can say anything. Check the dashboard before acting on a
   surprising alert.
 - Delivery has run against the real Discord and a local ntfy server. The

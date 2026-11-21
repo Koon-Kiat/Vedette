@@ -127,6 +127,7 @@ async def test_a_healthy_system_reports_every_check_ok_in_a_fixed_order(
         ("events:abc123", "Events from router", True),
         ("api:abc123", "NextDNS API (router)", True),
         ("ollama", "Local model", True),
+        ("delivery", "Alert delivery", True),
         ("backlog", "Processing backlog", True),
         ("disk", "Disk space", True),
     ]

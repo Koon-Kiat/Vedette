@@ -159,6 +159,21 @@ async def test_a_retrying_api_check_reads_retrying(filled: Store) -> None:
     assert "All 2 checks OK" in html, "a retrying check has raised no alert"
 
 
+async def test_a_delivery_being_retried_reads_retrying(filled: Store) -> None:
+    await HealthStore(filled.engine).save(
+        [
+            HealthCheck("delivery", "Alert delivery", True, "Retrying: ntfy answered HTTP 502"),
+            HealthCheck("disk", "Disk space", True, "Disk 2% full (934.9 GB free)"),
+        ],
+        now=NOW,
+    )
+    async with logged_in(filled) as (client, _):
+        html = (await client.get("/health")).text
+
+    assert '<tr class="watch"><td>Alert delivery</td><td><span class="state">Retrying' in html
+    assert '<tr class="ok"><td>Disk space</td><td><span class="state">OK' in html
+
+
 async def test_a_missing_finding_is_titled_in_words(filled: Store) -> None:
     async with logged_in(filled) as (client, _):
         response = await client.get("/findings/9999")

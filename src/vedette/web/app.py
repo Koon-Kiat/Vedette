@@ -204,6 +204,8 @@ def _check_state(check: Any) -> tuple[str, str]:
         return "watch", "Catching up"
     if check.key.startswith("api:") and check.detail != OK:
         return "watch", "Retrying"
+    if check.key == "delivery" and check.detail.startswith("Retrying"):
+        return "watch", "Retrying"
     return "ok", "OK"
 
 

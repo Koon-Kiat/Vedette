@@ -27,6 +27,7 @@ from vedette.enrich.first_seen import FirstSeenTracker
 from vedette.enrich.popularity import PopularityList
 from vedette.enrich.rdap import DomainAges, RdapClient
 from vedette.enrich.threat_intel import ThreatIntel
+from vedette.health.heartbeat import Heartbeat
 from vedette.health.monitor import HealthMonitor, OllamaProbe
 from vedette.health.server import start_health_server
 from vedette.health.state import HealthState
@@ -150,6 +151,12 @@ class Pipeline:
         )
         probe = OllamaProbe(llm.base_url, llm.model)
         channel = build_channel(settings)
+        # Only for HEARTBEAT_URL, so the ping carries no other credential.
+        beat_client = (
+            httpx.AsyncClient(headers={"User-Agent": f"vedette/{__version__}"})
+            if settings.heartbeat_url is not None
+            else None
+        )
         healthz: asyncio.Server | None = None
         try:
             reference = ReferenceStore(store.engine)
@@ -222,6 +229,7 @@ class Pipeline:
                 ollama=probe,
                 data_path=_data_dir(database_url),
                 tz=tz,
+                channel=notify.channel,
             )
             healthz = await _start_healthz(monitor, settings.health.healthz_port)
             if channel is None:
@@ -280,6 +288,16 @@ class Pipeline:
                     findings_days=settings.retention.findings_days,
                 ).run(),
             ]
+            if settings.heartbeat_url is not None and beat_client is not None:
+                workers.append(
+                    Heartbeat(
+                        monitor,
+                        settings.heartbeat_url.get_secret_value(),
+                        client=beat_client,
+                        interval=timedelta(minutes=settings.health.heartbeat_minutes),
+                    ).run()
+                )
+                log.info("heartbeat_enabled", minutes=settings.health.heartbeat_minutes)
             dashboard = _dashboard(settings, store, specs, tz)
             async with asyncio.TaskGroup() as group:
                 tasks = [group.create_task(worker) for worker in workers]
@@ -297,6 +315,8 @@ class Pipeline:
                 await healthz.wait_closed()
             if channel is not None:
                 await channel.aclose()
+            if beat_client is not None:
+                await beat_client.aclose()
             await probe.aclose()
             await ollama.aclose()
             await web.aclose()

@@ -16,7 +16,7 @@ from vedette.eval.report import render_markdown
 from vedette.eval.suite import run_suite
 from vedette.llm.schema import Analysis
 from vedette.log import configure_logging
-from vedette.notify.channels import Channel, DeliveryError
+from vedette.notify.channels import Channel, DeliveryError, OutgoingMessage
 from vedette.notify.defang import clean_text, defang, defang_text
 from vedette.notify.digest import DigestBuilder, render_digest
 from vedette.notify.factory import build_channel
@@ -30,6 +30,7 @@ from vedette.sources.nextdns_export import ExportFormatError, read_export
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.evaluation import EvalStore
 from vedette.storage.migrate import run_migrations
+from vedette.storage.notifications import NotificationStore
 from vedette.storage.retention import Purged, private_umask, purge_all, purge_expired
 from vedette.storage.store import Store, StoredFinding
 from vedette.storage.triage import DOMAIN_RULES, TriageStore
@@ -341,11 +342,30 @@ def import_export(
         )
 
 
-async def _send_test(channel: Channel, settings: Settings) -> None:
+async def _send_test(channel: Channel, message: OutgoingMessage) -> None:
     try:
-        await channel.send(render_test(datetime.now(UTC), ZoneInfo(settings.timezone)))
+        await channel.send(message)
     finally:
         await channel.aclose()
+
+
+def _record_test(settings: Settings, message: OutgoingMessage, error: str | None) -> None:
+    """Keep the test's outcome, so the "Alert delivery" health check can clear or fail."""
+    database_url = settings.storage.database_url
+    if _database_missing(database_url) is not None:
+        return
+    run_migrations(database_url)
+
+    async def record() -> None:
+        store = Store.open(database_url)
+        try:
+            await NotificationStore(store.engine).record_test(
+                message, now=datetime.now(UTC), error=error
+            )
+        finally:
+            await store.close()
+
+    asyncio.run(record())
 
 
 @app.command()
@@ -377,11 +397,16 @@ def notify(
         )
         raise typer.Exit(code=2)
     name = channel.name
+    message = render_test(datetime.now(UTC), ZoneInfo(settings.timezone))
+    error: str | None = None
     try:
-        asyncio.run(_send_test(channel, settings))
+        asyncio.run(_send_test(channel, message))
     except DeliveryError as exc:
-        typer.echo(f"Test notification failed via {name}: {exc}", err=True)
-        raise typer.Exit(code=1) from None
+        error = str(exc)
+    _record_test(settings, message, error)
+    if error is not None:
+        typer.echo(f"Test notification failed via {name}: {error}", err=True)
+        raise typer.Exit(code=1)
     typer.echo(f"Test notification sent via {name}.")
 
 

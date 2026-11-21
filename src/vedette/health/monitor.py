@@ -5,6 +5,7 @@ Checks, in this order:
 * per enabled profile, events arriving (silence beyond the window, not counting
   the profile's quiet hours) and the NextDNS API answering;
 * the local model (Ollama reachable and the model downloaded);
+* alert delivery through the configured channel;
 * the backlog of events waiting for the rules;
 * free disk space where the database lives.
 
@@ -46,6 +47,11 @@ PROBLEM_PREFIX = "Health problem: "
 # caught up, or until this long has passed if it never reports that.
 CATCH_UP_GRACE = timedelta(minutes=10)
 CATCHING_UP = "Catching up after start-up"
+# Delivery counts as failing once a message has failed this many tries in a row
+# (about seven minutes, given the delivery worker's backoff).
+DELIVERY_FAILING_ATTEMPTS = 3
+NO_CHANNEL = "No channel set: alerts are kept, not sent"
+_CHANNEL_NAMES = {"ntfy": "ntfy", "discord": "Discord", "email": "your mail server"}
 
 
 def _utc_now() -> datetime:
@@ -147,6 +153,7 @@ class HealthMonitor:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         disk_usage: Callable[[Path], Any] = shutil.disk_usage,
         started_at: datetime | None = None,
+        channel: str = "none",
     ) -> None:
         """Create the monitor.
 
@@ -164,6 +171,7 @@ class HealthMonitor:
             sleep: Awaitable used between runs.
             disk_usage: Returns total, used and free bytes for a path.
             started_at: When the service started (for profiles with no events yet).
+            channel: ``notify.channel``, for the alert delivery check.
         """
         self._store = store
         self._state = state
@@ -178,6 +186,7 @@ class HealthMonitor:
         self._sleep = sleep
         self._disk_usage = disk_usage
         self._started_at = started_at or clock()
+        self._channel = channel
         self._ollama_down_since: datetime | None = None
         self._backlog_since: datetime | None = None
         # Problems the user has been told about: check key -> (since, detail).
@@ -206,6 +215,7 @@ class HealthMonitor:
             checks.append(await self._events_check(profile, now))
             checks.append(self._api_check(profile, now))
         checks.append(await self._ollama_check(now))
+        checks.append(await self._delivery_check())
         checks.append(await self._backlog_check(now))
         checks.append(self._disk_check())
         await self._health_store.save(checks, now=now)
@@ -280,6 +290,28 @@ class HealthMonitor:
             return HealthCheck(key, label, True, f"{problem} (for {duration(down_for)})")
         return HealthCheck(key, label, False, f"{problem} for {duration(down_for)}")
 
+    async def _delivery_check(self) -> HealthCheck:
+        key, label = "delivery", "Alert delivery"
+        name = _CHANNEL_NAMES.get(self._channel)
+        if name is None:
+            return HealthCheck(key, label, True, NO_CHANNEL)
+        status = await self._notifications.delivery_status()
+        if status.last_outcome == "failed":
+            return HealthCheck(
+                key, label, False, f"Alerts are not reaching {name}: {status.last_reason}"
+            )
+        if status.retry_attempts >= DELIVERY_FAILING_ATTEMPTS:
+            return HealthCheck(
+                key,
+                label,
+                False,
+                f"Alerts are not reaching {name}: {status.retry_reason} "
+                f"({status.retry_attempts} tries)",
+            )
+        if status.retry_attempts:
+            return HealthCheck(key, label, True, f"Retrying: {status.retry_reason}")
+        return HealthCheck(key, label, True, OK)
+
     async def _backlog_check(self, now: datetime) -> HealthCheck:
         key, label = "backlog", "Processing backlog"
         waiting = 0
@@ -353,6 +385,15 @@ class HealthMonitor:
                 )
                 log.info("health_resolved", check=check.key)
 
+    def checks_running(self, now: datetime) -> bool:
+        """Whether a check has run recently enough: not before the first, nor stalled."""
+        if self.last_run_at is None:
+            return False
+        stalled_after = timedelta(
+            seconds=self._config.check_interval_seconds * STALLED_AFTER_INTERVALS
+        )
+        return now - self.last_run_at <= stalled_after
+
     def snapshot(self) -> tuple[int, dict[str, Any]]:
         """HTTP status and JSON body for ``/healthz``.
 
@@ -361,11 +402,7 @@ class HealthMonitor:
         """
         if self.last_run_at is None:
             return 503, {"status": "starting"}
-        now = self._clock()
-        stalled_after = timedelta(
-            seconds=self._config.check_interval_seconds * STALLED_AFTER_INTERVALS
-        )
-        if now - self.last_run_at > stalled_after:
+        if not self.checks_running(self._clock()):
             return 503, {"status": "stalled", "last_check": self.last_run_at.isoformat()}
         problems = any(not check.ok for check in self.last_checks)
         return 200, {

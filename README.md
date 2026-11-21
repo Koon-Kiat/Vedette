@@ -190,7 +190,26 @@ What you will receive:
   message when it recovers (after two good checks in a row).
 
 Every domain in a message is defanged (`example[.]com`) and never a link.
-Failed deliveries are retried with backoff for up to 10 attempts.
+Failed deliveries are retried with backoff for up to 10 attempts. The Health
+page's "Alert delivery" check turns red when a message could not be
+delivered, or after three failed tries; after fixing the channel, a
+successful `vedette notify --test` clears it.
+
+### Knowing when Vedette itself stops
+
+Vedette cannot send an alert when the computer, Docker or Vedette is down, or
+when its own alert channel is broken. For that, give it a dead man's switch: a
+check at a service such as [healthchecks.io](https://healthchecks.io) or a
+self-hosted Uptime Kuma, which alerts you when the pings stop.
+
+1. Create a check there with a period of 5 minutes and a grace time of about
+   10, and copy its ping URL.
+2. Put it in `.env` as `HEARTBEAT_URL=...`, then run `docker compose up -d`.
+
+Vedette pings it every 5 minutes (`health.heartbeat_minutes`) while its
+health checks run and alerts get out, and stops pinging when alert delivery
+is failing. The ping is a plain GET with nothing in it; the URL is treated as
+a secret and never logged.
 
 A laptop or phone profile is often silent for hours. Give it its own window,
 or switch the silence check off for it:
@@ -326,6 +345,8 @@ to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
   (rule names, defanged domains, device names, counts, the model's summary) goes
   to ntfy, Discord or your mail server. A self-hosted ntfy server keeps it on
   your network.
+- **Your heartbeat, if you set one:** an empty GET to `HEARTBEAT_URL` every few
+  minutes. The service learns only that Vedette is running.
 
 ## Tuning and allowlisting
 

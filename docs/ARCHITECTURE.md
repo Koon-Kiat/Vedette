@@ -209,6 +209,18 @@ on 127.0.0.1 inside the container: 503 until the first check and if checks
 stop running, otherwise 200 with `ok` or `degraded`. Docker's health check
 calls it, so container health means "the service is running its checks".
 
+**Alert delivery** is a check too, read from the outbox: bad when the most
+recently finished message failed, or when a message has failed three tries
+in a row; "Retrying" before that. A `vedette notify --test` is recorded in
+the outbox, so a good test after fixing the channel clears it.
+
+**The heartbeat** (`health/heartbeat.py`) covers what no alert can: the
+computer, Docker or Vedette being down, or the channel itself broken. When
+`HEARTBEAT_URL` is set, it sends a plain GET there every
+`health.heartbeat_minutes`, from the first health check on, but only while
+checks are running and alert delivery is not failing. The service at that
+URL (healthchecks.io, Uptime Kuma and the like) alerts when the pings stop.
+
 ### Channels
 
 | Channel | Format | Safeguards |
@@ -870,10 +882,19 @@ repository. Each decision that departs from it says so.
 93. **Every image is pinned to a digest.** `python:3.14-slim`, the `uv`
     image, the Dockerfile frontend, `ollama/ollama` and the gitleaks image
     name their tag and their `@sha256` digest, so a tag that a registry
-    moves cannot change what is
-    built or run. Dependabot proposes the tag and digest together (decision
-    90), which is what made this cheap. The gitleaks image runs from a
-    `docker run` line that Dependabot does not read and is bumped by hand.
+    moves cannot change what is built or run. Dependabot proposes the tag
+    and digest together (decision 90), which is what made this cheap. The
+    gitleaks image runs from a `docker run` line that Dependabot does not
+    read and is bumped by hand.
+94. **A heartbeat for what no alert can report.** A stopped computer, a
+    stopped Docker or a broken alert channel cannot raise an alert, and Docker
+    Desktop stopped twice in one day on the owner's machine. So Vedette can
+    ping a dead man's switch, a service that alerts when the pings stop. It
+    pings only while its checks run and alert delivery works, so a broken
+    channel is reported from outside too. A ping is a plain GET with nothing
+    in it: the service learns only that Vedette is up. Services differ in how
+    they take a failure signal, so silence is the one signal used. Off unless
+    `HEARTBEAT_URL` is set.
 
 ## Verified facts the design relies on
 
@@ -1015,8 +1036,6 @@ no name from your history or the feeds appears in it.
 - Optional abuse.ch feeds for users who register for a free key.
 - Use the Public Suffix List to tell registrable domains from platform
   customer names exactly, instead of the parent-rank heuristic.
-- A health check on notification delivery itself (a broken channel is
-  currently visible only in the logs and the outbox).
 - Batch stream writes if catch-up after long outages needs to be faster.
 - A dashboard page to review and remove stored allowlist entries (today an
   entry is removed by reopening the finding that made it).

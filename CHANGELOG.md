@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Knowing when Vedette itself stops
+
+- An optional heartbeat: set `HEARTBEAT_URL` to a dead man's switch
+  (healthchecks.io, Uptime Kuma) and Vedette pings it every 5 minutes
+  (`health.heartbeat_minutes`) while its checks run and alerts get out. When
+  the computer, Docker or Vedette stops, or alerts cannot be delivered, the
+  pings stop and that service warns you.
+- A new health check, "Alert delivery", turns bad when a message could not be
+  delivered or has failed three tries in a row, and reads "Retrying" before
+  that. `vedette notify --test` is now recorded, so a good test after fixing
+  the channel clears it.
+
 ### Maintenance
 
 - Every image is pinned to its digest as well as its tag: the Python and uv

@@ -49,6 +49,35 @@ def test_notify_test_sends_one_message(ntfy: None) -> None:
     assert "test" in sent["title"].lower()
 
 
+def recorded_outcome(url: str) -> str | None:
+    from vedette.storage.notifications import NotificationStore
+
+    async def read() -> str | None:
+        store = Store.open(url)
+        try:
+            return (await NotificationStore(store.engine).delivery_status()).last_outcome
+        finally:
+            await store.close()
+
+    return asyncio.run(read())
+
+
+@pytest.mark.parametrize(("status", "outcome"), [(200, "sent"), (403, "failed")])
+def test_a_test_message_is_recorded_for_the_delivery_check(
+    ntfy: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: int, outcome: str
+) -> None:
+    # After fixing a broken channel, a good test clears the "Alert delivery" check.
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    run_migrations(url)
+
+    with respx.mock(assert_all_mocked=True) as web:
+        web.post("https://ntfy.example/").mock(return_value=httpx.Response(status, json={}))
+        runner.invoke(app, ["notify", "--test"])
+
+    assert recorded_outcome(url) == outcome
+
+
 def test_notify_test_reports_a_failure_without_secrets(ntfy: None) -> None:
     with respx.mock(assert_all_mocked=True) as web:
         web.post("https://ntfy.example/").mock(return_value=httpx.Response(403))

@@ -62,6 +62,18 @@ class AlertCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class DeliveryStatus:
+    """What the outbox says about getting messages out through the channel."""
+
+    # "sent" or "failed": how the most recently finished delivery ended, if any.
+    last_outcome: str | None
+    last_reason: str | None
+    # The most failed tries of any message still being retried, and why.
+    retry_attempts: int
+    retry_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class StoredDigest:
     """A digest as generated, kept for the archive."""
 
@@ -220,6 +232,55 @@ class NotificationStore:
             return None
         kind = "resolved" if row.dedupe_key == resolved else "problem"
         return kind, row.title, row.created_at
+
+    async def delivery_status(self) -> DeliveryStatus:
+        """How the latest delivery ended, and the worst message still being retried.
+
+        A failed message's last try happened at its ``next_attempt_at`` and a sent
+        one's at ``sent_at``, so ordering by those finds the latest outcome even when
+        an older message was retried for a while. Messages held for quiet hours
+        have no failed tries and do not count as retrying.
+        """
+        finished_at = func.coalesce(notifications.c.sent_at, notifications.c.next_attempt_at)
+        last = (
+            select(notifications.c.status, notifications.c.reason)
+            .where(notifications.c.status.in_(["sent", "failed"]))
+            .order_by(finished_at.desc(), notifications.c.id.desc())
+            .limit(1)
+        )
+        retrying = (
+            select(notifications.c.attempts, notifications.c.reason)
+            .where(notifications.c.status == "pending", notifications.c.attempts > 0)
+            .order_by(notifications.c.attempts.desc(), notifications.c.id)
+            .limit(1)
+        )
+        async with self._engine.connect() as connection:
+            outcome = (await connection.execute(last)).one_or_none()
+            retry = (await connection.execute(retrying)).one_or_none()
+        return DeliveryStatus(
+            last_outcome=outcome.status if outcome is not None else None,
+            last_reason=outcome.reason if outcome is not None else None,
+            retry_attempts=retry.attempts if retry is not None else 0,
+            retry_reason=retry.reason if retry is not None else None,
+        )
+
+    async def record_test(
+        self, message: OutgoingMessage, *, now: datetime, error: str | None
+    ) -> int:
+        """Keep how ``vedette notify --test`` went, so the delivery check sees it."""
+        values = _row(
+            kind="test",
+            key="test",
+            message=message,
+            now=now,
+            finding_id=None,
+            status="sent" if error is None else "failed",
+            reason=None if error is None else error[:200],
+        )
+        values["attempts"] = 1
+        values["sent_at"] = now if error is None else None
+        async with self._engine.begin() as connection:
+            return _new_id(await connection.execute(notifications.insert().values(**values)))
 
     # --- delivering ----------------------------------------------------------------------
 

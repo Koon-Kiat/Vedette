@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-11-22
 
 ### Knowing when Vedette itself stops
 
@@ -76,6 +76,7 @@
 - Every image is pinned to its digest as well as its tag: the Python and uv
   images, the Dockerfile frontend, Ollama and gitleaks. Dependabot proposes
   new digests.
+- FastAPI 0.162.0 to 0.162.2, a patch release.
 
 ## 0.1.0 - 2026-11-21
 

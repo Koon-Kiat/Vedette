@@ -1,6 +1,6 @@
 [project]
 name = "vedette"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-hosted pipeline that flags suspicious DNS activity in NextDNS logs and explains it with a local LLM."
 readme = "README.md"
 requires-python = ">=3.14"

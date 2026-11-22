@@ -125,14 +125,14 @@ not delayed.
 ## Releases
 
 Pushing a version tag that matches `version` in `pyproject.toml` (for example
-`v0.1.0`) runs every CI check again, then publishes the image to the GitHub
+`v0.2.0`) runs every CI check again, then publishes the image to the GitHub
 Container Registry with a signed build-provenance attestation, and creates a
 GitHub Release whose notes are that version's section of `CHANGELOG.md`.
 
 To run a released image instead of building your own, add it to `.env`:
 
 ```text
-VEDETTE_IMAGE=ghcr.io/koon-kiat/vedette:0.1.0
+VEDETTE_IMAGE=ghcr.io/koon-kiat/vedette:0.2.0
 ```
 
 then:
@@ -146,7 +146,7 @@ Leave out `--build`, which would build locally under the released name.
 Check that the image was built by this repository's release workflow:
 
 ```powershell
-gh attestation verify oci://ghcr.io/koon-kiat/vedette:0.1.0 --repo Koon-Kiat/Vedette
+gh attestation verify oci://ghcr.io/koon-kiat/vedette:0.2.0 --repo Koon-Kiat/Vedette
 ```
 
 Only Vedette's own image is published. Ollama runs the official

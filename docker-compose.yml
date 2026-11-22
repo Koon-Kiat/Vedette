@@ -6,7 +6,7 @@ services:
       context: .
       target: runtime
     # A released image instead of a local build: set VEDETTE_IMAGE in .env, e.g.
-    # VEDETTE_IMAGE=ghcr.io/koon-kiat/vedette:0.1.0, then `docker compose pull`.
+    # VEDETTE_IMAGE=ghcr.io/koon-kiat/vedette:0.2.0, then `docker compose pull`.
     image: ${VEDETTE_IMAGE:-vedette:local}
     restart: unless-stopped
     env_file:

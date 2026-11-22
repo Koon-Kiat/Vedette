@@ -10,7 +10,7 @@ dependencies = [
     "aiosqlite>=0.22",
     # Dashboard. Web-facing dependencies are pinned exactly, each to a release
     # at least two weeks old when added; bump them deliberately.
-    "fastapi==0.162.0",
+    "fastapi==0.162.2",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.3",
     "jinja2==3.1.6",

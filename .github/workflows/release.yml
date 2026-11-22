@@ -45,8 +45,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           # ghcr.io image names must be lowercase.
           echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          awk -v heading="## $version" \
-            'index($0, heading) == 1 { found = 1; next } /^## / && found { exit } found' \
+          awk -v heading="## $version" -f .github/release-notes.awk \
             CHANGELOG.md > release-notes.md
           if [ "$PUBLISH" = true ]; then
             if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then

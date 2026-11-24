@@ -21,7 +21,7 @@ from vedette.eval.suite import run_suite
 from vedette.rules.loader import load_rules
 from vedette.storage.evaluation import EvalStore
 from vedette.storage.migrate import run_migrations
-from vedette.storage.models import popularity, threat_intel
+from vedette.storage.models import eval_hostnames, popularity, public_suffixes, threat_intel
 from vedette.storage.store import Store
 
 NOW = datetime(2026, 11, 19, 8, 0, tzinfo=UTC)
@@ -73,6 +73,91 @@ async def test_detection_uses_the_real_rules(store: Store, tmp_path: Path) -> No
     # Too slow for tunnel-like, but the random hex labels still look like DGA output.
     assert "tunnel-like" not in slow_result.by_rule
     assert slow_result.by_rule == {"dga-like": 10}
+
+
+#: dga-like fires on this label when it is not ranked: 14 characters, all different.
+RANDOM = "q8z3k1x9w7m2v5.example"
+
+
+async def test_ranks_off_shows_what_each_rule_does_on_its_own(store: Store, tmp_path: Path) -> None:
+    await seed_reference(store)
+    async with store.engine.begin() as connection:
+        await connection.execute(
+            popularity.insert(), [{"domain": RANDOM, "rank": 60}, {"domain": FEED[0], "rank": 70}]
+        )
+    # FEED[0] is now both on a feed and ranked inside the top 1,000.
+    scratch = await scratch_store(tmp_path)
+    names = [datasets.Name(RANDOM, RANDOM), datasets.Name(FEED[0], FEED[0])]
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            listed = await detector.names("listed", "benign", names, construction="sanity check")
+            unlisted = await detector.names("unlisted", "benign", names, ranks=False, examples=20)
+            capped = await detector.names("capped", "benign", names, ranks=False, examples=1)
+    finally:
+        await scratch.close()
+
+    assert (listed.flagged, listed.construction, listed.examples) == (0, "sanity check", [])
+    assert unlisted.by_rule == {"dga-like": 1, "threat-intel-allowed": 1}
+    assert unlisted.construction == ""
+    assert unlisted.examples == [
+        {"name": RANDOM, "rules": "dga-like"},
+        {"name": FEED[0], "rules": "threat-intel-allowed"},
+    ]
+    assert capped.examples == [{"name": RANDOM, "rules": "dga-like"}]
+
+
+async def test_popular_hostnames_are_sampled_with_their_registered_roots(
+    store: Store, tmp_path: Path
+) -> None:
+    async with store.engine.begin() as connection:
+        await connection.execute(
+            public_suffixes.insert(),
+            [
+                {"rule": "com", "private": False},
+                {"rule": "io", "private": False},
+                {"rule": "github.io", "private": True},
+            ],
+        )
+        await connection.execute(
+            eval_hostnames.insert(),
+            [
+                {"name": "events.data.example.com", "rank": 2},
+                {"name": "github.io", "rank": 4},
+                {"name": "foo.github.io", "rank": 6},
+                {"name": "www.example.com", "rank": 7},
+                {"name": "late.example.com", "rank": 9},
+            ],
+        )
+    scratch = await scratch_store(tmp_path)
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            known = detector.suffixes_known
+            names = await datasets.popular_hostnames(store.engine, detector.root_of, count=4)
+    finally:
+        await scratch.close()
+
+    assert known is True
+    # Highest rank 9, count 4: every 2nd rank, so 2, 4 and 6 (7 and 9 are not multiples).
+    # github.io is itself a public suffix and is skipped.
+    assert names == [
+        datasets.Name("events.data.example.com", "example.com"),
+        datasets.Name("foo.github.io", "foo.github.io"),
+    ]
+
+
+async def test_without_a_suffix_list_roots_are_the_last_two_labels(
+    store: Store, tmp_path: Path
+) -> None:
+    scratch = await scratch_store(tmp_path)
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            known = detector.suffixes_known
+            root = detector.root_of("a.b.example.co.uk")
+    finally:
+        await scratch.close()
+
+    assert known is False
+    assert root == "co.uk"
 
 
 class FakeModel:

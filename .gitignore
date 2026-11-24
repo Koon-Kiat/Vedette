@@ -12,6 +12,7 @@ secrets/
 *.sqlite
 *.sqlite3
 data/
+!src/vedette/eval/data/
 imports/
 
 # Python

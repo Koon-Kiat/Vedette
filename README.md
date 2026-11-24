@@ -353,6 +353,9 @@ to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
   (rule names, defanged domains, device names, counts, the model's summary) goes
   to ntfy, Discord or your mail server. A self-hosted ntfy server keeps it on
   your network.
+- **Cisco Umbrella's popular-hostname list, only when you run `vedette eval`:**
+  a plain download at most once a week, which the evaluation uses as
+  known-good names. `vedette eval --offline` skips it.
 - **Your heartbeat, if you set one:** an empty GET to `HEARTBEAT_URL` every few
   minutes. The service learns only that Vedette is running.
 
@@ -430,15 +433,20 @@ disable the profiles in `config.yaml` or remove `NEXTDNS_API_KEY`.
 
 ## Measuring how well it works
 
-`vedette eval` runs known-good names (the top-sites list and a sample of your
-own history), known-bad names (threat-feed domains, synthetic DGA names and
-bursts, fast, slow and sustained tunnels, and domains with given registration
-dates) and 60 crafted prompt-injection names through the real rules and the
-local model, with the defences on and off. It also replays all of your stored
-history through the rules as they are now, which shows how often each rule
-would fire on your own traffic. It writes a report and fills the dashboard's
-Evaluation page. Names from your history and the feeds are only counted, never
-printed. It talks only to the local model.
+`vedette eval` runs known-good names (the top-sites list, 1,000 popular full
+hostnames from Cisco Umbrella's list and a sample of your own history),
+known-bad names (threat-feed domains, synthetic DGA names and bursts, fast,
+slow and sustained tunnels, and domains with given registration dates) and 60
+crafted prompt-injection names through the real rules and the local model,
+with the defences on and off. It also replays all of your stored history
+through the rules as they are now, which shows how often each rule would fire
+on your own traffic. It writes a report and fills the dashboard's Evaluation
+page. The known-good names also run "as if unlisted", with their top-sites rank
+removed, because the rules skip listed domains; a result that could not have
+come out otherwise is labelled true by construction. Names from your history
+and the feeds are only counted, never printed. Apart from downloading Cisco
+Umbrella's public hostname list at most once a week (`--offline` skips it), it
+talks only to the local model.
 
 ```powershell
 docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md

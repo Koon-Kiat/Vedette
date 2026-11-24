@@ -1,12 +1,13 @@
 """The evaluation's popular-hostname list: downloaded at most weekly, kept, and skipped safely."""
 
+import zipfile
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import respx
 from sqlalchemy import select
 
-from tests.integration.list_helpers import HOSTNAMES_URL, zipped
+from tests.integration.list_helpers import HOSTNAMES_URL, damaged, zipped
 from vedette.eval.hostnames import HostnameList, ensure_hostnames
 from vedette.storage.models import eval_hostnames
 from vedette.storage.reference import ReferenceStore
@@ -127,3 +128,17 @@ async def test_a_missing_url_switches_the_sets_off(store: Store, router: respx.M
     assert result.problem is not None
     assert "switched off" in result.problem
     assert not router.calls
+
+
+async def test_a_damaged_archive_skips_the_sets_without_crashing(
+    store: Store, router: respx.MockRouter
+) -> None:
+    router.get(HOSTNAMES_URL).mock(
+        return_value=httpx.Response(200, content=damaged(zipfile.ZIP_DEFLATED))
+    )
+
+    result = await ensure(store, now=NOW)
+
+    assert result.available is False
+    assert result.problem is not None
+    assert "skipped" in result.problem

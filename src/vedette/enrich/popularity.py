@@ -8,6 +8,7 @@ no query about an individual domain ever leaves the machine.
 import asyncio
 import io
 import zipfile
+import zlib
 from collections.abc import Iterable, Iterator
 from datetime import datetime, timedelta
 
@@ -22,6 +23,9 @@ log = structlog.get_logger(__name__)
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 RETRY_AFTER_FAILURE = timedelta(hours=1)
 _CACHE_LIMIT = 200_000
+#: What reading a damaged or unusual archive member can raise: a bad checksum,
+#: a corrupt or cut-off stream, encryption, or a compression method zipfile lacks.
+_UNREADABLE = (zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, RuntimeError, OSError)
 
 
 def parse_tranco(
@@ -33,8 +37,10 @@ def parse_tranco(
     """Yield ``(domain, rank)`` from a Tranco-format zip, skipping bad rows.
 
     Raises:
-        ValueError: The data is not a zip archive, has no file in it, or would
-            expand beyond ``max_uncompressed_bytes``.
+        ValueError: The data is not a zip archive, has no file in it, would
+            expand beyond ``max_uncompressed_bytes``, or its file is damaged or
+            cannot be read (bad checksum, corrupt or truncated data, encryption,
+            an unsupported compression method).
     """
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
@@ -48,18 +54,23 @@ def parse_tranco(
         if member.file_size > max_uncompressed_bytes:
             raise ValueError("top-sites list is too large when unpacked")
         seen: set[str] = set()
-        with archive.open(member) as handle:
-            for raw in io.TextIOWrapper(handle, encoding="utf-8", errors="replace"):
-                rank_text, _, domain = raw.strip().partition(",")
-                domain = domain.strip().lower()
-                if not rank_text.isdigit() or int(rank_text) < 1 or not is_domain(domain):
-                    continue
-                if domain in seen:
-                    continue
-                seen.add(domain)
-                yield domain, int(rank_text)
-                if len(seen) >= max_rows:
-                    return
+        try:
+            with archive.open(member) as handle:
+                for raw in io.TextIOWrapper(handle, encoding="utf-8", errors="replace"):
+                    rank_text, _, domain = raw.strip().partition(",")
+                    domain = domain.strip().lower()
+                    if not rank_text.isdigit() or int(rank_text) < 1 or not is_domain(domain):
+                        continue
+                    if domain in seen:
+                        continue
+                    seen.add(domain)
+                    yield domain, int(rank_text)
+                    if len(seen) >= max_rows:
+                        return
+        except _UNREADABLE as exc:
+            raise ValueError(
+                f"the archive is damaged or unreadable ({type(exc).__name__})"
+            ) from exc
 
 
 class PopularityList:

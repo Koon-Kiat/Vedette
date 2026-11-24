@@ -688,7 +688,7 @@ repository. Each decision that departs from it says so.
       reference data is read from the local tables, registration dates come
       from the cache only (no RDAP), and first sightings go to a scratch
       database. The real database is only read, except for storing the
-      result.
+      result and, since decision 101, the popular-hostname list.
     - **Defences off.** A naive analyst kept only in `vedette/eval/`: names
       written into the instructions, no warning, no pre-filter, no floor
       guard, no sanitising. The JSON schema stays so a priority can be read;
@@ -698,8 +698,10 @@ repository. Each decision that departs from it says so.
       with the model's words, so it can be checked.
     - **False alerts, latency and load.** Read from what the pipeline already
       stored, not replayed.
-    - **Privacy.** The report and the dashboard show names from your history
-      and the feeds only as counts.
+    - **Privacy.** The report and the dashboard show names sampled from your
+      history and from the feeds only as counts. Since decision 101, flagged
+      names from the two public lists are shown, even when a feed also lists
+      one.
     - **Results.** Stored in `eval_runs` for the Evaluation page.
 67. **The dashboard's visual system was redesigned.** The direction is
     "notices and chart corrections": a navy rail, a chart-white ground,
@@ -1015,9 +1017,12 @@ repository. Each decision that departs from it says so.
     passes in would be a manual step on every run inside Docker. The download
     is a plain fetch of a public file, size-capped and validated like the
     top-sites list; a failure keeps the stored copy and the report says which
-    date it is from. The report lists up to 20 flagged names from each public
-    set so every false alert can be checked; names from the owner's history
-    and the feeds are still only counted.
+    date it is from. The refresh record carries a digest of the list's
+    address, so changing `evaluation.hostnames_url` downloads the new list on
+    the next run instead of reusing the old copy for up to a week. The report
+    lists up to 20 flagged names from each public set so every false alert can
+    be checked, even a name a feed also lists (both are public); names sampled
+    from the owner's history and from the feeds are still only counted.
 
 ## Verified facts the design relies on
 

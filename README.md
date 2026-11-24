@@ -443,8 +443,9 @@ through the rules as they are now, which shows how often each rule would fire
 on your own traffic. It writes a report and fills the dashboard's Evaluation
 page. The known-good names also run "as if unlisted", with their top-sites rank
 removed, because the rules skip listed domains; a result that could not have
-come out otherwise is labelled true by construction. Names from your history
-and the feeds are only counted, never printed. Apart from downloading Cisco
+come out otherwise is labelled true by construction. Names sampled from your
+history and the feeds are only counted, never printed; flagged names from the
+two public lists are shown, even one a feed also lists. Apart from downloading Cisco
 Umbrella's public hostname list at most once a week (`--offline` skips it), it
 talks only to the local model.
 

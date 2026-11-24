@@ -288,3 +288,14 @@ def test_duplicate_feed_names_are_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigError, match="duplicate feed name"):
         load_settings(path)
+
+
+def test_the_evaluation_list_defaults_to_umbrella_and_can_be_switched_off(tmp_path: Path) -> None:
+    default = load_settings().evaluation
+    off = load_settings(write_yaml(tmp_path, "evaluation:\n  hostnames_url: null\n")).evaluation
+
+    assert default.hostnames_url == (
+        "https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"
+    )
+    assert default.refresh_days == 7
+    assert off.hostnames_url is None

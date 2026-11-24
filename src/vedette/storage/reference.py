@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from vedette.storage.models import (
     domain_age,
+    eval_hostnames,
     first_seen,
     popularity,
     public_suffixes,
@@ -121,6 +122,28 @@ class ReferenceStore:
                 )
                 found.update((row.domain, row.rank) for row in rows)
         return found
+
+    # --- popular hostnames, for the evaluation ------------------------------------------
+
+    async def replace_eval_hostnames(self, rows: Iterable[tuple[str, int]], when: datetime) -> int:
+        """Replace the evaluation's hostname list in one transaction; return its size.
+
+        An empty list changes nothing and returns 0, so the stored copy survives.
+        """
+        total = 0
+        async with self._engine.begin() as connection:
+            await connection.execute(delete(eval_hostnames))
+            for chunk in batched(rows, _INSERT_CHUNK, strict=False):
+                await connection.execute(
+                    eval_hostnames.insert(),
+                    [{"name": name, "rank": rank} for name, rank in chunk],
+                )
+                total += len(chunk)
+            if total == 0:
+                await connection.rollback()
+                return 0
+            await self._mark_refreshed(connection, "eval_hostnames", when, total)
+        return total
 
     # --- public suffix list -----------------------------------------------------------
 

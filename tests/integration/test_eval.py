@@ -421,7 +421,7 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
     assert "### By category" in report
     assert "### The pre-filter on unseen names" in report
     assert "### Effects on other findings in the batch" in report
-    assert "but not the list of roots a burst finding carries" in report
+    assert "- The pre-filter raised none of the held-out items in: spoof, sample-roots." in report
 
 
 async def test_the_suite_runs_without_the_model_and_is_stored(

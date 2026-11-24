@@ -71,9 +71,10 @@ Mitigations:
 - **No tools.** The model has no tool calls. Ollama has no internet route and
   no write access to Vedette's data.
 - **Pre-filter.** Instruction-like words in labels (`ignore`, `instruction`,
-  `system`, `benign`, `override` and others), or in a finding's device name,
-  add the words to the evidence and raise the severity one step. A hit never
-  removes or hides a domain (`rules/prefilter.py`).
+  `system`, `benign`, `override` and others), in each root a burst finding
+  lists, or in a finding's device name, add the words to the evidence and
+  raise the severity one step. A hit never removes or hides a domain
+  (`rules/prefilter.py`).
 - **Safe output.** Model text has HTML, markdown and links stripped, domains
   defanged, and length capped (`llm/guards.py` `sanitize_model_text`). Every
   domain in alerts, digests, the CLI and the dashboard is defanged and never a

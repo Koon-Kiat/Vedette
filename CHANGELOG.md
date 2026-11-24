@@ -35,6 +35,12 @@
   `docker-compose.yml`, empty by default), the evaluation finishes several
   times sooner.
 
+### Prompt-injection defences
+
+- The instruction-word pre-filter now checks each root a burst finding
+  (`dga-burst`) lists, as it checks a looked-up name. Instructions placed in
+  those roots used to reach the model without raising the finding.
+
 ## 0.2.0 - 2026-11-22
 
 ### Knowing when Vedette itself stops

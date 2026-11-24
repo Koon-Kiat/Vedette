@@ -517,15 +517,7 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
     missed = [category for category, (count, hit) in held.items() if count and not hit]
     if missed:
         out.append(
-            "- The pre-filter raised none of the held-out items in: "
-            + ", ".join(missed)
-            + "."
-            + (
-                " It reads the looked-up name, the root and the device name, but not the list "
-                "of roots a burst finding carries."
-                if "sample-roots" in missed
-                else ""
-            )
+            "- The pre-filter raised none of the held-out items in: " + ", ".join(missed) + "."
         )
     return out
 

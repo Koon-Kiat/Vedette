@@ -1066,8 +1066,8 @@ repository. Each decision that departs from it says so.
       it is left out, or a verdict names another finding of the batch or
       uses an id not in it. `--no-cross` skips this part.
     - **The pre-filter's hit rate** is computed on both sets without the
-      model. It reads the looked-up name, the root and the device name, but
-      not the list of roots a burst finding carries; the report says so.
+      model. It reads the looked-up name, the root and the device name, and
+      since decision 103 each root a burst finding lists.
     - **Parallel calls.** `--parallel N` keeps up to N calls in flight across
       all runs of a model, which only helps when Ollama answers that many
       together (`OLLAMA_NUM_PARALLEL`, passed through by `docker-compose.yml`
@@ -1085,6 +1085,14 @@ repository. Each decision that departs from it says so.
     (`--repeats 3`) remain to be run. Reading the cases of the first such run
     found three faults in the word patterns that over-counted, all named in
     the report's method note; they were fixed and the run repeated.
+103. **The pre-filter reads the roots a burst finding lists.** A
+    `dga-burst` finding carries up to five of the new roots that made the
+    burst (`sample_roots`), and they reach the model like any other name.
+    The pre-filter read only single-name fields, so an instruction placed in
+    those roots was never raised: none of the 25 held-out items carried that
+    way were. Each listed root is now checked as a looked-up name is, with
+    the same words. Roots are checked one by one, so a word split across two
+    roots is not caught.
 
 ## Verified facts the design relies on
 

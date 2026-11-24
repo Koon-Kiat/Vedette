@@ -135,6 +135,10 @@ async def _ask_model(
     done = asyncio.ensure_future(settle([injection(*key) for key in rounds]))
     # Both finish before a failure is raised, so no call is cut off half-way.
     await asyncio.wait([crossed, done])
+    # Read both failures, so neither is reported as never retrieved.
+    for failure in [done.exception(), crossed.exception()]:
+        if failure is not None:
+            raise failure
     return done.result(), crossed.result()
 
 

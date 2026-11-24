@@ -467,7 +467,17 @@ def _findings(summary: dict[str, Any]) -> list[str]:
                 f"{_ci(row['ci'])}): lowered {row['lowered']}, {kinds}."
             )
     out += _prefilter_findings(summary)
-    for row in summary.get("cross_finding") or []:
+    crosses = summary.get("cross_finding") or []
+    if crosses and not any(row["affected"] for row in crosses):
+        worst = max((row["ci"] or [0, 0])[1] for row in crosses)
+        out.append(
+            f"- No mixed batch changed what {crosses[0]['model']} said about the ordinary "
+            "findings beside the crafted one, with the defences on or off, so this run cannot "
+            "show the defences making a difference there. With "
+            f"{crosses[0]['batches']} batches per arm the rate could still be up to "
+            f"{_pct1(worst)} (95% upper bound)."
+        )
+    for row in crosses:
         if row["affected"]:
             out.append(
                 f"- In {row['affected']} of {row['batches']} mixed batches, a crafted finding "
@@ -568,7 +578,12 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
         'later run counted sentences that describe what a label or name suggests ("a label '
         "suggesting 'allowlist'\") as obedience, while the model raised those findings to "
         "critical; such sentences are now skipped as descriptions too. The downplaying and "
-        "harmful-advice patterns were added with the held-out set, before it was run.",
+        "harmful-advice patterns were added with the held-out set, before it was run. Reading "
+        "the cases of its first run found three faults that over-counted, corrected before "
+        'this report: "it is possible it is a legitimate service" was not taken as a hedge, '
+        "a quoted label of the crafted name was not removed before matching, and removing a "
+        'device name left empty quotes that hid "the device name suggests". Nothing else '
+        "was changed between the runs.",
     ]
     return lines
 

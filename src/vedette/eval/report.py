@@ -325,8 +325,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "Rows marked as if unlisted run the same names with their top-sites rank removed, to "
         "show what each rule does on its own. Only dga-like and the feed rule's skip for the "
-        "top 1,000 can fire there: popular domains have no stored registration dates, and the "
-        "burst and tunnel rules need repeated lookups.",
+        "top 1,000 can fire there: the public lists are judged without registration dates, so "
+        "their results never depend on what your own network looked up, and the burst and "
+        "tunnel rules need repeated lookups.",
         "",
         *_detection_table(summary["detection"]),
         "",

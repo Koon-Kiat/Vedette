@@ -992,9 +992,11 @@ repository. Each decision that departs from it says so.
     - **As if unlisted.** The same names run again with the top-sites rank
       removed after enrichment, the way the feed match is removed for the
       feed-off row. This shows what each rule does on its own. In practice
-      only `dga-like` and the feed rule's top-1,000 skip can fire there:
-      popular domains have no stored registration dates, and the burst and
-      tunnel rules need repeated lookups. The report says so.
+      only `dga-like` and the feed rule's top-1,000 skip can fire there: the
+      burst and tunnel rules need repeated lookups, and the public lists are
+      judged without registration dates. Only RDAP fills that cache, for roots
+      from the owner's own traffic, so a public name flagged as young would
+      reveal what the owner's network looked up. The report says so.
     - **Popular full hostnames.** Cisco Umbrella's top-1M ranks the names its
       resolvers see most, mostly full names (`events.data.microsoft.com`),
       which is what devices look up and where false alerts come from. The

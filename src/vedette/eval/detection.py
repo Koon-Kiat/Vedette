@@ -151,6 +151,7 @@ class Detector:
         feeds: bool,
         prefilter: bool,
         ranks: bool = True,
+        dates: bool = True,
         counted: frozenset[str] = DOMAIN_RULES,
         ages: ReferenceStore | None = None,
     ) -> list[list[tuple[str, Severity]]]:
@@ -159,7 +160,10 @@ class Detector:
         Each item is a list of (fqdn, root, seconds after the item's start), from
         a device of its own, so items never add up to a burst between them.
         With ``ranks`` off, the top-sites rank is removed after enrichment, so
-        the rules judge each name as if it were not on the list.
+        the rules judge each name as if it were not on the list. With ``dates``
+        off, cached registration dates are removed too: only RDAP writes that
+        cache, for roots from the owner's own traffic, so a public set judged
+        with them could reveal what the owner's network looked up.
         """
         enricher = self._enricher(ages)
         engine = self._engine(prefilter=prefilter)
@@ -193,6 +197,8 @@ class Detector:
                     seen = seen.model_copy(update={"threat_feeds": (), "threat_match": None})
                 if not ranks:
                     seen = seen.model_copy(update={"popularity_rank": None, "platform_rank": None})
+                if not dates:
+                    seen = seen.model_copy(update={"domain_age_days": None})
                 for finding in engine.evaluate(seen):
                     if finding.rule_id in counted:
                         results[owner[finding.event_id]].append((finding.rule_id, finding.severity))
@@ -229,6 +235,7 @@ class Detector:
         feeds: bool = True,
         prefilter: bool = True,
         ranks: bool = True,
+        dates: bool = True,
         note: str = "",
         construction: str = "",
         examples: int = 0,
@@ -242,6 +249,8 @@ class Detector:
             feeds: Match the threat feeds; off shows what the other rules catch.
             prefilter: Apply the instruction-word pre-filter.
             ranks: Use top-sites ranks; off judges every name as if unlisted.
+            dates: Use cached registration dates. Off for public lists, whose
+                results must not depend on the owner's own lookups.
             note: Shown beside the dataset's name.
             construction: Why the result could not have come out otherwise, if so.
             examples: Keep up to this many flagged names, in dataset order. Only
@@ -253,6 +262,7 @@ class Detector:
             feeds=feeds,
             prefilter=prefilter,
             ranks=ranks,
+            dates=dates,
         )
         result = self._summarise(dataset, kind, found, note, construction)
         for name, findings in zip(names, found, strict=True):

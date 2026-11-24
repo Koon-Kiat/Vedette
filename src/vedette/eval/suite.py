@@ -29,8 +29,8 @@ log = structlog.get_logger(__name__)
 #: Flagged names kept per public set, so each false alert can be checked.
 EXAMPLES = 20
 TOP_SITES_CONSTRUCTION = (
-    "The rules skip domains on the top-sites list, so only a threat-feed match below rank "
-    "1,000 can flag one. A sanity check, not a false-alert rate."
+    "The rules skip domains on the top-sites list, so only a threat-feed match on a domain "
+    "outside the top 1,000 can flag one. A sanity check, not a false-alert rate."
 )
 FEEDS_CONSTRUCTION = (
     "The feeds are the same ones the threat-intel rule matches, so recall with the feed "
@@ -121,15 +121,22 @@ async def run_suite(
                     "No Public Suffix List is stored yet, so popular hostnames were grouped "
                     "by their last two labels."
                 )
+            # Public lists are judged without cached registration dates: only the
+            # owner's own lookups fill that cache, and these sets print names.
             detection = [
                 await detector.names(
-                    "Top sites, local list", "benign", top, construction=TOP_SITES_CONSTRUCTION
+                    "Top sites, local list",
+                    "benign",
+                    top,
+                    dates=False,
+                    construction=TOP_SITES_CONSTRUCTION,
                 ),
                 await detector.names(
                     "Top sites, as if unlisted",
                     "benign",
                     top,
                     ranks=False,
+                    dates=False,
                     note="the same names with their rank removed",
                     examples=EXAMPLES,
                 ),
@@ -140,6 +147,7 @@ async def run_suite(
                         "Popular hostnames (Cisco Umbrella)",
                         "benign",
                         hostnames,
+                        dates=False,
                         note="full names, every 100th of the top 100,000",
                         examples=EXAMPLES,
                     ),
@@ -148,6 +156,7 @@ async def run_suite(
                         "benign",
                         hostnames,
                         ranks=False,
+                        dates=False,
                         examples=EXAMPLES,
                     ),
                 ]

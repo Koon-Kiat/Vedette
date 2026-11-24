@@ -2,7 +2,7 @@
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,7 @@ from vedette.rules.loader import load_rules
 from vedette.storage.evaluation import EvalStore
 from vedette.storage.migrate import run_migrations
 from vedette.storage.models import eval_hostnames, popularity, public_suffixes, threat_intel
+from vedette.storage.reference import DomainAgeRecord, ReferenceStore
 from vedette.storage.store import Store
 
 NOW = datetime(2026, 11, 19, 8, 0, tzinfo=UTC)
@@ -78,6 +79,14 @@ async def test_detection_uses_the_real_rules(store: Store, tmp_path: Path) -> No
 
 #: dga-like fires on this label when it is not ranked: 14 characters, all different.
 RANDOM = "q8z3k1x9w7m2v5.example"
+#: A root the registry said was registered 5 days ago: only RDAP writes this cache,
+#: and only for roots from the owner's own traffic.
+YOUNG_ROOT_AGE = DomainAgeRecord(
+    root="fresh.example",
+    status="found",
+    registered_at=NOW - timedelta(days=5),
+    fetched_at=NOW,
+)
 
 
 async def test_ranks_off_shows_what_each_rule_does_on_its_own(store: Store, tmp_path: Path) -> None:
@@ -105,6 +114,24 @@ async def test_ranks_off_shows_what_each_rule_does_on_its_own(store: Store, tmp_
         {"name": FEED[0], "rules": "threat-intel-allowed"},
     ]
     assert capped.examples == [{"name": RANDOM, "rules": "dga-like"}]
+
+
+async def test_public_sets_ignore_registration_dates_from_the_owners_history(
+    store: Store, tmp_path: Path
+) -> None:
+    await seed_reference(store)
+    await ReferenceStore(store.engine).save_domain_ages([YOUNG_ROOT_AGE])
+    scratch = await scratch_store(tmp_path)
+    names = [datasets.Name("www.fresh.example", "fresh.example")]
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            history = await detector.names("history", "benign", names)
+            public = await detector.names("public", "benign", names, dates=False, examples=20)
+    finally:
+        await scratch.close()
+
+    assert history.by_rule == {"young-domain": 1}, "the cached date is used by default"
+    assert (public.flagged, public.examples) == (0, [])
 
 
 async def test_popular_hostnames_are_sampled_with_their_registered_roots(
@@ -239,9 +266,13 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
     store = Store.open(url)
     try:
         await seed_reference(store)
+        # A date the registry gave for a root the owner's own network looked up.
+        await ReferenceStore(store.engine).save_domain_ages([YOUNG_ROOT_AGE])
     finally:
         await store.close()
-    hostnames = zipped([f"{n},host{n}.site{n}.example" for n in range(1, 11)])
+    hostnames = zipped(
+        [f"{n},host{n}.site{n}.example" for n in range(1, 11)] + ["11,www.fresh.example"]
+    )
 
     with respx.mock(assert_all_called=True) as web:
         web.get(HOSTNAMES_URL).mock(return_value=httpx.Response(200, content=hostnames))
@@ -256,7 +287,7 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
 
     assert summary["injection"] == []
     sizes = summary["dataset_sizes"]
-    assert (sizes["feeds"], sizes["injection"], sizes["hostnames"]) == (20, 60, 10)
+    assert (sizes["feeds"], sizes["injection"], sizes["hostnames"]) == (20, 60, 11)
     assert [row["dataset"] for row in summary["detection"]][:6] == [
         "Top sites, local list",
         "Top sites, as if unlisted",
@@ -274,6 +305,11 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
     json.dumps(summary)  # stored as JSON
     rows = {row["dataset"]: row for row in summary["detection"]}
     assert rows["Top sites, local list"]["construction"].startswith("The rules skip domains")
+    assert "outside the top 1,000" in rows["Top sites, local list"]["construction"]
+    for public in ("Popular hostnames (Cisco Umbrella)", "Popular hostnames, as if unlisted"):
+        # A registration date from the owner's history must not make a public name print.
+        assert "young-domain" not in rows[public]["by_rule"]
+        assert all(example["name"] != "www.fresh.example" for example in rows[public]["examples"])
     assert rows["Threat-feed domains"]["construction"].startswith("The feeds are the same")
     assert rows["Top sites, as if unlisted"]["construction"] == ""
     assert rows["Your own history, sample"]["examples"] == []

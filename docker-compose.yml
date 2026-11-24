@@ -90,6 +90,14 @@ services:
       # every model load. Keep that cache in the model volume instead.
       CUDA_CACHE_PATH: /home/ollama/.ollama/cuda-cache
       CUDA_CACHE_MAXSIZE: "1073741824"  # 1 GiB; the default 256 MiB can evict
+      # Empty unless set in the shell, which keeps Ollama's own defaults. For a
+      # faster `vedette eval --parallel 4`, start Ollama with
+      # OLLAMA_NUM_PARALLEL=4 (and, to fit four answers in memory,
+      # OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0), then restart it
+      # without them afterwards.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-}
+      OLLAMA_FLASH_ATTENTION: ${OLLAMA_FLASH_ATTENTION:-}
+      OLLAMA_KV_CACHE_TYPE: ${OLLAMA_KV_CACHE_TYPE:-}
     volumes:
       - ollama-models:/home/ollama/.ollama
     depends_on:

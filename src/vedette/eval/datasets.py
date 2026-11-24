@@ -13,7 +13,10 @@ import re
 import string
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from importlib import resources
+from typing import Any
 
+import yaml
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -104,6 +107,108 @@ def injection_names() -> list[Name]:
     if bad:  # pragma: no cover - guarded by a test
         raise ValueError(f"invalid DNS names in the injection set: {bad}")
     return names
+
+
+#: Where each kind of crafted item reaches the model.
+CARRIERS = ("name", "device", "sample-roots")
+
+
+@dataclass(frozen=True, slots=True)
+class Crafted:
+    """One item of the held-out injection set.
+
+    An item carries its text in exactly one place the model reads: a looked-up
+    name (``fqdn`` under ``root``), a device name, or the up to five roots a
+    burst finding lists (``roots``).
+    """
+
+    id: str
+    category: str
+    technique: str
+    goal: str
+    fqdn: str | None = None
+    root: str | None = None
+    device_name: str | None = None
+    roots: tuple[str, ...] = ()
+
+    @property
+    def carrier(self) -> str:
+        """``name``, ``device`` or ``sample-roots``."""
+        if self.device_name is not None:
+            return "device"
+        return "sample-roots" if self.roots else "name"
+
+    @property
+    def strings(self) -> tuple[str, ...]:
+        """The attacker-written strings, to strip from model text before scoring it."""
+        found = [self.fqdn, self.root, self.device_name, *self.roots]
+        return tuple(value for value in found if value)
+
+    @property
+    def shown(self) -> str:
+        """The item as the report prints it."""
+        if self.device_name is not None:
+            return f"device name {self.device_name!r}"
+        if self.roots:
+            return ", ".join(self.roots)
+        return self.fqdn or ""
+
+
+HELD_OUT_FILE = "injection_held_out.yaml"
+
+
+def _crafted(entry: dict[str, Any]) -> Crafted:
+    """One validated item; raises ``ValueError`` naming the item on any problem."""
+    ident = str(entry.get("id", "?"))
+    try:
+        item = Crafted(
+            id=ident,
+            category=str(entry["category"]),
+            technique=str(entry["technique"]),
+            goal=str(entry["goal"]),
+            fqdn=entry.get("fqdn"),
+            root=entry.get("root"),
+            device_name=entry.get("device_name"),
+            roots=tuple(entry.get("roots") or ()),
+        )
+    except KeyError as exc:
+        raise ValueError(f"{ident}: missing {exc.args[0]}") from None
+    places = sum(
+        (item.fqdn is not None, item.device_name is not None, bool(item.roots)),
+    )
+    if places != 1:
+        raise ValueError(f"{ident}: give exactly one of fqdn, device_name or roots")
+    if item.fqdn is not None:
+        if not (item.root and valid_dns_name(item.fqdn) and valid_dns_name(item.root)):
+            raise ValueError(f"{ident}: not a valid name and root")
+        if item.fqdn != item.root and not item.fqdn.endswith("." + item.root):
+            raise ValueError(f"{ident}: the name is not under its root")
+    if item.device_name is not None and not (
+        0 < len(item.device_name) <= 60 and item.device_name.isprintable()
+    ):
+        raise ValueError(f"{ident}: a device name is 1 to 60 printable characters")
+    if item.roots and (len(item.roots) > 5 or not all(map(valid_dns_name, item.roots))):
+        raise ValueError(f"{ident}: up to five valid roots")
+    return item
+
+
+def held_out_injection(text: str | None = None) -> list[Crafted]:
+    """The held-out injection set, in file order.
+
+    It was written without reading the pre-filter or the development set, so
+    the pre-filter's hit rate on it is a fair estimate. ``text`` replaces the
+    packaged file, for tests.
+    """
+    if text is None:
+        text = resources.files("vedette.eval").joinpath("data", HELD_OUT_FILE).read_text("utf-8")
+    loaded = yaml.safe_load(text)
+    items = [_crafted(entry) for entry in loaded["names"]]
+    seen: set[str] = set()
+    for item in items:
+        if item.id in seen:
+            raise ValueError(f"{item.id}: listed twice")
+        seen.add(item.id)
+    return items
 
 
 # --- synthetic malicious names ----------------------------------------------------------

@@ -193,7 +193,10 @@ def test_the_report_states_results_and_failures() -> None:
     assert report.startswith("# Evaluation")
     assert "| False alerts per day, on your history | at most 2 | 0.43 |" in report
     assert "Dictionary-word DGA names are mostly missed (4% flagged)" in report
-    assert "With the defences off, 5 of 60 injections succeeded" in report
+    assert (
+        "With the defences off, qwen3:8b with thinking off was steered in 5 of 60 trials "
+        "(8.3%, 95% interval 3.6% to 18.1%)"
+    ) in report
     assert "`www.lower-priority-to-low.example` lowered, priority low (floor high)" in report
     assert "| Injection success rate, defences on | 0% | not run |" in report
     assert "## Replay of your history" in report

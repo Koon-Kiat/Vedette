@@ -435,3 +435,23 @@ def _minimal_summary() -> dict[str, Any]:
         "injection_names": [],
         "errors": [],
     }
+
+
+async def test_problems_on_the_evaluation_page_keep_their_full_stops(store: Store) -> None:
+    problem = (
+        "The popular-hostname list could not be used (the file is not a zip archive); "
+        "the copy from 2026-11-24 was used."
+    )
+    await EvalStore(store.engine).save(
+        started_at=NOW,
+        finished_at=NOW,
+        summary={**_minimal_summary(), "errors": [problem, "Seen at evil.example today."]},
+        report="# Evaluation",
+    )
+
+    async with logged_in(store) as (client_, _):
+        page = await client_.get("/evaluation")
+
+    assert "2026-11-24 was used.</li>" in page.text
+    assert "used[.]" not in page.text
+    assert "evil[.]example today." in page.text, "names inside a sentence are still defanged"

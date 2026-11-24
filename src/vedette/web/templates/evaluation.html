@@ -76,7 +76,7 @@
 {% if s.errors %}
 <section class="block" aria-labelledby="problems-title">
   <h2 id="problems-title">Problems during the run</h2>
-  <ul class="plain">{% for error in s.errors %}<li>{{ error|text }}</li>{% endfor %}</ul>
+  <ul class="plain">{% for error in s.errors %}<li>{{ error|prose }}</li>{% endfor %}</ul>
 </section>
 {% endif %}
 <p class="note">The full report, with every counted injection case and the limits of the method, is written by <code>vedette eval</code> to docs/EVALUATION.md.</p>

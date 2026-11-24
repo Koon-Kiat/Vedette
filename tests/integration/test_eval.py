@@ -11,6 +11,7 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
+from tests.integration.list_helpers import HOSTNAMES_URL, zipped
 from tests.integration.web_helpers import logged_in
 from vedette.cli import app
 from vedette.config import load_settings
@@ -233,27 +234,50 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
     url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
     monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
     monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_EVALUATION__HOSTNAMES_URL", HOSTNAMES_URL)
     run_migrations(url)
     store = Store.open(url)
     try:
         await seed_reference(store)
     finally:
         await store.close()
+    hostnames = zipped([f"{n},host{n}.site{n}.example" for n in range(1, 11)])
 
-    summary = await run_suite(
-        load_settings(), load_rules(), models=["qwen3:8b"], thinks=[False], with_llm=False, now=NOW
-    )
+    with respx.mock(assert_all_called=True) as web:
+        web.get(HOSTNAMES_URL).mock(return_value=httpx.Response(200, content=hostnames))
+        summary = await run_suite(
+            load_settings(),
+            load_rules(),
+            models=["qwen3:8b"],
+            thinks=[False],
+            with_llm=False,
+            now=NOW,
+        )
 
     assert summary["injection"] == []
     sizes = summary["dataset_sizes"]
-    assert (sizes["feeds"], sizes["injection"]) == (20, 60)
-    assert [row["dataset"] for row in summary["detection"]][:3] == [
+    assert (sizes["feeds"], sizes["injection"], sizes["hostnames"]) == (20, 60, 10)
+    assert [row["dataset"] for row in summary["detection"]][:6] == [
         "Top sites, local list",
+        "Top sites, as if unlisted",
+        "Popular hostnames (Cisco Umbrella)",
+        "Popular hostnames, as if unlisted",
         "Your own history, sample",
         "Threat-feed domains",
     ]
+    assert summary["hostname_list"] == {
+        "source": HOSTNAMES_URL,
+        "refreshed_at": NOW.isoformat(),
+        "suffix_list": False,
+    }
+    assert any("No Public Suffix List is stored yet" in error for error in summary["errors"])
     json.dumps(summary)  # stored as JSON
     rows = {row["dataset"]: row for row in summary["detection"]}
+    assert rows["Top sites, local list"]["construction"].startswith("The rules skip domains")
+    assert rows["Threat-feed domains"]["construction"].startswith("The feeds are the same")
+    assert rows["Top sites, as if unlisted"]["construction"] == ""
+    assert rows["Your own history, sample"]["examples"] == []
+    assert rows["Threat-feed domains"]["examples"] == []
     assert rows["Tunnels, a lookup a minute for 2 hours"]["by_rule"]["tunnel-slow"] == 10
     assert rows["Bursts of 30 dictionary-word domains"]["by_rule"]["dga-burst"] == 10
     assert rows["Young domains, registration dates given"]["flagged"] == 40
@@ -273,12 +297,20 @@ async def test_the_suite_reports_a_missing_list_and_an_unreachable_model(
     with respx.mock(assert_all_called=False) as web:
         web.post(f"{OLLAMA}/api/chat").mock(side_effect=httpx.ConnectError("refused"))
         summary = await run_suite(
-            load_settings(), load_rules(), models=["qwen3:8b"], thinks=[False], now=NOW
+            load_settings(),
+            load_rules(),
+            models=["qwen3:8b"],
+            thinks=[False],
+            offline=True,
+            now=NOW,
         )
 
     assert summary["injection"] == []
     assert any("No top-sites list is stored yet" in error for error in summary["errors"])
     assert any("qwen3:8b: the local model could not be used" in e for e in summary["errors"])
+    assert any("--offline" in e and "skipped" in e for e in summary["errors"])
+    assert not any(row["dataset"].startswith("Popular hostnames") for row in summary["detection"])
+    assert summary["dataset_sizes"]["hostnames"] == 0
 
 
 def test_the_command_writes_the_report_and_feeds_the_dashboard(
@@ -289,13 +321,14 @@ def test_the_command_writes_the_report_and_feeds_the_dashboard(
     monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     output = tmp_path / "EVALUATION.md"
 
-    result = CliRunner().invoke(app, ["eval", "--no-llm", "--output", str(output)])
+    result = CliRunner().invoke(app, ["eval", "--no-llm", "--offline", "--output", str(output)])
 
     assert result.exit_code == 0, result.output
     assert f"Report written to {output}." in result.output
     report = output.read_text(encoding="utf-8")
     assert report.startswith("# Evaluation")
     assert "The model was not run in this evaluation." in report
+    assert "the popular-hostname sets were skipped" in report
 
 
 async def test_the_evaluation_page_shows_the_latest_run(store: Store) -> None:

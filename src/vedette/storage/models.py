@@ -125,6 +125,15 @@ popularity = Table(
     Column("rank", Integer, nullable=False),
 )
 
+# Popular full hostnames (Cisco Umbrella's list), used only by `vedette eval` as
+# known-good names the rules do not skip.
+eval_hostnames = Table(
+    "eval_hostnames",
+    metadata,
+    Column("name", String(255), primary_key=True),
+    Column("rank", Integer, nullable=False),
+)
+
 # Public Suffix List rules ("co.uk", "*.ck", "!www.ck"); private marks the
 # section for platforms such as github.io, whose customers get names of their own.
 public_suffixes = Table(

@@ -2,7 +2,7 @@
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +11,7 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
+from tests.integration.list_helpers import HOSTNAMES_URL, zipped
 from tests.integration.web_helpers import logged_in
 from vedette.cli import app
 from vedette.config import load_settings
@@ -21,7 +22,8 @@ from vedette.eval.suite import run_suite
 from vedette.rules.loader import load_rules
 from vedette.storage.evaluation import EvalStore
 from vedette.storage.migrate import run_migrations
-from vedette.storage.models import popularity, threat_intel
+from vedette.storage.models import eval_hostnames, popularity, public_suffixes, threat_intel
+from vedette.storage.reference import DomainAgeRecord, ReferenceStore
 from vedette.storage.store import Store
 
 NOW = datetime(2026, 11, 19, 8, 0, tzinfo=UTC)
@@ -73,6 +75,117 @@ async def test_detection_uses_the_real_rules(store: Store, tmp_path: Path) -> No
     # Too slow for tunnel-like, but the random hex labels still look like DGA output.
     assert "tunnel-like" not in slow_result.by_rule
     assert slow_result.by_rule == {"dga-like": 10}
+
+
+#: dga-like fires on this label when it is not ranked: 14 characters, all different.
+RANDOM = "q8z3k1x9w7m2v5.example"
+#: A root the registry said was registered 5 days ago: only RDAP writes this cache,
+#: and only for roots from the owner's own traffic.
+YOUNG_ROOT_AGE = DomainAgeRecord(
+    root="fresh.example",
+    status="found",
+    registered_at=NOW - timedelta(days=5),
+    fetched_at=NOW,
+)
+
+
+async def test_ranks_off_shows_what_each_rule_does_on_its_own(store: Store, tmp_path: Path) -> None:
+    await seed_reference(store)
+    async with store.engine.begin() as connection:
+        await connection.execute(
+            popularity.insert(), [{"domain": RANDOM, "rank": 60}, {"domain": FEED[0], "rank": 70}]
+        )
+    # FEED[0] is now both on a feed and ranked inside the top 1,000.
+    scratch = await scratch_store(tmp_path)
+    names = [datasets.Name(RANDOM, RANDOM), datasets.Name(FEED[0], FEED[0])]
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            listed = await detector.names("listed", "benign", names, construction="sanity check")
+            unlisted = await detector.names("unlisted", "benign", names, ranks=False, examples=20)
+            capped = await detector.names("capped", "benign", names, ranks=False, examples=1)
+    finally:
+        await scratch.close()
+
+    assert (listed.flagged, listed.construction, listed.examples) == (0, "sanity check", [])
+    assert unlisted.by_rule == {"dga-like": 1, "threat-intel-allowed": 1}
+    assert unlisted.construction == ""
+    assert unlisted.examples == [
+        {"name": RANDOM, "rules": "dga-like"},
+        {"name": FEED[0], "rules": "threat-intel-allowed"},
+    ]
+    assert capped.examples == [{"name": RANDOM, "rules": "dga-like"}]
+
+
+async def test_public_sets_ignore_registration_dates_from_the_owners_history(
+    store: Store, tmp_path: Path
+) -> None:
+    await seed_reference(store)
+    await ReferenceStore(store.engine).save_domain_ages([YOUNG_ROOT_AGE])
+    scratch = await scratch_store(tmp_path)
+    names = [datasets.Name("www.fresh.example", "fresh.example")]
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            history = await detector.names("history", "benign", names)
+            public = await detector.names("public", "benign", names, dates=False, examples=20)
+    finally:
+        await scratch.close()
+
+    assert history.by_rule == {"young-domain": 1}, "the cached date is used by default"
+    assert (public.flagged, public.examples) == (0, [])
+
+
+async def test_popular_hostnames_are_sampled_with_their_registered_roots(
+    store: Store, tmp_path: Path
+) -> None:
+    async with store.engine.begin() as connection:
+        await connection.execute(
+            public_suffixes.insert(),
+            [
+                {"rule": "com", "private": False},
+                {"rule": "io", "private": False},
+                {"rule": "github.io", "private": True},
+            ],
+        )
+        await connection.execute(
+            eval_hostnames.insert(),
+            [
+                {"name": "events.data.example.com", "rank": 2},
+                {"name": "github.io", "rank": 4},
+                {"name": "foo.github.io", "rank": 6},
+                {"name": "www.example.com", "rank": 7},
+                {"name": "late.example.com", "rank": 9},
+            ],
+        )
+    scratch = await scratch_store(tmp_path)
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            known = detector.suffixes_known
+            names = await datasets.popular_hostnames(store.engine, detector.root_of, count=4)
+    finally:
+        await scratch.close()
+
+    assert known is True
+    # Highest rank 9, count 4: every 2nd rank, so 2, 4 and 6 (7 and 9 are not multiples).
+    # github.io is itself a public suffix and is skipped.
+    assert names == [
+        datasets.Name("events.data.example.com", "example.com"),
+        datasets.Name("foo.github.io", "foo.github.io"),
+    ]
+
+
+async def test_without_a_suffix_list_roots_are_the_last_two_labels(
+    store: Store, tmp_path: Path
+) -> None:
+    scratch = await scratch_store(tmp_path)
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            known = detector.suffixes_known
+            root = detector.root_of("a.b.example.co.uk")
+    finally:
+        await scratch.close()
+
+    assert known is False
+    assert root == "co.uk"
 
 
 class FakeModel:
@@ -148,27 +261,59 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
     url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
     monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
     monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_EVALUATION__HOSTNAMES_URL", HOSTNAMES_URL)
     run_migrations(url)
     store = Store.open(url)
     try:
         await seed_reference(store)
+        # A date the registry gave for a root the owner's own network looked up.
+        await ReferenceStore(store.engine).save_domain_ages([YOUNG_ROOT_AGE])
     finally:
         await store.close()
-
-    summary = await run_suite(
-        load_settings(), load_rules(), models=["qwen3:8b"], thinks=[False], with_llm=False, now=NOW
+    hostnames = zipped(
+        [f"{n},host{n}.site{n}.example" for n in range(1, 11)] + ["11,www.fresh.example"]
     )
+
+    with respx.mock(assert_all_called=True) as web:
+        web.get(HOSTNAMES_URL).mock(return_value=httpx.Response(200, content=hostnames))
+        summary = await run_suite(
+            load_settings(),
+            load_rules(),
+            models=["qwen3:8b"],
+            thinks=[False],
+            with_llm=False,
+            now=NOW,
+        )
 
     assert summary["injection"] == []
     sizes = summary["dataset_sizes"]
-    assert (sizes["feeds"], sizes["injection"]) == (20, 60)
-    assert [row["dataset"] for row in summary["detection"]][:3] == [
+    assert (sizes["feeds"], sizes["injection"], sizes["hostnames"]) == (20, 60, 11)
+    assert [row["dataset"] for row in summary["detection"]][:6] == [
         "Top sites, local list",
+        "Top sites, as if unlisted",
+        "Popular hostnames (Cisco Umbrella)",
+        "Popular hostnames, as if unlisted",
         "Your own history, sample",
         "Threat-feed domains",
     ]
+    assert summary["hostname_list"] == {
+        "source": HOSTNAMES_URL,
+        "refreshed_at": NOW.isoformat(),
+        "suffix_list": False,
+    }
+    assert any("No Public Suffix List is stored yet" in error for error in summary["errors"])
     json.dumps(summary)  # stored as JSON
     rows = {row["dataset"]: row for row in summary["detection"]}
+    assert rows["Top sites, local list"]["construction"].startswith("The rules skip domains")
+    assert "outside the top 1,000" in rows["Top sites, local list"]["construction"]
+    for public in ("Popular hostnames (Cisco Umbrella)", "Popular hostnames, as if unlisted"):
+        # A registration date from the owner's history must not make a public name print.
+        assert "young-domain" not in rows[public]["by_rule"]
+        assert all(example["name"] != "www.fresh.example" for example in rows[public]["examples"])
+    assert rows["Threat-feed domains"]["construction"].startswith("The feeds are the same")
+    assert rows["Top sites, as if unlisted"]["construction"] == ""
+    assert rows["Your own history, sample"]["examples"] == []
+    assert rows["Threat-feed domains"]["examples"] == []
     assert rows["Tunnels, a lookup a minute for 2 hours"]["by_rule"]["tunnel-slow"] == 10
     assert rows["Bursts of 30 dictionary-word domains"]["by_rule"]["dga-burst"] == 10
     assert rows["Young domains, registration dates given"]["flagged"] == 40
@@ -188,12 +333,20 @@ async def test_the_suite_reports_a_missing_list_and_an_unreachable_model(
     with respx.mock(assert_all_called=False) as web:
         web.post(f"{OLLAMA}/api/chat").mock(side_effect=httpx.ConnectError("refused"))
         summary = await run_suite(
-            load_settings(), load_rules(), models=["qwen3:8b"], thinks=[False], now=NOW
+            load_settings(),
+            load_rules(),
+            models=["qwen3:8b"],
+            thinks=[False],
+            offline=True,
+            now=NOW,
         )
 
     assert summary["injection"] == []
     assert any("No top-sites list is stored yet" in error for error in summary["errors"])
     assert any("qwen3:8b: the local model could not be used" in e for e in summary["errors"])
+    assert any("--offline" in e and "skipped" in e for e in summary["errors"])
+    assert not any(row["dataset"].startswith("Popular hostnames") for row in summary["detection"])
+    assert summary["dataset_sizes"]["hostnames"] == 0
 
 
 def test_the_command_writes_the_report_and_feeds_the_dashboard(
@@ -204,13 +357,14 @@ def test_the_command_writes_the_report_and_feeds_the_dashboard(
     monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
     output = tmp_path / "EVALUATION.md"
 
-    result = CliRunner().invoke(app, ["eval", "--no-llm", "--output", str(output)])
+    result = CliRunner().invoke(app, ["eval", "--no-llm", "--offline", "--output", str(output)])
 
     assert result.exit_code == 0, result.output
     assert f"Report written to {output}." in result.output
     report = output.read_text(encoding="utf-8")
     assert report.startswith("# Evaluation")
     assert "The model was not run in this evaluation." in report
+    assert "the popular-hostname sets were skipped" in report
 
 
 async def test_the_evaluation_page_shows_the_latest_run(store: Store) -> None:
@@ -228,6 +382,8 @@ async def test_the_evaluation_page_shows_the_latest_run(store: Store) -> None:
     assert "Against the targets" in page.text
     assert "0.43" in page.text
     assert "Threat-feed domains" in page.text
+    assert "True by construction: A sanity check." in page.text
+    assert page.text.count("True by construction") == 1
     assert "No evaluation has run yet" not in page.text
 
 
@@ -249,7 +405,19 @@ def _minimal_summary() -> dict[str, Any]:
                 "by_rule": {"threat-intel-allowed": 20},
                 "note": "",
                 "rate": 1.0,
-            }
+            },
+            {  # from a run after the by-construction labels; the row above is from before
+                "dataset": "Top sites, local list",
+                "kind": "benign",
+                "items": 1000,
+                "flagged": 0,
+                "alerting": 0,
+                "by_rule": {},
+                "note": "",
+                "rate": 0.0,
+                "construction": "A sanity check.",
+                "examples": [],
+            },
         ],
         "history": {
             "days": 7.0,
@@ -267,3 +435,23 @@ def _minimal_summary() -> dict[str, Any]:
         "injection_names": [],
         "errors": [],
     }
+
+
+async def test_problems_on_the_evaluation_page_keep_their_full_stops(store: Store) -> None:
+    problem = (
+        "The popular-hostname list could not be used (the file is not a zip archive); "
+        "the copy from 2026-11-24 was used."
+    )
+    await EvalStore(store.engine).save(
+        started_at=NOW,
+        finished_at=NOW,
+        summary={**_minimal_summary(), "errors": [problem, "Seen at evil.example today."]},
+        report="# Evaluation",
+    )
+
+    async with logged_in(store) as (client_, _):
+        page = await client_.get("/evaluation")
+
+    assert "2026-11-24 was used.</li>" in page.text
+    assert "used[.]" not in page.text
+    assert "evil[.]example today." in page.text, "names inside a sentence are still defanged"

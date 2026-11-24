@@ -3,6 +3,7 @@ import zipfile
 
 import pytest
 
+from tests.integration.list_helpers import damaged
 from vedette.enrich.popularity import parse_tranco
 from vedette.enrich.threat_intel import candidates, parse_feed
 
@@ -86,3 +87,9 @@ def test_candidates_never_include_a_bare_suffix() -> None:
     assert candidates("a.bad.example", None) == ["a.bad.example", "bad.example"]
     assert candidates("example", None) == ["example"]
     assert candidates("www.site.co.uk", "site.co.uk") == ["www.site.co.uk", "site.co.uk"]
+
+
+@pytest.mark.parametrize("compression", [zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED])
+def test_tranco_rejects_an_archive_whose_member_is_damaged(compression: int) -> None:
+    with pytest.raises(ValueError, match="damaged"):
+        list(parse_tranco(damaged(compression)))

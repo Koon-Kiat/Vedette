@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from vedette.storage.models import events, popularity, threat_intel
+from vedette.storage.models import eval_hostnames, events, popularity, threat_intel
 
 SEED = 20261119
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
@@ -230,6 +230,37 @@ async def top_sites(engine: AsyncEngine, count: int = 1000) -> list[Name]:
             .limit(count)
         )
         return [Name(fqdn=row.domain, root=row.domain) for row in rows]
+
+
+async def popular_hostnames(
+    engine: AsyncEngine, root_for: Callable[[str], str | None], count: int = 1000
+) -> list[Name]:
+    """Popular full hostnames spread across the stored list, each with its registered root.
+
+    The step comes from the highest stored rank, not the row count, so a few
+    rows dropped by validation do not shift the sample. A name with no root
+    (a public suffix itself) is left out.
+    """
+    async with engine.connect() as connection:
+        highest = (
+            await connection.execute(select(func.max(eval_hostnames.c.rank)))
+        ).scalar_one_or_none()
+        if not highest:
+            return []
+        step = max(int(highest) // count, 1)
+        rows = await connection.execute(
+            select(eval_hostnames.c.name)
+            .where((eval_hostnames.c.rank % step) == 0)
+            .order_by(eval_hostnames.c.rank)
+            .limit(count)
+        )
+        names = [row.name for row in rows]
+    found = []
+    for name in names:
+        root = root_for(name)
+        if root is not None:
+            found.append(Name(fqdn=name, root=root))
+    return found
 
 
 async def own_history(engine: AsyncEngine, count: int = 1000) -> list[Name]:

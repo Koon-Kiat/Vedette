@@ -119,6 +119,21 @@ class SuffixRules:
         suffix = found[0] if found is not None else 1  # no rule: the last label is the suffix
         return len(labels) > suffix + 1
 
+    def registered(self, name: str) -> str | None:
+        """The domain registered under the list that ``name`` belongs to.
+
+        Private rules count, so a customer name on a platform is its own
+        registered domain (``foo.github.io``), as NextDNS reports it. Without a
+        matching rule the last label is the suffix. ``None`` when ``name`` is
+        itself a public suffix.
+        """
+        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        found = self._suffix(labels)
+        size = found[0] if found is not None else 1
+        if len(labels) <= size:
+            return None
+        return ".".join(labels[len(labels) - size - 1 :])
+
     def platform_suffix(self, name: str) -> str | None:
         """The private suffix ``name`` is a customer name under, else ``None``."""
         labels = [label for label in name.lower().rstrip(".").split(".") if label]
@@ -193,6 +208,10 @@ class PublicSuffixList:
     def platform_suffix(self, name: str) -> str | None:
         """The hosting platform's suffix ``name`` is a customer name under, else ``None``."""
         return self._rules.platform_suffix(name)
+
+    def registered(self, name: str) -> str | None:
+        """The registered domain ``name`` belongs to; see :meth:`SuffixRules.registered`."""
+        return self._rules.registered(name)
 
     def is_platform_name(self, root: str) -> bool:
         """Whether a root NextDNS reported is a customer name on a hosting platform.

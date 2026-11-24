@@ -1,13 +1,70 @@
 #!/bin/sh
 # Secret scan of staged changes, run through Docker so nothing is installed on
 # the host. Enable once per clone:  git config core.hooksPath .githooks
+#
+# The commit is refused unless gitleaks actually read the staged changes.
+# gitleaks logs git failures (an unreadable repository, missing objects) but
+# still exits 0, so its log is checked for errors as well as its exit code.
 set -eu
 
-# Git for Windows runs hooks under MSYS: use a Windows-style path for the
-# bind mount and stop MSYS from rewriting the container-side paths.
-repo=$(pwd -W 2>/dev/null || pwd)
+image=ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 
-MSYS_NO_PATHCONV=1 exec docker run --rm \
-    -v "${repo}:/repo:ro" \
-    ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
-    git --pre-commit --staged --redact --no-banner /repo
+refuse() {
+    echo "pre-commit: $1; commit refused." >&2
+    exit 1
+}
+
+# Git for Windows runs hooks under MSYS and prints Windows-style paths that
+# Docker can bind-mount. The container cannot follow host paths, such as the
+# one in a worktree's .git file, so the git directory is handed over in
+# GIT_DIR instead of being discovered. --git-path index follows
+# GIT_INDEX_FILE, which git points at a temporary index for commit -a.
+paths=$(git rev-parse --path-format=absolute \
+    --show-toplevel --git-dir --git-common-dir --git-path index) ||
+    refuse "could not locate the repository"
+{
+    read -r top
+    read -r gitdir
+    read -r common
+    read -r index
+} <<EOF
+$paths
+EOF
+
+# The work tree is mounted at /repo and the shared git directory at /git; a
+# worktree's own git directory and every index live under the latter.
+in_container() {
+    case $1 in
+        "$common") echo /git ;;
+        "$common"/*) echo "/git/${1#"$common"/}" ;;
+        *) return 1 ;;
+    esac
+}
+git_dir=$(in_container "$gitdir") ||
+    refuse "git directory $gitdir is outside $common, so it cannot be scanned"
+index_file=$(in_container "$index") ||
+    refuse "index $index is outside $common, so it cannot be scanned"
+
+# Stop MSYS from rewriting the container-side paths.
+status=0
+log=$(MSYS_NO_PATHCONV=1 docker run --rm \
+    -v "${top}:/repo:ro" \
+    -v "${common}:/git:ro" \
+    -e GIT_DIR="$git_dir" \
+    -e GIT_WORK_TREE=/repo \
+    -e GIT_INDEX_FILE="$index_file" \
+    "$image" \
+    git --pre-commit --staged --redact --no-banner --no-color /repo 2>&1) ||
+    status=$?
+[ -z "$log" ] || printf '%s\n' "$log" >&2
+
+# Log lines read "<time> <level> <message>".
+if printf '%s\n' "$log" | grep -qE '^[^ ]+ (ERR|FTL) '; then
+    refuse "gitleaks could not scan the staged changes (errors above)"
+fi
+if [ "$status" -ne 0 ]; then
+    if printf '%s\n' "$log" | grep -qE '^[^ ]+ WRN leaks found: '; then
+        refuse "gitleaks found secrets in the staged changes"
+    fi
+    refuse "the secret scan did not run (exit $status)"
+fi

@@ -311,6 +311,19 @@ class RetentionConfig(_Section):
     findings_days: int = Field(default=180, ge=1)
 
 
+class EvaluationConfig(_Section):
+    """What ``vedette eval`` downloads for itself.
+
+    ``hostnames_url`` is a zip of ``rank,hostname`` rows of popular full names,
+    used as known-good names the rules do not skip; ``None`` leaves those sets out.
+    """
+
+    hostnames_url: NonEmptyStr | None = (
+        "https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"
+    )
+    refresh_days: int = Field(default=7, ge=1)
+
+
 class Settings(BaseSettings):
     """All Vedette settings. Build one with :func:`load_settings`."""
 
@@ -333,6 +346,7 @@ class Settings(BaseSettings):
     health: HealthConfig = Field(default_factory=HealthConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     nextdns_write_enabled: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     nextdns_api_key: SecretStr | None = Field(

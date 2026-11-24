@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Evaluation
+
+- The top-sites set is now labelled a sanity check: the rules skip listed
+  domains, so it cannot show false alerts. Results that could not have come
+  out otherwise say so, in the report and on the Evaluation page.
+- New "as if unlisted" rows run the known-good names again with their
+  top-sites rank removed, to show what each rule does on its own.
+- New known-good set: 1,000 popular full hostnames from Cisco Umbrella's
+  top-1M, grouped under their registered domains. `vedette eval` downloads the
+  list itself, at most once a week, into the database; `--offline` uses the
+  stored copy. A new `evaluation:` config section sets its address
+  (`hostnames_url`, `null` to leave the sets out) and `refresh_days`.
+- The report lists up to 20 flagged names from each public list, with the
+  rules that fired, so each false alert can be checked.
+
 ## 0.2.0 - 2026-11-22
 
 ### Knowing when Vedette itself stops

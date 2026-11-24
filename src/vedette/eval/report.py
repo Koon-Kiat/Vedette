@@ -1,8 +1,9 @@
 """Writes docs/EVALUATION.md from the evaluation's numbers.
 
 The report states results as measured, failures included, with the reason
-where one is known. It never contains a name from the owner's history or the
-threat feeds: those sets are only counted.
+where one is known. Names sampled from the owner's history and from the threat
+feeds are only counted. Flagged names from the two public lists are shown,
+even when a feed also lists one.
 """
 
 from typing import Any
@@ -34,13 +35,52 @@ def _detection_table(rows: list[dict[str, Any]]) -> list[str]:
         "| --- | --- | ---: | ---: | ---: | ---: | --- |",
     ]
     for row in rows:
-        rules = ", ".join(f"{rule} {count}" for rule, count in row["by_rule"].items()) or "none"
-        name = row["dataset"] + (f" ({row['note']})" if row["note"] else "")
+        name = row["dataset"] + (" (by construction)" if row.get("construction") else "")
+        name += f" ({row['note']})" if row["note"] else ""
         lines.append(
             f"| {name} | {row['kind']} | {row['items']} | {row['flagged']} | {_pct(row['rate'])} "
-            f"| {row['alerting']} | {rules} |"
+            f"| {row['alerting']} | {_rules(row)} |"
         )
+    built = [row for row in rows if row.get("construction")]
+    if built:
+        lines += ["", "Results that are true by construction:", ""]
+        lines += [f"- {row['dataset']}: {row['construction']}" for row in built]
     return lines
+
+
+def _rules(row: dict[str, Any]) -> str:
+    """The rules that fired on a set, with counts."""
+    return ", ".join(f"{rule} {count}" for rule, count in row["by_rule"].items()) or "none"
+
+
+def _examples_section(rows: list[dict[str, Any]]) -> list[str]:
+    """Flagged names from the public lists, so each false alert can be checked."""
+    found = [(row, example) for row in rows for example in row.get("examples", [])]
+    if not found:
+        return []
+    lines = [
+        "### Flagged names from the public lists",
+        "",
+        "These lists are public, so the names are shown. Up to 20 per set.",
+        "",
+    ]
+    lines += [
+        f"- `{example['name']}` ({row['dataset']}): {example['rules']}" for row, example in found
+    ]
+    return [*lines, ""]
+
+
+def _hostname_limit(summary: dict[str, Any]) -> list[str]:
+    """The popular-hostname set's own limit, when it ran."""
+    ran = any(row["dataset"].startswith("Popular hostnames") for row in summary["detection"])
+    refreshed = (summary.get("hostname_list") or {}).get("refreshed_at")
+    if not ran or not refreshed:
+        return []
+    return [
+        "- The popular hostnames come from Cisco Umbrella's list of the names its resolvers see "
+        f"most, downloaded on {refreshed[:10]}. Its tail holds junk and some malicious names, so "
+        "only the top 100,000 are sampled; any of them flagged counts as a false alert here."
+    ]
 
 
 def _injection_table(rows: list[dict[str, Any]]) -> list[str]:
@@ -174,7 +214,18 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "the injection test below forces every name in front of the model to measure the "
             "worst case."
         )
-    for dataset in ("Top sites, local list", "Your own history, sample"):
+    for row in detection:
+        if row["dataset"].endswith("as if unlisted") and row["items"]:
+            out.append(
+                f"- Without the top-sites exemption, the rules flag {row['flagged']} of "
+                f'{row["items"]} names in "{row["dataset"]}" ({_pct(row["rate"])}): '
+                f"{_rules(row)}. This is what the rules do on their own on popular names."
+            )
+    for dataset in (
+        "Top sites, local list",
+        "Popular hostnames (Cisco Umbrella)",
+        "Your own history, sample",
+    ):
         benign = _by_name(detection, dataset)
         if benign and benign["flagged"]:
             out.append(
@@ -244,8 +295,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"Production model: {summary['production_model']}.",
         "",
         "Thresholds and prompts were set before this evaluation and were not changed in "
-        "response to it. The benign history sample and the threat-feed domains are only "
-        "counted here; no name from them appears in this report.",
+        "response to it. Names sampled from your history and from the threat feeds are only "
+        "counted here; none of them appears in this report. Flagged names from the two "
+        "public lists (top sites and popular hostnames) are shown, even when a feed also "
+        "lists one.",
         "",
         "## Targets",
         "",
@@ -273,9 +326,17 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "threat-intel-allowed, dga-like, tunnel-like, tunnel-slow), and dga-burst in the burst "
         "sets. Each item comes from a device of its own, so items never add up to a burst.",
         "",
+        "Rows marked as if unlisted run the same names with their top-sites rank removed, to "
+        "show what each rule does on its own. Only dga-like and the feed rule's skip for the "
+        "top 1,000 can fire there: the public lists are judged without registration dates, so "
+        "their results never depend on what your own network looked up, and the burst and "
+        "tunnel rules need repeated lookups.",
+        "",
         *_detection_table(summary["detection"]),
         "",
-        f"Dataset sizes: {sizes['top_sites']} top sites, {sizes['own_history']} names from your "
+        f"Dataset sizes: {sizes['top_sites']} top sites, "
+        + (f"{sizes['hostnames']} popular hostnames, " if sizes.get("hostnames") else "")
+        + f"{sizes['own_history']} names from your "
         f"history, {sizes['feeds']} feed domains, {sizes['dga_random']} random and "
         f"{sizes['dga_words']} word-based DGA names, {sizes['tunnels_fast']} fast, "
         f"{sizes['tunnels_slow']} short slow and {sizes['tunnels_sustained']} sustained tunnels, "
@@ -283,6 +344,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"{sizes['young']} young and {sizes['old']} older dated domains, "
         f"{sizes['injection']} crafted injection names.",
         "",
+        *_examples_section(summary["detection"]),
         *_replay_section(summary.get("replay")),
         "",
         "## Prompt injection",
@@ -346,8 +408,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "with dates given, not how often the registry lookup finds them.",
         "- The replay treats your history as benign too, and starts with fresh first "
         "sightings, so its first days are spent learning, as a new install's are.",
-        "- The threat-feed set comes from the same feeds the threat-intel rule uses, so its "
-        "recall with the feed match on is high by construction.",
+        *_hostname_limit(summary),
         "- Synthetic DGA and tunnelling names imitate common patterns; real malware varies more.",
         "- The echo check is a heuristic and may miss or over-count; the listed cases are the "
         "evidence.",

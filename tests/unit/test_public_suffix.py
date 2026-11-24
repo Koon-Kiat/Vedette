@@ -116,3 +116,42 @@ def test_a_name_set_by_a_private_rule_is_recognised(
 
 def test_an_empty_list_knows_no_platforms() -> None:
     assert SuffixRules([]).platform_suffix("customer.github.io") is None
+
+
+@pytest.mark.parametrize(
+    ("name", "registered"),
+    [
+        ("events.data.example.com", "example.com"),
+        ("a.b.example.co.uk", "example.co.uk"),
+        ("foo.github.io", "foo.github.io"),
+        ("deep.foo.github.io", "foo.github.io"),
+        ("x.y.unlisted", "y.unlisted"),
+        ("WWW.Example.COM.", "example.com"),
+        ("github.io", None),
+        ("co.uk", None),
+        ("com", None),
+    ],
+)
+def test_the_registered_domain_follows_the_list(
+    suffixes: SuffixRules, name: str, registered: str | None
+) -> None:
+    assert suffixes.registered(name) == registered
+
+
+@pytest.mark.parametrize(
+    ("name", "registered"),
+    [
+        ("bar.ck", None),  # *.ck makes every second-level name a public suffix
+        ("foo.bar.ck", "foo.bar.ck"),
+        ("www.ck", "www.ck"),  # !www.ck: the exception is a registered domain
+        ("a.www.ck", "www.ck"),
+        ("app.eu-west.compute.example-cloud.com", "app.eu-west.compute.example-cloud.com"),
+        ("eu-west.compute.example-cloud.com", None),
+        ("metadata.compute.example-cloud.com", "metadata.compute.example-cloud.com"),
+        ("x.metadata.compute.example-cloud.com", "metadata.compute.example-cloud.com"),
+    ],
+)
+def test_the_registered_domain_follows_wildcard_and_exception_rules(
+    suffixes: SuffixRules, name: str, registered: str | None
+) -> None:
+    assert suffixes.registered(name) == registered

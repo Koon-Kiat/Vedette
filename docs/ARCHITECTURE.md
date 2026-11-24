@@ -50,7 +50,7 @@ NextDNS API (per profile)
 | Pipeline runner | `src/vedette/pipeline/runner.py` | Runs all six stages, `/healthz`, the dashboard and the hourly retention purge |
 | CLI | `src/vedette/cli.py` | `vedette run`, `findings`, `benign`, `backfill`, `import`, `notify --test`, `digest`, `purge`, `eval`, `--version` |
 | Dashboard | `src/vedette/web/`, `src/vedette/storage/dashboard.py`, `src/vedette/storage/triage.py` | Done: eight pages, triage with an audit log, token login |
-| Evaluation | `src/vedette/eval/` | Done: datasets, offline detection, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
+| Evaluation | `src/vedette/eval/` | Done: datasets (including popular hostnames from Cisco Umbrella), offline detection with and without the top-sites exemption, prompt-injection test with defences on and off, history metrics, `docs/EVALUATION.md` |
 
 ## How the collector avoids gaps and duplicates
 
@@ -688,7 +688,7 @@ repository. Each decision that departs from it says so.
       reference data is read from the local tables, registration dates come
       from the cache only (no RDAP), and first sightings go to a scratch
       database. The real database is only read, except for storing the
-      result.
+      result and, since decision 101, the popular-hostname list.
     - **Defences off.** A naive analyst kept only in `vedette/eval/`: names
       written into the instructions, no warning, no pre-filter, no floor
       guard, no sanitising. The JSON schema stays so a priority can be read;
@@ -698,8 +698,10 @@ repository. Each decision that departs from it says so.
       with the model's words, so it can be checked.
     - **False alerts, latency and load.** Read from what the pipeline already
       stored, not replayed.
-    - **Privacy.** The report and the dashboard show names from your history
-      and the feeds only as counts.
+    - **Privacy.** The report and the dashboard show names sampled from your
+      history and from the feeds only as counts. Since decision 101, flagged
+      names from the two public lists are shown, even when a feed also lists
+      one.
     - **Results.** Stored in `eval_runs` for the Evaluation page.
 67. **The dashboard's visual system was redesigned.** The direction is
     "notices and chart corrections": a navy rail, a chart-white ground,
@@ -983,6 +985,44 @@ repository. Each decision that departs from it says so.
     rule, while they caught 10 of 10 sustained tunnels and 10 of 10 bursts
     of random or dictionary-word names, and `young-domain` flagged 40 of 40
     young and 0 of 40 older dated domains.
+101. **The evaluation measures false alerts on names the rules do not skip.**
+    The top-sites set could not fail: `dga-like`, `young-domain` and
+    `dga-burst` skip every ranked root, and `threat-intel-allowed` skips feed
+    hits in the top 1,000, so "0 of 1,000 flagged" said nothing about false
+    alerts. The set stays as a sanity check, labelled so, and three changes
+    make the measurement able to fail:
+    - **As if unlisted.** The same names run again with the top-sites rank
+      removed after enrichment, the way the feed match is removed for the
+      feed-off row. This shows what each rule does on its own. In practice
+      only `dga-like` and the feed rule's top-1,000 skip can fire there: the
+      burst and tunnel rules need repeated lookups, and the public lists are
+      judged without registration dates. Only RDAP fills that cache, for roots
+      from the owner's own traffic, so a public name flagged as young would
+      reveal what the owner's network looked up. The report says so.
+    - **Popular full hostnames.** Cisco Umbrella's top-1M ranks the names its
+      resolvers see most, mostly full names (`events.data.microsoft.com`),
+      which is what devices look up and where false alerts come from. The
+      evaluation takes every 100th of the top 100,000 (the tail holds junk and
+      some malicious names) and groups each under its registered domain from
+      the Public Suffix List, private rules included, as NextDNS reports roots.
+      It runs with real ranks and as if unlisted.
+    - **True by construction.** A result that could not have come out
+      otherwise carries the reason, in the report and on the Evaluation page:
+      the top-sites set, and the threat-feed set with the feed match on.
+    The list is used only by the evaluation, so `vedette eval` downloads it
+    itself, at most once a week (`evaluation.refresh_days`), into the
+    `eval_hostnames` table, and `--offline` uses the stored copy. The service
+    does not download it: that would be a weekly download on every install
+    for a list only the evaluation uses. A file the owner downloads and
+    passes in would be a manual step on every run inside Docker. The download
+    is a plain fetch of a public file, size-capped and validated like the
+    top-sites list; a failure keeps the stored copy and the report says which
+    date it is from. The refresh record carries a digest of the list's
+    address, so changing `evaluation.hostnames_url` downloads the new list on
+    the next run instead of reusing the old copy for up to a week. The report
+    lists up to 20 flagged names from each public set so every false alert can
+    be checked, even a name a feed also lists (both are public); names sampled
+    from the owner's history and from the feeds are still only counted.
 
 ## Verified facts the design relies on
 

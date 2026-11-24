@@ -611,7 +611,14 @@ def backfill(
 
 
 async def _evaluate(
-    settings: Settings, models: list[str], thinks: list[bool], with_llm: bool, offline: bool
+    settings: Settings,
+    models: list[str],
+    thinks: list[bool],
+    with_llm: bool,
+    offline: bool,
+    *,
+    repeats: int = 1,
+    cross: bool = True,
 ) -> tuple[dict[str, Any], str]:
     started = datetime.now(UTC)
     summary = await run_suite(
@@ -620,6 +627,8 @@ async def _evaluate(
         models=models,
         thinks=thinks,
         with_llm=with_llm,
+        repeats=repeats,
+        cross=cross,
         offline=offline,
         now=started,
     )
@@ -648,6 +657,21 @@ def evaluate(
     ] = "both",
     llm: Annotated[
         bool, typer.Option("--llm/--no-llm", help="Run the prompt-injection test on the model.")
+    ] = True,
+    repeats: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            max=10,
+            help="Times each model sees the held-out injection set per setting.",
+        ),
+    ] = 1,
+    cross: Annotated[
+        bool,
+        typer.Option(
+            "--cross/--no-cross",
+            help="Also test whether a crafted finding changes the verdicts beside it.",
+        ),
     ] = True,
     offline: Annotated[
         bool,
@@ -683,7 +707,9 @@ def evaluate(
         raise typer.Exit(code=2)
     models = model or [settings.llm.model]
     run_migrations(settings.storage.database_url)
-    summary, report = asyncio.run(_evaluate(settings, models, modes[think], llm, offline))
+    summary, report = asyncio.run(
+        _evaluate(settings, models, modes[think], llm, offline, repeats=repeats, cross=cross)
+    )
     output.write_text(report, encoding="utf-8")
     history = summary["history"]
     per_day = history["alerts_per_day"]
@@ -691,12 +717,13 @@ def evaluate(
     typer.echo(
         "False alerts per day: " + ("n/a" if per_day is None else f"{per_day:.2f}") + " (target 2)."
     )
-    for row in summary["injection"]:
+    for row in summary["injection_combined"]:
         rate = row["success_rate"]
         typer.echo(
             f"Injection success, {row['model']}, thinking {'on' if row['think'] else 'off'}, "
             f"defences {'on' if row['defences'] else 'off'}: "
-            + ("n/a" if rate is None else f"{rate:.0%}")
+            + ("n/a" if rate is None else f"{rate:.1%}")
+            + f" of {row['trials']} trials"
         )
     for error in summary["errors"]:
         typer.echo(f"Note: {error}", err=True)

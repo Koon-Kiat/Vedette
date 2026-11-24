@@ -8,20 +8,34 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 import structlog
 
 from vedette.config import Settings
 from vedette.eval import datasets
 from vedette.eval.detection import DetectionResult, Detector
 from vedette.eval.history import history_metrics
+from vedette.eval.hostnames import ensure_hostnames
 from vedette.eval.injection import InjectionResult, RecordingClient, run_defended, run_undefended
 from vedette.llm.ollama import OllamaUnavailable
 from vedette.rules.model import RuleSpec
 from vedette.storage.migrate import run_migrations
+from vedette.storage.reference import ReferenceStore
 from vedette.storage.store import Store
 from vedette.storage.triage import TriageStore
 
 log = structlog.get_logger(__name__)
+
+#: Flagged names kept per public set, so each false alert can be checked.
+EXAMPLES = 20
+TOP_SITES_CONSTRUCTION = (
+    "The rules skip domains on the top-sites list, so only a threat-feed match on a domain "
+    "outside the top 1,000 can flag one. A sanity check, not a false-alert rate."
+)
+FEEDS_CONSTRUCTION = (
+    "The feeds are the same ones the threat-intel rule matches, so recall with the feed "
+    "match on is high by construction."
+)
 
 
 def _detection(result: DetectionResult) -> dict[str, Any]:
@@ -48,9 +62,16 @@ async def run_suite(
     models: Sequence[str],
     thinks: Sequence[bool],
     with_llm: bool = True,
+    offline: bool = False,
+    http_client: httpx.AsyncClient | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Run every part of the evaluation that the local data allows."""
+    """Run every part of the evaluation that the local data allows.
+
+    The popular-hostname list is the one thing downloaded, at most once per
+    ``evaluation.refresh_days``; with ``offline`` the stored copy is used or
+    those sets are skipped. ``http_client`` downloads it (one is opened if not given).
+    """
     now = now or datetime.now(UTC)
     profile_ids = [profile.id for profile in settings.enabled_profiles] or [
         profile.id for profile in settings.profiles
@@ -61,7 +82,18 @@ async def run_suite(
     store = Store.open(settings.storage.database_url)
     scratch = Store.open(scratch_url)
     errors: list[str] = []
+    http = http_client or httpx.AsyncClient(timeout=httpx.Timeout(60.0), follow_redirects=True)
     try:
+        listing = await ensure_hostnames(
+            ReferenceStore(store.engine),
+            http,
+            url=settings.evaluation.hostnames_url,
+            refresh=timedelta(days=settings.evaluation.refresh_days),
+            now=now,
+            offline=offline,
+        )
+        if listing.problem:
+            errors.append(listing.problem)
         top = await datasets.top_sites(store.engine)
         own = await datasets.own_history(store.engine)
         feeds = await datasets.feed_domains(store.engine)
@@ -78,10 +110,61 @@ async def run_suite(
                     "No top-sites list is stored yet, so the popularity-based rules "
                     "(dga-like, young-domain) could not be judged fairly."
                 )
+            hostnames = (
+                await datasets.popular_hostnames(store.engine, detector.root_of)
+                if listing.available
+                else []
+            )
+            suffix_list = detector.suffixes_known
+            if hostnames and not suffix_list:
+                errors.append(
+                    "No Public Suffix List is stored yet, so popular hostnames were grouped "
+                    "by their last two labels."
+                )
+            # Public lists are judged without cached registration dates: only the
+            # owner's own lookups fill that cache, and these sets print names.
             detection = [
-                await detector.names("Top sites, local list", "benign", top),
+                await detector.names(
+                    "Top sites, local list",
+                    "benign",
+                    top,
+                    dates=False,
+                    construction=TOP_SITES_CONSTRUCTION,
+                ),
+                await detector.names(
+                    "Top sites, as if unlisted",
+                    "benign",
+                    top,
+                    ranks=False,
+                    dates=False,
+                    note="the same names with their rank removed",
+                    examples=EXAMPLES,
+                ),
+            ]
+            if hostnames:
+                detection += [
+                    await detector.names(
+                        "Popular hostnames (Cisco Umbrella)",
+                        "benign",
+                        hostnames,
+                        dates=False,
+                        note="full names, every 100th of the top 100,000",
+                        examples=EXAMPLES,
+                    ),
+                    await detector.names(
+                        "Popular hostnames, as if unlisted",
+                        "benign",
+                        hostnames,
+                        ranks=False,
+                        dates=False,
+                        examples=EXAMPLES,
+                    ),
+                ]
+            detection += [
                 await detector.names("Your own history, sample", "benign", own),
-                await detector.names("Threat-feed domains", "malicious", feeds),
+                await detector.names(
+                    "Threat-feed domains", "malicious", feeds, construction=FEEDS_CONSTRUCTION
+                ),
                 await detector.names(
                     "Threat-feed domains, feed lookup off",
                     "malicious",
@@ -155,6 +238,8 @@ async def run_suite(
                         finally:
                             await client.aclose()
     finally:
+        if http_client is None:
+            await http.aclose()
         await scratch.close()
         await store.close()
         shutil.rmtree(scratch_dir, ignore_errors=True)
@@ -167,6 +252,7 @@ async def run_suite(
         "with_llm": with_llm,
         "dataset_sizes": {
             "top_sites": len(top),
+            "hostnames": len(hostnames),
             "own_history": len(own),
             "feeds": len(feeds),
             "dga_random": len(dga_random),
@@ -202,5 +288,12 @@ async def run_suite(
         },
         "injection": [_injection(result) for result in results],
         "injection_names": [name.fqdn for name in injection],
+        "hostname_list": {
+            "source": settings.evaluation.hostnames_url,
+            "refreshed_at": (
+                listing.refreshed_at.isoformat() if listing.refreshed_at is not None else None
+            ),
+            "suffix_list": suffix_list,
+        },
         "errors": errors,
     }

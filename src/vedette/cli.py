@@ -611,11 +611,17 @@ def backfill(
 
 
 async def _evaluate(
-    settings: Settings, models: list[str], thinks: list[bool], with_llm: bool
+    settings: Settings, models: list[str], thinks: list[bool], with_llm: bool, offline: bool
 ) -> tuple[dict[str, Any], str]:
     started = datetime.now(UTC)
     summary = await run_suite(
-        settings, load_rules(), models=models, thinks=thinks, with_llm=with_llm, now=started
+        settings,
+        load_rules(),
+        models=models,
+        thinks=thinks,
+        with_llm=with_llm,
+        offline=offline,
+        now=started,
     )
     report = render_markdown(summary)
     store = Store.open(settings.storage.database_url)
@@ -643,6 +649,12 @@ def evaluate(
     llm: Annotated[
         bool, typer.Option("--llm/--no-llm", help="Run the prompt-injection test on the model.")
     ] = True,
+    offline: Annotated[
+        bool,
+        typer.Option(
+            "--offline", help="Download nothing; use the stored hostname list, or skip those sets."
+        ),
+    ] = False,
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Where to write the report (Markdown).")
     ] = Path("EVALUATION.md"),
@@ -658,8 +670,10 @@ def evaluate(
     """Measure detection, false alerts, prompt-injection resistance, speed and load.
 
     Uses the local reference data and your stored history (only counted, never
-    printed) and asks the local model about crafted names. Nothing is sent
-    anywhere else. The results also appear on the dashboard's Evaluation page.
+    printed), downloads Cisco Umbrella's public list of popular hostnames at most
+    once a week (--offline uses the stored copy), and asks the local model about
+    crafted names. Nothing about your network is sent anywhere. The results also
+    appear on the dashboard's Evaluation page.
     """
     settings = _load_or_exit(config)
     configure_logging(settings.log_level, secrets=_secret_values(settings))
@@ -669,7 +683,7 @@ def evaluate(
         raise typer.Exit(code=2)
     models = model or [settings.llm.model]
     run_migrations(settings.storage.database_url)
-    summary, report = asyncio.run(_evaluate(settings, models, modes[think], llm))
+    summary, report = asyncio.run(_evaluate(settings, models, modes[think], llm, offline))
     output.write_text(report, encoding="utf-8")
     history = summary["history"]
     per_day = history["alerts_per_day"]

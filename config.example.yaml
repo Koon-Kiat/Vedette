@@ -92,4 +92,9 @@ dashboard:                   # http://127.0.0.1:8080, login token in DASHBOARD_T
 retention:
   events_days: 30
   findings_days: 180
+evaluation:                  # used only by `vedette eval`
+  # Cisco Umbrella's popular hostnames, the known-good names the rules do not
+  # skip; downloaded by the evaluation at most once per refresh. null = leave those sets out.
+  hostnames_url: "https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"
+  refresh_days: 7
 nextdns_write_enabled: false

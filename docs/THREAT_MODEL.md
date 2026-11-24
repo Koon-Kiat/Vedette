@@ -186,6 +186,11 @@ Residual risk:
   most a few per batch, and can be switched off (`enrich.rdap.enabled`).
 - **The top-sites list, the Public Suffix List and the feeds** are bulk
   downloads matched locally, so they reveal nothing about your lookups.
+- **The evaluation's hostname list** (Cisco Umbrella's top-1M) is downloaded
+  only when `vedette eval` runs, at most once a week, and reveals only that an
+  evaluation ran from your address. It is untrusted input like the other
+  lists: capped at 64 MB, every row validated as a domain name, and a bad
+  download leaves the stored copy in place. `vedette eval --offline` skips it.
 
 Residual risk: the registry learns that someone at your address looked up that
 root.

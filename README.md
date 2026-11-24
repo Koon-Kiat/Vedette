@@ -113,6 +113,10 @@ git config core.hooksPath .githooks
 If you already use [pre-commit](https://pre-commit.com), `.pre-commit-config.yaml`
 provides the same gitleaks check.
 
+Pull requests are titled as a Conventional Commit, the same as the squashed
+commit, and their description follows `.github/pull_request_template.md`: a
+summary, the changes, how they were tested, and optional notes.
+
 CI (`.github/workflows/ci.yml`) runs lint, types and tests on Python 3.14 and
 3.15, pip-audit, gitleaks over the full history, and a build of the image
 that Trivy scans for fixable high or critical vulnerabilities, on every push

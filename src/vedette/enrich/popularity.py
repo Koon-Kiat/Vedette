@@ -42,17 +42,19 @@ def parse_tranco(
             cannot be read (bad checksum, corrupt or truncated data, encryption,
             an unsupported compression method).
     """
+    # The messages name no list: the top-sites list and the evaluation's
+    # hostname list share this parser, and each caller says which list failed.
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
-        raise ValueError("top-sites list is not a zip archive") from None
+        raise ValueError("the file is not a zip archive") from None
     with archive:
         members = [info for info in archive.infolist() if not info.is_dir()]
         if not members:
-            raise ValueError("top-sites zip archive is empty")
+            raise ValueError("the zip archive is empty")
         member = members[0]
         if member.file_size > max_uncompressed_bytes:
-            raise ValueError("top-sites list is too large when unpacked")
+            raise ValueError("the file is too large when unpacked")
         seen: set[str] = set()
         try:
             with archive.open(member) as handle:
@@ -68,9 +70,7 @@ def parse_tranco(
                     if len(seen) >= max_rows:
                         return
         except _UNREADABLE as exc:
-            raise ValueError(
-                f"the archive is damaged or unreadable ({type(exc).__name__})"
-            ) from exc
+            raise ValueError("the archive is damaged or unreadable") from exc
 
 
 class PopularityList:

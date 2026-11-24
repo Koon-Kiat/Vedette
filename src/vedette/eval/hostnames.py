@@ -12,6 +12,7 @@ validated row by row, and a bad download leaves the stored copy in place.
 """
 
 import asyncio
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -27,7 +28,8 @@ log = structlog.get_logger(__name__)
 #: Only the most popular names are kept: the list's tail holds junk and some malicious names.
 HOSTNAMES_TOP = 100_000
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
-_STATE = "eval_hostnames"
+#: Refresh records are named this, a colon and a digest of the list's address.
+STATE_PREFIX = "eval_hostnames"
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,9 +77,13 @@ async def ensure_hostnames(
             available=False,
             refreshed_at=None,
             downloaded=False,
-            problem="The popular-hostname sets are switched off (evaluation.hostnames_url).",
+            problem=(
+                "The popular-hostname sets are switched off "
+                "(hostnames_url in the evaluation section of the config)."
+            ),
         )
-    stored = await reference.refreshed_at(_STATE)
+    state = state_name(url)
+    stored = await reference.refreshed_at(state)
     if offline:
         if stored is not None:
             return HostnameList(True, stored, downloaded=False, problem=None)
@@ -86,39 +92,52 @@ async def ensure_hostnames(
             refreshed_at=None,
             downloaded=False,
             problem=(
-                "The run was --offline and no popular-hostname list is stored yet, "
-                "so the popular-hostname sets were skipped."
+                "The run was --offline and no popular-hostname list from this address is "
+                "stored yet, so the popular-hostname sets were skipped."
             ),
         )
     if stored is not None and now - stored < refresh:
         return HostnameList(True, stored, downloaded=False, problem=None)
     try:
         data = await fetch_limited(client, url, max_bytes=MAX_DOWNLOAD_BYTES)
+    except ReferenceFetchError as exc:
+        return _failed(stored, f"could not be downloaded ({exc})")
+    try:
         rows = await asyncio.to_thread(lambda: list(parse_tranco(data, max_rows=HOSTNAMES_TOP)))
-        if not rows:
-            raise ReferenceFetchError("no usable rows")
-    except (ReferenceFetchError, ValueError) as exc:
-        reason = str(exc)
-        log.warning("eval_hostnames_refresh_failed", reason=reason)
-        if stored is not None:
-            return HostnameList(
-                available=True,
-                refreshed_at=stored,
-                downloaded=False,
-                problem=(
-                    f"The popular-hostname list could not be downloaded ({reason}); "
-                    f"the copy from {_day(stored)} was used."
-                ),
-            )
-        return HostnameList(
-            available=False,
-            refreshed_at=None,
-            downloaded=False,
-            problem=(
-                f"The popular-hostname list could not be downloaded ({reason}), "
-                "so the popular-hostname sets were skipped."
-            ),
-        )
-    entries = await reference.replace_eval_hostnames(((name, rank) for name, rank in rows), now)
+    except ValueError as exc:
+        return _failed(stored, f"could not be used ({exc})")
+    if not rows:
+        return _failed(stored, "could not be used (no usable rows)")
+    entries = await reference.replace_eval_hostnames(
+        ((name, rank) for name, rank in rows), now, state=state
+    )
     log.info("eval_hostnames_refreshed", entries=entries)
     return HostnameList(available=True, refreshed_at=now, downloaded=True, problem=None)
+
+
+def state_name(url: str) -> str:
+    """The refresh record for a list from ``url``.
+
+    The address is part of the name, so a copy downloaded from one address is
+    never taken for a fresh copy of another after ``hostnames_url`` changes.
+    """
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+    return f"{STATE_PREFIX}:{digest}"
+
+
+def _failed(stored: datetime | None, what: str) -> HostnameList:
+    """The outcome when a download or its contents failed: the stored copy, if any."""
+    log.warning("eval_hostnames_refresh_failed", reason=what)
+    if stored is not None:
+        return HostnameList(
+            available=True,
+            refreshed_at=stored,
+            downloaded=False,
+            problem=(f"The popular-hostname list {what}; the copy from {_day(stored)} was used."),
+        )
+    return HostnameList(
+        available=False,
+        refreshed_at=None,
+        downloaded=False,
+        problem=f"The popular-hostname list {what}, so the popular-hostname sets were skipped.",
+    )

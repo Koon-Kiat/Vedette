@@ -125,10 +125,15 @@ class ReferenceStore:
 
     # --- popular hostnames, for the evaluation ------------------------------------------
 
-    async def replace_eval_hostnames(self, rows: Iterable[tuple[str, int]], when: datetime) -> int:
+    async def replace_eval_hostnames(
+        self, rows: Iterable[tuple[str, int]], when: datetime, *, state: str
+    ) -> int:
         """Replace the evaluation's hostname list in one transaction; return its size.
 
-        An empty list changes nothing and returns 0, so the stored copy survives.
+        ``state`` names the refresh record for the list's source; every other
+        ``eval_hostnames`` record is removed, since the table now holds this
+        source's names only. An empty list changes nothing and returns 0, so
+        the stored copy survives.
         """
         total = 0
         async with self._engine.begin() as connection:
@@ -142,7 +147,13 @@ class ReferenceStore:
             if total == 0:
                 await connection.rollback()
                 return 0
-            await self._mark_refreshed(connection, "eval_hostnames", when, total)
+            await connection.execute(
+                delete(reference_state).where(
+                    (reference_state.c.name == "eval_hostnames")
+                    | reference_state.c.name.startswith("eval_hostnames:", autoescape=True)
+                )
+            )
+            await self._mark_refreshed(connection, state, when, total)
         return total
 
     # --- public suffix list -----------------------------------------------------------

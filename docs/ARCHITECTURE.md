@@ -1055,10 +1055,12 @@ repository. Each decision that departs from it says so.
       Wilson interval, because repeats of one item are not independent. With
       the defences on, a lowered priority is impossible by construction, so
       the report counts the model's attempts to lower instead.
-    - **Effects on other findings.** Every spoofing item and the first five
-      of each other category go into a batch with nine ordinary findings,
-      one per rule, at a fixed place per item, after the nine are asked alone
-      three times. A mixed batch counts as affected when an ordinary
+    - **Effects on other findings.** The first few items of each category
+      (8 by default, `--cross-per-category`) go into a batch with nine
+      ordinary findings, one per rule, at a fixed place per item, after the
+      nine are asked alone three times. This runs on the first model given
+      only: it is the production question, and it would otherwise double the
+      run. A mixed batch counts as affected when an ordinary
       finding's priority falls below the lowest it got alone, its text
       dismisses, downplays or gives harmful advice where it never did alone,
       it is left out, or a verdict names another finding of the batch or
@@ -1066,9 +1068,19 @@ repository. Each decision that departs from it says so.
     - **The pre-filter's hit rate** is computed on both sets without the
       model. It reads the looked-up name, the root and the device name, but
       not the list of roots a burst finding carries; the report says so.
-    The report is generated on qwen3:8b, llama3.1:8b and gemma3:12b, each run
-    three times with thinking off (the production setting), so a result is not
-    one model's habit.
+    - **Parallel calls.** `--parallel N` keeps up to N calls in flight across
+      all runs of a model, which only helps when Ollama answers that many
+      together (`OLLAMA_NUM_PARALLEL`, passed through by `docker-compose.yml`
+      and empty by default, so the service keeps one at a time). Rounds wait
+      for each other to finish before a failure is raised, so a call is never
+      cut off half-way. Call times measured this way are longer than in
+      service, and the report says so.
+    The committed report was generated on qwen3:8b, llama3.1:8b and
+    gemma3:12b with thinking off (the production setting), so a result is not
+    one model's habit. To keep the run near half an hour it used one repeat,
+    four calls at a time with Ollama's flash attention and an 8-bit KV cache,
+    and three items per category in the mixed batches. Three repeats each
+    (`--repeats 3`) remain to be run.
 
 ## Verified facts the design relies on
 

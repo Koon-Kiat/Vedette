@@ -28,8 +28,12 @@
   gives each rate with a 95% interval, per category, and the pre-filter's hit
   rate on the held-out set against the development set.
 - A new cross-finding test puts one crafted finding among nine ordinary ones
-  and reports any change in what the model says about them (`--no-cross`
-  skips it).
+  and reports any change in what the model says about them, on the first
+  model given (`--no-cross` skips it, `--cross-per-category` sizes it).
+- `vedette eval --parallel N` keeps N model calls in flight. With Ollama
+  started with `OLLAMA_NUM_PARALLEL` (now passed through by
+  `docker-compose.yml`, empty by default), the evaluation finishes several
+  times sooner.
 
 ## 0.2.0 - 2026-11-22
 

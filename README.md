@@ -462,10 +462,29 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 
 (bash: `-v "$PWD/docs:/out"`.) It takes a while: every injection round asks
 the model about all 315 items, with thinking off and on, and the mixed
-batches add about 70 calls per setting. `--think off` halves that,
-`--no-cross` skips the mixed batches, `--no-llm` skips the model entirely,
-`--model` (repeatable) tests another downloaded model, and `--repeats N` runs
-the set N times per setting for tighter confidence intervals.
+batches on the first model add about 70 calls per setting. `--think off`
+halves that, `--no-cross` skips the mixed batches (`--cross-per-category`
+sizes them), `--no-llm` skips the model entirely, `--model` (repeatable) tests
+another downloaded model, and `--repeats N` runs the set N times per setting
+for tighter confidence intervals.
+
+To finish several times sooner, let Ollama answer four calls at once and send
+four at a time, then put Ollama back as it was:
+
+```powershell
+$env:OLLAMA_NUM_PARALLEL=4; $env:OLLAMA_FLASH_ATTENTION=1; $env:OLLAMA_KV_CACHE_TYPE="q8_0"; docker compose up -d ollama
+```
+
+```powershell
+docker compose run --rm -v "${PWD}/docs:/out" vedette eval --parallel 4 --think off --output /out/EVALUATION.md
+```
+
+```powershell
+Remove-Item Env:OLLAMA_NUM_PARALLEL, Env:OLLAMA_FLASH_ATTENTION, Env:OLLAMA_KV_CACHE_TYPE; docker compose up -d ollama
+```
+
+The flash attention and 8-bit cache settings let four answers fit in 12 GB of
+graphics memory; a smaller card may need `--parallel 2`.
 
 ## How to add a profile
 

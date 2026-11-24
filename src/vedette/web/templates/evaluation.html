@@ -38,7 +38,7 @@
     <thead><tr><th>Dataset</th><th>Kind</th><th class="num">Items</th><th class="num">Flagged</th><th class="num">Rate</th><th class="num">High or critical</th></tr></thead>
     <tbody>
       {% for row in s.detection %}
-      <tr><td>{{ row.dataset|text }}{% if row.note %}<span class="note">{{ row.note|text }}</span>{% endif %}</td><td>{{ row.kind }}</td><td class="num">{{ row["items"]|num }}</td><td class="num">{{ row.flagged|num }}</td><td class="num">{{ pct(row.rate) }}</td><td class="num">{{ row.alerting|num }}</td></tr>
+      <tr><td>{{ row.dataset|text }}{% if row.note %}<span class="note">{{ row.note|text }}</span>{% endif %}{% if row.get("construction") %}<span class="note">True by construction: {{ row.get("construction")|prose }}</span>{% endif %}</td><td>{{ row.kind }}</td><td class="num">{{ row["items"]|num }}</td><td class="num">{{ row.flagged|num }}</td><td class="num">{{ pct(row.rate) }}</td><td class="num">{{ row.alerting|num }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -346,6 +346,8 @@ async def test_the_evaluation_page_shows_the_latest_run(store: Store) -> None:
     assert "Against the targets" in page.text
     assert "0.43" in page.text
     assert "Threat-feed domains" in page.text
+    assert "True by construction: A sanity check." in page.text
+    assert page.text.count("True by construction") == 1
     assert "No evaluation has run yet" not in page.text
 
 
@@ -367,7 +369,19 @@ def _minimal_summary() -> dict[str, Any]:
                 "by_rule": {"threat-intel-allowed": 20},
                 "note": "",
                 "rate": 1.0,
-            }
+            },
+            {  # from a run after the by-construction labels; the row above is from before
+                "dataset": "Top sites, local list",
+                "kind": "benign",
+                "items": 1000,
+                "flagged": 0,
+                "alerting": 0,
+                "by_rule": {},
+                "note": "",
+                "rate": 0.0,
+                "construction": "A sanity check.",
+                "examples": [],
+            },
         ],
         "history": {
             "days": 7.0,

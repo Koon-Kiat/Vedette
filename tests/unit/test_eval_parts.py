@@ -205,3 +205,102 @@ def test_a_run_without_the_model_says_so() -> None:
     report = render_markdown(summary(injection=[], with_llm=False))
 
     assert "The model was not run in this evaluation." in report
+
+
+def _row(dataset: str, **fields: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "dataset": dataset,
+        "kind": "benign",
+        "items": 1000,
+        "flagged": 0,
+        "alerting": 0,
+        "by_rule": {},
+        "note": "",
+        "rate": 0.0,
+        "construction": "",
+        "examples": [],
+    }
+    row.update(fields)
+    return row
+
+
+def test_the_report_marks_results_true_by_construction_and_lists_public_examples() -> None:
+    report = render_markdown(
+        summary(
+            detection=[
+                _row("Top sites, local list", construction="A sanity check."),
+                _row(
+                    "Top sites, as if unlisted",
+                    flagged=3,
+                    rate=0.003,
+                    by_rule={"dga-like": 3},
+                    examples=[{"name": "x7k2q9z1m3b8v4.example", "rules": "dga-like"}],
+                ),
+            ],
+            hostname_list={"source": None, "refreshed_at": None, "suffix_list": True},
+        )
+    )
+
+    assert "| Top sites, local list (by construction) |" in report
+    assert "Results that are true by construction:" in report
+    assert "- Top sites, local list: A sanity check." in report
+    assert "Rows marked as if unlisted run the same names" in report
+    assert (
+        'the rules flag 3 of 1000 names in "Top sites, as if unlisted" (0%): dga-like 3'
+    ) in report
+    assert "### Flagged names from the public lists" in report
+    assert "- `x7k2q9z1m3b8v4.example` (Top sites, as if unlisted): dga-like" in report
+    assert "Cisco Umbrella's list of the names its resolvers see most" not in report
+
+
+def test_an_as_if_unlisted_row_with_nothing_flagged_is_still_stated() -> None:
+    report = render_markdown(summary(detection=[_row("Popular hostnames, as if unlisted")]))
+
+    assert (
+        'the rules flag 0 of 1000 names in "Popular hostnames, as if unlisted" (0%): none'
+    ) in report
+    assert "### Flagged names from the public lists" not in report
+
+
+def test_the_report_describes_the_popular_hostname_sets() -> None:
+    sizes = {**summary()["dataset_sizes"], "hostnames": 1000}
+    report = render_markdown(
+        summary(
+            dataset_sizes=sizes,
+            detection=[
+                _row(
+                    "Popular hostnames (Cisco Umbrella)",
+                    flagged=2,
+                    alerting=1,
+                    rate=0.002,
+                    by_rule={"threat-intel-allowed": 1, "dga-like": 1},
+                )
+            ],
+            hostname_list={
+                "source": "https://lists.test/top-1m.csv.zip",
+                "refreshed_at": "2026-11-24T08:00:00+00:00",
+                "suffix_list": True,
+            },
+        )
+    )
+
+    assert "10 top sites, 1000 popular hostnames, 10 names from your history" in report
+    assert '2 of 1000 benign names in "Popular hostnames (Cisco Umbrella)" were flagged' in report
+    assert (
+        "Cisco Umbrella's list of the names its resolvers see most, downloaded on 2026-11-24"
+        in (report)
+    )
+
+
+def test_a_summary_from_before_these_fields_still_renders() -> None:
+    old = summary()
+    old.pop("hostname_list", None)
+    old["dataset_sizes"].pop("hostnames", None)
+    for row in old["detection"]:
+        row.pop("construction", None)
+        row.pop("examples", None)
+
+    report = render_markdown(old)
+
+    assert report.startswith("# Evaluation")
+    assert "Results that are true by construction" not in report

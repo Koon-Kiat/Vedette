@@ -304,3 +304,19 @@ def test_a_summary_from_before_these_fields_still_renders() -> None:
 
     assert report.startswith("# Evaluation")
     assert "Results that are true by construction" not in report
+
+
+def test_the_report_says_which_names_are_only_counted() -> None:
+    report = render_markdown(summary())
+
+    assert (
+        "Names sampled from your history and from the threat feeds are only counted here; "
+        "none of them appears in this report."
+    ) in report
+    assert "even when a feed also lists one" in report
+
+
+def test_an_empty_as_if_unlisted_row_is_not_stated() -> None:
+    report = render_markdown(summary(detection=[_row("Top sites, as if unlisted", items=0)]))
+
+    assert "Without the top-sites exemption" not in report

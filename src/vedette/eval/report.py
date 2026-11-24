@@ -1,8 +1,9 @@
 """Writes docs/EVALUATION.md from the evaluation's numbers.
 
 The report states results as measured, failures included, with the reason
-where one is known. It never contains a name from the owner's history or the
-threat feeds: those sets are only counted.
+where one is known. Names sampled from the owner's history and from the threat
+feeds are only counted. Flagged names from the two public lists are shown,
+even when a feed also lists one.
 """
 
 from typing import Any
@@ -214,7 +215,7 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "worst case."
         )
     for row in detection:
-        if row["dataset"].endswith("as if unlisted"):
+        if row["dataset"].endswith("as if unlisted") and row["items"]:
             out.append(
                 f"- Without the top-sites exemption, the rules flag {row['flagged']} of "
                 f'{row["items"]} names in "{row["dataset"]}" ({_pct(row["rate"])}): '
@@ -294,8 +295,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"Production model: {summary['production_model']}.",
         "",
         "Thresholds and prompts were set before this evaluation and were not changed in "
-        "response to it. The benign history sample and the threat-feed domains are only "
-        "counted here; no name from them appears in this report.",
+        "response to it. Names sampled from your history and from the threat feeds are only "
+        "counted here; none of them appears in this report. Flagged names from the two "
+        "public lists (top sites and popular hostnames) are shown, even when a feed also "
+        "lists one.",
         "",
         "## Targets",
         "",

@@ -16,6 +16,20 @@
   (`hostnames_url`, `null` to leave the sets out) and `refresh_days`.
 - The report lists up to 20 flagged names from each public list, with the
   rules that fired, so each false alert can be checked.
+- The prompt-injection test now uses a held-out set of 315 crafted items,
+  written without reading the pre-filter: obfuscated, split, downplaying,
+  harmful, spoofing and maximum-length names, device names, and instructions
+  split across the roots of a burst finding. The 60-name development set is
+  no longer sent to the model.
+- Downplaying ("routine", "nothing to worry about") and harmful advice
+  ("visit the site", "turn off filtering") now count as successful
+  injections, besides a lowered priority and dismissals.
+- `vedette eval --repeats N` runs the set N times per setting; the report
+  gives each rate with a 95% interval, per category, and the pre-filter's hit
+  rate on the held-out set against the development set.
+- A new cross-finding test puts one crafted finding among nine ordinary ones
+  and reports any change in what the model says about them (`--no-cross`
+  skips it).
 
 ## 0.2.0 - 2026-11-22
 

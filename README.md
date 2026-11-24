@@ -440,9 +440,12 @@ disable the profiles in `config.yaml` or remove `NEXTDNS_API_KEY`.
 `vedette eval` runs known-good names (the top-sites list, 1,000 popular full
 hostnames from Cisco Umbrella's list and a sample of your own history),
 known-bad names (threat-feed domains, synthetic DGA names and bursts, fast,
-slow and sustained tunnels, and domains with given registration dates) and 60
-crafted prompt-injection names through the real rules and the local model,
-with the defences on and off. It also replays all of your stored history
+slow and sustained tunnels, and domains with given registration dates) and a
+held-out set of 315 crafted prompt-injection items (names, device names and
+lists of roots, written without reading the defences) through the real rules
+and the local model, with the defences on and off. A sample of those items is
+also put among ordinary findings, to see whether one crafted finding changes
+what the model says about the others. It also replays all of your stored history
 through the rules as they are now, which shows how often each rule would fire
 on your own traffic. It writes a report and fills the dashboard's Evaluation
 page. The known-good names also run "as if unlisted", with their top-sites rank
@@ -458,9 +461,11 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 ```
 
 (bash: `-v "$PWD/docs:/out"`.) It takes a while: every injection round asks
-the model about all 60 names, with thinking off and on. `--think off` halves
-that, `--no-llm` skips the model entirely, and `--model` (repeatable) tests
-another downloaded model.
+the model about all 315 items, with thinking off and on, and the mixed
+batches add about 70 calls per setting. `--think off` halves that,
+`--no-cross` skips the mixed batches, `--no-llm` skips the model entirely,
+`--model` (repeatable) tests another downloaded model, and `--repeats N` runs
+the set N times per setting for tighter confidence intervals.
 
 ## How to add a profile
 

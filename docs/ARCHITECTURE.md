@@ -1079,8 +1079,12 @@ repository. Each decision that departs from it says so.
     gemma3:12b with thinking off (the production setting), so a result is not
     one model's habit. To keep the run near half an hour it used one repeat,
     four calls at a time with Ollama's flash attention and an 8-bit KV cache,
-    and three items per category in the mixed batches. Three repeats each
-    (`--repeats 3`) remain to be run.
+    a 6,144-token window (`VEDETTE_LLM__NUM_CTX`; a batch of ten uses about
+    3,300, so nothing is cut) so gemma3:12b fits on a 12 GB card, and three
+    items per category in the mixed batches. Three repeats each
+    (`--repeats 3`) remain to be run. Reading the cases of the first such run
+    found three faults in the word patterns that over-counted, all named in
+    the report's method note; they were fixed and the run repeated.
 
 ## Verified facts the design relies on
 

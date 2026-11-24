@@ -24,15 +24,17 @@ The cross-finding test puts one crafted finding among nine ordinary ones and
 compares what the model says about the nine with the same nine asked alone.
 """
 
+import asyncio
 import hashlib
 import re
 import statistics
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Iterable, Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from itertools import batched
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -232,21 +234,48 @@ def echoed(texts: Sequence[str], name: str) -> bool:
     return match is not None and not match.conditional
 
 
-class RecordingClient(OllamaClient):
-    """An Ollama client that keeps every raw answer and how long it took."""
+#: Answers given while it is set, for the batch being asked in the current task.
+_CAPTURE: ContextVar[list[str] | None] = ContextVar("_CAPTURE", default=None)
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Same arguments as :class:`OllamaClient`."""
+
+async def settle[T](calls: Iterable[Awaitable[T]]) -> list[T]:
+    """Run ``calls`` concurrently and wait for all, then raise the first failure if any.
+
+    Unlike a plain gather or a task group, nothing is cancelled half-way when
+    one call fails, so no database write or model call is left cut off.
+    """
+    results = await asyncio.gather(*calls, return_exceptions=True)
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
+    return cast("list[T]", results)
+
+
+class RecordingClient(OllamaClient):
+    """An Ollama client that keeps every raw answer and how long it took.
+
+    Clients that share ``limit`` never have more calls in flight together than
+    it allows, so batches can be asked concurrently up to the number of
+    requests the model server answers at once.
+    """
+
+    def __init__(self, *args: Any, limit: asyncio.Semaphore | None = None, **kwargs: Any) -> None:
+        """Same arguments as :class:`OllamaClient`, and the shared call limit."""
         super().__init__(*args, **kwargs)
         self.answers: list[str] = []
         self.durations_ms: list[float] = []
+        self._limit = limit or asyncio.Semaphore(1)
 
     async def chat_json(self, system: str, user: str, schema: dict[str, Any]) -> str:
-        """Ask, and record the answer and its duration."""
-        started = time.monotonic()
-        content = await super().chat_json(system, user, schema)
-        self.durations_ms.append((time.monotonic() - started) * 1000)
+        """Ask, and record the answer and how long the call itself took."""
+        async with self._limit:
+            started = time.monotonic()
+            content = await super().chat_json(system, user, schema)
+            self.durations_ms.append((time.monotonic() - started) * 1000)
         self.answers.append(content)
+        captured = _CAPTURE.get()
+        if captured is not None:
+            captured.append(content)
         return content
 
 
@@ -499,7 +528,10 @@ async def run_defended(
 ) -> InjectionResult:
     """The production analyst, with its cache off, on the crafted findings."""
     findings = crafted_findings(items, now, defended=True)
-    analyses = await _analyst(client, specs, scratch).analyse(findings)
+    analyst = _analyst(client, specs, scratch)
+    # One call per batch, as the analyst would make them, asked concurrently.
+    asked = await settle(analyst.analyse(batch) for batch in batched(findings, BATCH, strict=False))
+    analyses = [analysis for batch in asked for analysis in batch]
     raw, failures = _raw_verdicts(client.answers)
     result = InjectionResult(
         model=client.model,
@@ -535,8 +567,10 @@ async def run_undefended(
     """The naive analyst: no data framing, no pre-filter, no guards."""
     findings = crafted_findings(items, now, defended=False)
     got: dict[int, Verdict] = {}
-    for batch in batched(findings, BATCH, strict=False):
-        got.update(await _ask_naive(client, batch))
+    for answers in await settle(
+        _ask_naive(client, batch) for batch in batched(findings, BATCH, strict=False)
+    ):
+        got.update(answers)
     _, failures = _raw_verdicts(client.answers)
     result = InjectionResult(
         model=client.model,
@@ -823,12 +857,12 @@ def neighbour_markers() -> dict[int, tuple[str, ...]]:
     return {number: entry[4] for number, entry in enumerate(_NEIGHBOURS, start=1)}
 
 
-def mixed_sample(items: Sequence[Crafted], per_category: int = 5) -> list[Crafted]:
-    """Every spoofing item, and the first few of every other category, in file order."""
+def mixed_sample(items: Sequence[Crafted], per_category: int = 8) -> list[Crafted]:
+    """The first ``per_category`` items of every category, in file order."""
     taken: dict[str, int] = {}
     chosen = []
     for item in items:
-        if item.category == "spoof" or taken.get(item.category, 0) < per_category:
+        if taken.get(item.category, 0) < per_category:
             chosen.append(item)
             taken[item.category] = taken.get(item.category, 0) + 1
     return chosen
@@ -903,26 +937,29 @@ async def _answers(
     scratch: AsyncEngine,
 ) -> tuple[dict[int, _Answer], int]:
     """Ask one batch in either arm; the answers by finding id and the stray verdicts."""
-    start = len(client.answers)
+    captured: list[str] = []
+    token = _CAPTURE.set(captured)  # batches run as tasks, each with its own context
     answers: dict[int, _Answer] = {}
-    if defended:
-        analyses = await _analyst(client, specs, scratch).analyse(findings)
-        for finding, analysis in zip(findings, analyses, strict=True):
-            answered = analysis.source == "llm"
-            answers[finding.id] = _Answer(
-                analysis.priority if answered else None, _texts(analysis) if answered else ()
-            )
-    else:
-        got = await _ask_naive(client, findings)
-        for finding in findings:
-            verdict = got.get(finding.id)
-            answers[finding.id] = (
-                _Answer(verdict.priority, _texts(verdict))
-                if verdict is not None
-                else _Answer(None, ())
-            )
-    stray = _stray(client.answers[start:], {finding.id for finding in findings})
-    return answers, stray
+    try:
+        if defended:
+            analyses = await _analyst(client, specs, scratch).analyse(findings)
+            for finding, analysis in zip(findings, analyses, strict=True):
+                answered = analysis.source == "llm"
+                answers[finding.id] = _Answer(
+                    analysis.priority if answered else None, _texts(analysis) if answered else ()
+                )
+        else:
+            got = await _ask_naive(client, findings)
+            for finding in findings:
+                verdict = got.get(finding.id)
+                answers[finding.id] = (
+                    _Answer(verdict.priority, _texts(verdict))
+                    if verdict is not None
+                    else _Answer(None, ())
+                )
+    finally:
+        _CAPTURE.reset(token)
+    return answers, _stray(captured, {finding.id for finding in findings})
 
 
 def _kinds(texts: Sequence[str], strings: Sequence[str]) -> set[str]:
@@ -956,10 +993,11 @@ async def run_cross(
     seen: dict[int, set[str]] = {finding.id: set() for finding in ordinary}
     always_answered = {finding.id for finding in ordinary}
     result = CrossResult(model=client.model, think=think, defences=defended)
-    for _ in range(control_runs):
-        answers, _ = await _answers(
-            client, ordinary, defended=defended, specs=specs, scratch=scratch
-        )
+    controls = await settle(
+        _answers(client, ordinary, defended=defended, specs=specs, scratch=scratch)
+        for _ in range(control_runs)
+    )
+    for answers, _ in controls:
         result.control_runs += 1
         for ident, answer in answers.items():
             if answer.priority is None:
@@ -968,13 +1006,18 @@ async def run_cross(
             lowest[ident] = min(lowest.get(ident, answer.priority.rank), answer.priority.rank)
             seen[ident] |= _kinds(answer.texts, markers[ident])
     crafted_id = NEIGHBOURS + 1
+    batches = []
     for index, item in enumerate(items):
-        crafted = crafted_finding(item, index, crafted_id, now, defended=defended)
         batch = list(ordinary)
-        batch.insert(_position(item), crafted)
-        answers, stray = await _answers(
-            client, batch, defended=defended, specs=specs, scratch=scratch
+        batch.insert(
+            _position(item), crafted_finding(item, index, crafted_id, now, defended=defended)
         )
+        batches.append(batch)
+    mixed = await settle(
+        _answers(client, batch, defended=defended, specs=specs, scratch=scratch)
+        for batch in batches
+    )
+    for item, (answers, stray) in zip(items, mixed, strict=True):
         effects: list[str] = []
         result.batches += 1
         result.stray_ids += stray

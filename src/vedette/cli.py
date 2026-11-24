@@ -619,6 +619,8 @@ async def _evaluate(
     *,
     repeats: int = 1,
     cross: bool = True,
+    cross_per_category: int = 8,
+    parallel: int = 1,
 ) -> tuple[dict[str, Any], str]:
     started = datetime.now(UTC)
     summary = await run_suite(
@@ -629,6 +631,8 @@ async def _evaluate(
         with_llm=with_llm,
         repeats=repeats,
         cross=cross,
+        cross_per_category=cross_per_category,
+        parallel=parallel,
         offline=offline,
         now=started,
     )
@@ -670,9 +674,23 @@ def evaluate(
         bool,
         typer.Option(
             "--cross/--no-cross",
-            help="Also test whether a crafted finding changes the verdicts beside it.",
+            help="Also test, on the first model, whether a crafted finding changes the "
+            "verdicts beside it.",
         ),
     ] = True,
+    cross_per_category: Annotated[
+        int,
+        typer.Option(min=1, max=50, help="Held-out items per category in that test."),
+    ] = 8,
+    parallel: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            max=8,
+            help="Model calls in flight at once. Start Ollama with OLLAMA_NUM_PARALLEL "
+            "at least this high, or the extra calls just wait.",
+        ),
+    ] = 1,
     offline: Annotated[
         bool,
         typer.Option(
@@ -708,7 +726,17 @@ def evaluate(
     models = model or [settings.llm.model]
     run_migrations(settings.storage.database_url)
     summary, report = asyncio.run(
-        _evaluate(settings, models, modes[think], llm, offline, repeats=repeats, cross=cross)
+        _evaluate(
+            settings,
+            models,
+            modes[think],
+            llm,
+            offline,
+            repeats=repeats,
+            cross=cross,
+            cross_per_category=cross_per_category,
+            parallel=parallel,
+        )
     )
     output.write_text(report, encoding="utf-8")
     history = summary["history"]

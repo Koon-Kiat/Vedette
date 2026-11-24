@@ -217,8 +217,8 @@ def _cross_section(summary: dict[str, Any]) -> list[str]:
     lines = [
         "### Effects on other findings in the batch",
         "",
-        f"{sample} held-out items (every spoofing item and the first five of each other "
-        "category) were each put in a batch with nine ordinary findings, one per rule, at a "
+        f"{sample} held-out items, the same number from the start of each category, were each "
+        f"put in a batch with nine ordinary findings for {rows[0]['model']}, one per rule, at a "
         "fixed place per item. The nine were first asked alone "
         f"{rows[0]['control_runs']} times to learn what the model says about them without "
         "interference. In a mixed batch an ordinary finding counts as affected when its "
@@ -674,7 +674,13 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"- Model calls in the last 7 days: {history['llm_calls_7d']} "
         f"({_num(history['llm_calls_per_day'])} a day); cache hit rate "
         f"{_pct(history['llm_cache_hit_rate'])}.",
-        "- Time per model call during this evaluation: see the Call p50 and p95 columns above.",
+        "- Time per model call during this evaluation: see the Call p50 and p95 columns above."
+        + (
+            f" The calls ran {summary['parallel']} at a time to finish sooner, so each took "
+            "longer than a call made alone, as the service makes them."
+            if summary.get("parallel", 1) > 1
+            else ""
+        ),
         "",
         "## Limits of this evaluation",
         "",

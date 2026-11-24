@@ -1,5 +1,6 @@
 """The evaluation suite against a seeded database and a faked local model."""
 
+import asyncio
 import json
 import re
 from datetime import UTC, datetime, timedelta
@@ -391,26 +392,27 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
     summary = await run_suite(
         load_settings(),
         load_rules(),
-        models=["fake:1b"],
+        models=["fake:1b", "fake:2b"],
         thinks=[False],
         repeats=2,
+        parallel=3,
         offline=True,
         now=NOW,
     )
     report = render_markdown(summary)
 
-    assert [(row["repeat"], row["defences"]) for row in summary["injection"]] == [
-        (1, True),
-        (1, False),
-        (2, True),
-        (2, False),
+    assert [(r["model"], r["repeat"], r["defences"]) for r in summary["injection"]] == [
+        (model, repeat, defended)
+        for model in ("fake:1b", "fake:2b")
+        for repeat in (1, 2)
+        for defended in (True, False)
     ]
     combined = summary["injection_combined"]
-    assert [(row["runs"], row["trials"], row["succeeded"]) for row in combined] == [
-        (2, 6, 6),
-        (2, 6, 6),
-    ]
-    assert [row["batches"] for row in summary["cross_finding"]] == [3, 3]
+    assert [(row["runs"], row["trials"], row["succeeded"]) for row in combined] == [(2, 6, 6)] * 4
+    # The mixed batches run on the first model only.
+    assert [(r["model"], r["batches"]) for r in summary["cross_finding"]] == [("fake:1b", 3)] * 2
+    assert summary["parallel"] == 3
+    assert "The calls ran 3 at a time" in report
     assert summary["held_out_categories"] == {"spoof": 1, "device": 1, "sample-roots": 1}
     assert summary["prefilter"]["held_out"]["sample-roots"] == [1, 0]
     assert summary["dataset_sizes"]["injection_held_out"] == 3
@@ -626,3 +628,41 @@ async def test_problems_on_the_evaluation_page_keep_their_full_stops(store: Stor
     assert "2026-11-24 was used.</li>" in page.text
     assert "used[.]" not in page.text
     assert "evil[.]example today." in page.text, "names inside a sentence are still defanged"
+
+
+async def test_clients_sharing_a_limit_never_exceed_it(router: respx.MockRouter) -> None:
+    in_flight = 0
+    most = 0
+
+    async def answer(request: httpx.Request) -> httpx.Response:
+        nonlocal in_flight, most
+        in_flight += 1
+        most = max(most, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": "{}"}})
+
+    router.post(f"{OLLAMA}/api/chat").mock(side_effect=answer)
+    limit = asyncio.Semaphore(2)
+    clients = [
+        RecordingClient(
+            OLLAMA,
+            model="fake:1b",
+            think=False,
+            temperature=0.1,
+            num_ctx=8192,
+            keep_alive="1m",
+            limit=limit,
+        )
+        for _ in range(2)
+    ]
+    try:
+        await asyncio.gather(
+            *(client.chat_json("s", "u", {}) for client in clients for _ in range(4))
+        )
+    finally:
+        for client in clients:
+            await client.aclose()
+
+    assert most == 2
+    assert [len(client.answers) for client in clients] == [4, 4]

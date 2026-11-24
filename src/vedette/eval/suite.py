@@ -1,5 +1,6 @@
 """Runs the whole evaluation and returns its numbers as plain JSON-ready data."""
 
+import asyncio
 import shutil
 import tempfile
 from collections.abc import Sequence
@@ -11,7 +12,7 @@ from typing import Any
 import httpx
 import structlog
 
-from vedette.config import Settings
+from vedette.config import LlmConfig, Settings
 from vedette.eval import datasets
 from vedette.eval.detection import DetectionResult, Detector
 from vedette.eval.history import history_metrics
@@ -27,6 +28,7 @@ from vedette.eval.injection import (
     run_cross,
     run_defended,
     run_undefended,
+    settle,
 )
 from vedette.eval.stats import wilson
 from vedette.llm.ollama import OllamaUnavailable
@@ -87,62 +89,65 @@ async def _ask_model(
     held_out: Sequence[datasets.Crafted],
     sample: Sequence[datasets.Crafted],
     repeats: int,
+    parallel: int,
     now: datetime,
 ) -> tuple[list[InjectionResult], list[CrossResult]]:
     """Every injection run for one model and thinking setting.
+
+    All runs are started together and share one limit of ``parallel`` calls in
+    flight, so the model server is kept busy without queueing.
 
     Raises:
         OllamaUnavailable: The model could not be used.
     """
     llm = settings.llm
-    results: list[InjectionResult] = []
-    crosses: list[CrossResult] = []
+    limit = asyncio.Semaphore(parallel)
 
-    def client() -> RecordingClient:
-        return RecordingClient(
-            llm.base_url,
-            model=model,
-            think=think,
-            temperature=llm.temperature,
-            num_ctx=llm.num_ctx,
-            keep_alive=llm.keep_alive,
-        )
-
-    for repeat in range(1, repeats + 1):
-        for defended in (True, False):
-            log.info(
-                "eval_injection_round", model=model, think=think, defences=defended, repeat=repeat
-            )
-            recording = client()
-            try:
-                if defended:
-                    result = await run_defended(
-                        recording, held_out, specs, scratch.engine, think=think, now=now
-                    )
-                else:
-                    result = await run_undefended(recording, held_out, think=think, now=now)
-            finally:
-                await recording.aclose()
-            result.repeat = repeat
-            results.append(result)
-    for defended in (True, False) if sample else ():
-        log.info("eval_cross_finding_round", model=model, think=think, defences=defended)
-        recording = client()
+    async def injection(repeat: int, defended: bool) -> InjectionResult:
+        log.info("eval_injection_round", model=model, think=think, defences=defended, repeat=repeat)
+        recording = _client(llm, model, think, limit)
         try:
-            crosses.append(
-                await run_cross(
-                    recording,
-                    sample,
-                    specs,
-                    scratch.engine,
-                    defended=defended,
-                    think=think,
-                    now=now,
+            if defended:
+                result = await run_defended(
+                    recording, held_out, specs, scratch.engine, think=think, now=now
                 )
+            else:
+                result = await run_undefended(recording, held_out, think=think, now=now)
+        finally:
+            await recording.aclose()
+        result.repeat = repeat
+        return result
+
+    async def cross(defended: bool) -> CrossResult:
+        log.info("eval_cross_finding_round", model=model, think=think, defences=defended)
+        recording = _client(llm, model, think, limit)
+        try:
+            return await run_cross(
+                recording, sample, specs, scratch.engine, defended=defended, think=think, now=now
             )
         finally:
             await recording.aclose()
-    return results, crosses
+
+    rounds = [(repeat, defended) for repeat in range(1, repeats + 1) for defended in (True, False)]
+    crossed = asyncio.ensure_future(
+        settle([cross(defended) for defended in (True, False) if sample])
+    )
+    done = asyncio.ensure_future(settle([injection(*key) for key in rounds]))
+    # Both finish before a failure is raised, so no call is cut off half-way.
+    await asyncio.wait([crossed, done])
+    return done.result(), crossed.result()
+
+
+def _client(llm: LlmConfig, model: str, think: bool, limit: asyncio.Semaphore) -> RecordingClient:
+    return RecordingClient(
+        llm.base_url,
+        model=model,
+        think=think,
+        temperature=llm.temperature,
+        num_ctx=llm.num_ctx,
+        keep_alive=llm.keep_alive,
+        limit=limit,
+    )
 
 
 async def run_suite(
@@ -154,6 +159,8 @@ async def run_suite(
     with_llm: bool = True,
     repeats: int = 1,
     cross: bool = True,
+    cross_per_category: int = 8,
+    parallel: int = 1,
     offline: bool = False,
     http_client: httpx.AsyncClient | None = None,
     now: datetime | None = None,
@@ -164,8 +171,11 @@ async def run_suite(
     ``evaluation.refresh_days``; with ``offline`` the stored copy is used or
     those sets are skipped. ``http_client`` downloads it (one is opened if not given).
     The held-out injection set goes to each model ``repeats`` times per thinking
-    and defence setting; with ``cross``, a sample of it is also put among
-    ordinary findings to see whether it changes what the model says about them.
+    and defence setting. With ``cross``, the first ``cross_per_category`` items
+    of each category are also put among ordinary findings, on the first model
+    only, to see whether they change what it says about the others. Up to
+    ``parallel`` model calls are in flight at once; set the model server to
+    answer as many together (``OLLAMA_NUM_PARALLEL``).
     """
     now = now or datetime.now(UTC)
     profile_ids = [profile.id for profile in settings.enabled_profiles] or [
@@ -199,7 +209,7 @@ async def run_suite(
         young, old = datasets.dated_domains()
         injection = datasets.injection_names()
         held_out = datasets.held_out_injection()
-        sample = mixed_sample(held_out) if cross else []
+        sample = mixed_sample(held_out, cross_per_category) if cross else []
         prefilter = {
             "development": prefilter_hits(as_crafted(injection), now),
             "held_out": prefilter_hits(held_out, now),
@@ -313,7 +323,7 @@ async def run_suite(
         results: list[InjectionResult] = []
         crosses: list[CrossResult] = []
         if with_llm:
-            for model in models:
+            for number, model in enumerate(models):
                 for think in thinks:
                     try:
                         done, crossed = await _ask_model(
@@ -323,8 +333,9 @@ async def run_suite(
                             model,
                             think,
                             held_out=held_out,
-                            sample=sample,
+                            sample=sample if number == 0 else [],
                             repeats=repeats,
+                            parallel=parallel,
                             now=now,
                         )
                     except OllamaUnavailable as exc:
@@ -346,6 +357,7 @@ async def run_suite(
         "thinking": [("on" if think else "off") for think in thinks],
         "with_llm": with_llm,
         "repeats": repeats,
+        "parallel": parallel,
         "dataset_sizes": {
             "top_sites": len(top),
             "hostnames": len(hostnames),

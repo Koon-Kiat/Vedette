@@ -216,7 +216,7 @@ def test_the_prefilter_raises_the_development_set_and_its_hits_are_counted() -> 
     assert raised.evidence["instruction_tokens"]
 
 
-def test_the_mixed_sample_keeps_every_spoof_and_a_few_of_the_rest() -> None:
+def test_the_mixed_sample_takes_the_first_few_of_every_category() -> None:
     items = [
         Crafted(f"{category}-{n}", category, "t", "dismiss", fqdn=f"n{n}.a.com", root="a.com")
         for category in ("spoof", "split", "harmful")
@@ -226,7 +226,7 @@ def test_the_mixed_sample_keeps_every_spoof_and_a_few_of_the_rest() -> None:
     sample = mixed_sample(items, per_category=3)
 
     assert [item.id for item in sample] == [
-        *(f"spoof-{n}" for n in range(8)),
+        *(f"spoof-{n}" for n in range(3)),
         *(f"split-{n}" for n in range(3)),
         *(f"harmful-{n}" for n in range(3)),
     ]

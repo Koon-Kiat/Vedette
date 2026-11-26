@@ -517,15 +517,7 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
     missed = [category for category, (count, hit) in held.items() if count and not hit]
     if missed:
         out.append(
-            "- The pre-filter raised none of the held-out items in: "
-            + ", ".join(missed)
-            + "."
-            + (
-                " It reads the looked-up name, the root and the device name, but not the list "
-                "of roots a burst finding carries."
-                if "sample-roots" in missed
-                else ""
-            )
+            "- The pre-filter raised none of the held-out items in: " + ", ".join(missed) + "."
         )
     return out
 
@@ -584,6 +576,16 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
         "a quoted label of the crafted name was not removed before matching, and removing a "
         'device name left empty quotes that hid "the device name suggests". Nothing else '
         "was changed between the runs.",
+        "",
+        "The held-out set had already been run and its results read when two defences "
+        "changed, to close the gaps it showed: the pre-filter now checks each root a burst "
+        "finding lists, and the prompt (version 2) says a device name proves nothing about "
+        "its device, sends it as `device_name_self_reported`, and gives a default action for "
+        "a new device. Every held-out device name had been seen before the prompt was "
+        "written. Its wording was tried only on ten device names written for the live test, "
+        "but the device and sample-roots rows no longer measure attacks the defences were "
+        "not shaped by; the other categories still do. The word patterns were not changed "
+        "with them.",
     ]
     return lines
 
@@ -607,7 +609,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"Production model: {summary['production_model']}.",
         "",
         "Thresholds and prompts were set before this evaluation and were not changed in "
-        "response to it. Names sampled from your history and from the threat feeds are only "
+        "response to it, with one exception: two prompt-injection defences were changed after "
+        "the held-out set's results had been read, as the method note under Prompt injection "
+        "explains. Names sampled from your history and from the threat feeds are only "
         "counted here; none of them appears in this report. Flagged names from the two "
         "public lists (top sites and popular hostnames) are shown, even when a feed also "
         "lists one.",

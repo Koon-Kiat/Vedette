@@ -9,6 +9,7 @@ never removes or hides anything.
 Distinctive words are matched anywhere in a label, so run-together names such
 as ``ignoreallrules`` are caught. Short or common words are matched only as
 whole words between hyphens, dots or digits, to keep ordinary names quiet.
+Each root a burst finding lists is checked the same way as a looked-up name.
 
 A device name is checked too, since a guest or a gadget on the network can
 name itself. It is free text that often names people and products, so only a
@@ -74,6 +75,8 @@ EVIDENCE_KEY = "instruction_tokens"
 
 #: Evidence fields that hold a domain name taken from the event.
 _NAME_FIELDS = ("fqdn", "sample_fqdn", "root")
+#: Evidence fields that hold a list of domain names, such as the roots a burst lists.
+_NAME_LISTS = ("sample_roots",)
 _WORDS = re.compile(r"[a-z]+")
 _ORDER = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
 
@@ -107,14 +110,18 @@ def raised(severity: Severity) -> Severity:
 def apply(finding: Finding) -> Finding:
     """Add any instruction-like words to the evidence and raise the severity.
 
-    Domain names and the device name in the evidence are checked; a finding with
-    neither is returned unchanged.
+    Domain names and the device name in the evidence are checked, including each
+    root a burst lists; a finding with neither is returned unchanged.
     """
-    names = [value for key in _NAME_FIELDS if isinstance(value := finding.evidence.get(key), str)]
-    device = finding.evidence.get("device_name")
+    evidence = finding.evidence
+    names = [value for key in _NAME_FIELDS if isinstance(value := evidence.get(key), str)]
+    for key in _NAME_LISTS:
+        if isinstance(values := evidence.get(key), list | tuple):
+            names += [value for value in values if isinstance(value, str)]
+    device = evidence.get("device_name")
     devices = [device] if isinstance(device, str) else []
     tokens = sorted({*instruction_tokens(names), *device_tokens(devices)})
     if not tokens:
         return finding
-    evidence: dict[str, Any] = {**finding.evidence, EVIDENCE_KEY: tokens}
-    return finding.model_copy(update={"severity": raised(finding.severity), "evidence": evidence})
+    updated: dict[str, Any] = {**evidence, EVIDENCE_KEY: tokens}
+    return finding.model_copy(update={"severity": raised(finding.severity), "evidence": updated})

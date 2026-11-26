@@ -3,17 +3,20 @@ name: Conventions
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
   group: conventions-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   pull-request:
     name: pull request title, description and commits
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
       AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -26,8 +29,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      # Dependabot's descriptions quote upstream release notes, so its title is
-      # checked without them.
+      # Dependabot writes its own descriptions and commit bodies, which nobody
+      # can change, so only its title is checked here. Its squashed commit on
+      # main is checked like any other.
       - name: Title
         if: env.AUTHOR == 'dependabot[bot]'
         run: python3 tools/conventions.py pr --number "$NUMBER" --title "$TITLE"
@@ -36,11 +40,13 @@ jobs:
         shell: bash
         run: printf '%s' "$BODY" | python3 tools/conventions.py pr --number "$NUMBER" --title "$TITLE" --body-file -
       - name: Commit messages
+        if: env.AUTHOR != 'dependabot[bot]'
         shell: bash
         run: git log --format=%x1e%h%n%B "$BASE..$HEAD" | python3 tools/conventions.py commits -
 
   lock-age:
     name: releases added to uv.lock are 14 days old
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
       BASE: ${{ github.event.pull_request.base.sha }}
@@ -53,3 +59,24 @@ jobs:
         run: |
           git show "$BASE:uv.lock" > "$RUNNER_TEMP/base-uv.lock"
           python3 tools/lock_age.py "$RUNNER_TEMP/base-uv.lock" uv.lock
+
+  main:
+    name: commit messages pushed to main
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      BEFORE: ${{ github.event.before }}
+      AFTER: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Commit messages, squash merges included
+        shell: bash
+        run: |
+          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$AFTER"
+          else
+            range="$AFTER^!"
+          fi
+          git log --format=%x1e%h%n%B "$range" | python3 tools/conventions.py commits -

@@ -64,6 +64,9 @@
   line, the storage queries and the pipeline tests is shared too.
 - Pull requests check that every release they add to `uv.lock` is at least 14
   days old, and milestone codes are refused in code as well as in prose.
+- Commit message bodies must be wrapped at 72 characters, with a blank line
+  after the subject. The commit-msg hook and the pull request checks hold
+  this, and a new check runs on every commit pushed to main.
 - The architecture's decisions now name the test or CI step that holds each
   one, and the history behind them moved to git. Decisions that had no check
   gained one: Ollama's network, user and GPU cache, published ports, the

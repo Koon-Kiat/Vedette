@@ -721,7 +721,11 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
 106. **Corrections become checks.** `tools/conventions.py` checks commit
      messages and pull requests, `tools/lock_age.py` holds releases added to
      the lock to 14 days old, and `tests/unit/test_repository.py` holds the
-     repository's names and pins.
+     repository's names and pins. Commit bodies are wrapped at 72 characters,
+     git's own convention, rather than written one line per paragraph; every
+     commit pushed to main is checked, squash merges included. Held by
+     `test_a_paragraph_written_on_one_long_line_is_refused` and
+     `test_every_commit_pushed_to_main_is_checked`.
 
 ## Verified facts the design relies on
 

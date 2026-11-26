@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 import respx
+from sqlalchemy.exc import OperationalError
 
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
@@ -54,7 +55,7 @@ async def run_until_processed(server: FakeNextDns, database_url: str, tmp_path: 
                     await reader.count_events("abc123") == len(server.entries)
                     and await reader.count_unprocessed("abc123") == 0
                 )
-            except Exception:  # noqa: BLE001 - schema may not exist yet; keep polling
+            except OperationalError:
                 return False
             finally:
                 await reader.close()

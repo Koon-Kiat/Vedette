@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
@@ -36,7 +37,7 @@ async def test_pipeline_migrates_collects_and_stops_cleanly(
             reader = Store.open(database_url)
             try:
                 return await reader.count_events("abc123") == 25
-            except Exception:  # noqa: BLE001 - schema may not exist yet; keep polling
+            except OperationalError:
                 return False
             finally:
                 await reader.close()

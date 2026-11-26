@@ -7,7 +7,7 @@ import structlog
 
 from vedette.log import REDACTED, configure_logging, make_redactor
 
-SECRET = "not-a-real-secret-value"  # noqa: S105 - fake value used only by these tests
+SECRET = "not-a-real-secret-value"
 
 
 def redact(event: dict[str, Any], secrets: tuple[str, ...] = ()) -> dict[str, Any]:

@@ -4,7 +4,7 @@ import pytest
 
 from vedette.config import ConfigError, load_settings
 
-TOKEN = "a-dashboard-token-of-enough-length-1234"  # noqa: S105 - fake value for tests
+TOKEN = "a-dashboard-token-of-enough-length-1234"
 
 
 def test_dashboard_defaults() -> None:

@@ -15,7 +15,7 @@ from tests.integration.fake_nextdns import API_KEY, FakeNextDns
 from vedette.config import load_settings
 from vedette.pipeline.runner import Pipeline
 
-TOKEN = "a-dashboard-token-of-enough-length-1234"  # noqa: S105 - fake value for tests
+TOKEN = "a-dashboard-token-of-enough-length-1234"
 
 
 def free_port() -> int:

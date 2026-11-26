@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import pytest
 import respx
+from sqlalchemy.exc import OperationalError
 from structlog.testing import capture_logs
 
 from tests.integration.conftest import wait_until
@@ -95,7 +96,7 @@ async def run_pipeline(
                 return False
             try:
                 found, analyses = await read_state(database_url)
-            except Exception:  # noqa: BLE001 - schema may not exist yet; keep polling
+            except OperationalError:
                 return False
             if len(found) < at_least_findings or not and_also():
                 return False

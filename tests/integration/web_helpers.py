@@ -14,7 +14,7 @@ from vedette.rules.loader import load_rules
 from vedette.storage.store import Store
 from vedette.web.app import DashboardContext, create_app
 
-TOKEN = "test-dashboard-token-0123456789abcdef"  # noqa: S105 - fake value for tests
+TOKEN = "test-dashboard-token-0123456789abcdef"
 BASE = "http://127.0.0.1"
 NOW = datetime(2026, 3, 15, 0, 30, tzinfo=UTC)  # 08:30 in Singapore, just after the fixture
 

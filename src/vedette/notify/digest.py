@@ -16,10 +16,11 @@ from sqlalchemy import bindparam, case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from vedette.config import ProfileConfig
-from vedette.notify.defang import clean_text
 from vedette.notify.render import local_time, prose, reason_name, rule_name, safe
 from vedette.rules.loader import load_rules
-from vedette.rules.model import RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.defang import clean_text
+from vedette.shared.models import Severity
 from vedette.storage.health import HealthStore
 from vedette.storage.models import UtcDateTime, events, finding_analysis, findings
 

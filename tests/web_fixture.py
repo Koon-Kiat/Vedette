@@ -3,10 +3,8 @@
 from datetime import timedelta
 
 from tests.digest_fixture import PERIOD_END, PERIOD_START, PROFILES, TZ, _event, build_fixture
-from vedette.llm.schema import Analysis
-from vedette.notify.channels import OutgoingMessage
 from vedette.notify.digest import DigestBuilder, render_digest
-from vedette.rules.model import Severity
+from vedette.shared.models import Analysis, OutgoingMessage, Severity
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.notifications import NotificationStore
 from vedette.storage.reference import DomainAgeRecord, FirstSeenRow, ReferenceStore

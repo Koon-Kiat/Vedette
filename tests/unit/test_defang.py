@@ -1,6 +1,6 @@
 import pytest
 
-from vedette.notify.defang import clean_text, defang, defang_names
+from vedette.shared.defang import clean_text, defang, defang_names
 
 
 def test_our_own_messages_keep_numbers_but_lose_links() -> None:
@@ -62,7 +62,7 @@ def test_clean_text_collapses_whitespace() -> None:
 
 
 def test_prose_keeps_its_sentence_punctuation() -> None:
-    from vedette.notify.defang import defang_text
+    from vedette.shared.defang import defang_text
 
     text = (
         "A device reached evil.example twice. See https://evil.example/a now. Version 1.2 is old."
@@ -75,7 +75,7 @@ def test_prose_keeps_its_sentence_punctuation() -> None:
 
 
 def test_defanging_prose_twice_changes_nothing() -> None:
-    from vedette.notify.defang import defang_text
+    from vedette.shared.defang import defang_text
 
     once = defang_text("Reached a.b.example. Done.")
 
@@ -84,7 +84,7 @@ def test_defanging_prose_twice_changes_nothing() -> None:
 
 
 def test_prose_defanging_leaves_no_clickable_name() -> None:
-    from vedette.notify.defang import defang_text
+    from vedette.shared.defang import defang_text
 
     result = defang_text("go to www.evil.example/login, or evil.example:8443.")
 

@@ -5,8 +5,7 @@ from typing import Any
 
 from tests.unit.rule_helpers import engine, enriched, event, fired
 from vedette.enrich.model import EnrichedEvent
-from vedette.rules.allowlist import AllowlistEntry
-from vedette.rules.model import Severity
+from vedette.shared.models import AllowlistEntry, Severity
 
 DATA = "0123456789abcdef" * 4
 

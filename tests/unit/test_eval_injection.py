@@ -19,7 +19,7 @@ from vedette.eval.injection import (
 )
 from vedette.eval.stats import wilson
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 
 NOW = datetime(2026, 11, 25, 8, 0, tzinfo=UTC)
 

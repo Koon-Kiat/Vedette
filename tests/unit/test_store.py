@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, inspect
 
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 from vedette.sources.base import DnsEvent
 from vedette.sources.nextdns import parse_log_entry
 from vedette.storage.migrate import run_migrations

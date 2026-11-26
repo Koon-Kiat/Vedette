@@ -13,7 +13,7 @@ from sqlalchemy import Integer, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from vedette.config import ProfileConfig
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 from vedette.storage.live import LiveEvent, live_event
 from vedette.storage.models import events, finding_analysis, findings
 

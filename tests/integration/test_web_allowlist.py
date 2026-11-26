@@ -6,7 +6,7 @@ import pytest
 
 from tests.integration.web_helpers import NOW, logged_in
 from tests.web_fixture import build_web_fixture
-from vedette.rules.allowlist import AllowlistEntry
+from vedette.shared.models import AllowlistEntry
 from vedette.storage.store import Store
 from vedette.storage.triage import TriageStore
 

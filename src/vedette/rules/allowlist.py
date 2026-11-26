@@ -2,28 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-class AllowlistEntry(BaseModel):
-    """One allowlisted root, optionally limited to a profile or a device.
-
-    Attributes:
-        root: Domain to allow; its subdomains are allowed too.
-        profile: Profile id or label the entry applies to; all profiles if unset.
-        device: Device id the entry applies to; all devices if unset.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    root: str = Field(min_length=1)
-    profile: str | None = None
-    device: str | None = None
-
-    @field_validator("root")
-    @classmethod
-    def _normalise(cls, value: str) -> str:
-        return value.strip().lower().strip(".")
+from vedette.shared.models import AllowlistEntry
 
 
 class Allowlist:

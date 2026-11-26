@@ -18,12 +18,13 @@ from zoneinfo import ZoneInfo
 
 import structlog
 
-from vedette.notify.channels import Channel, DeliveryError, OutgoingMessage
+from vedette.notify.channels import Channel, DeliveryError
 from vedette.notify.digest import DAY, DigestBuilder, render_digest
 from vedette.notify.render import alert_key, render_alert
 from vedette.notify.schedule import QuietHours, latest_occurrence
 from vedette.retry import backoff_delay
-from vedette.rules.model import RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.models import OutgoingMessage, Severity
 from vedette.storage.notifications import NotificationStore
 
 log = structlog.get_logger(__name__)

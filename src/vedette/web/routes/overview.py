@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from starlette.exceptions import HTTPException
 
 from vedette.notify.digest import DigestBuilder
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 from vedette.web.charts import hourly_chart
 from vedette.web.dashboard import (
     ALL,

@@ -26,7 +26,7 @@ from vedette.enrich.enricher import Enricher
 from vedette.enrich.model import EnrichedEvent
 from vedette.pipeline.queue import EventQueue
 from vedette.rules.engine import RuleEngine
-from vedette.rules.model import Finding
+from vedette.shared.models import Finding
 from vedette.storage.store import Store
 
 log = structlog.get_logger(__name__)

@@ -9,8 +9,7 @@ from sqlalchemy import case, delete, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from vedette.llm.schema import Analysis, Verdict
-from vedette.rules.model import Severity
+from vedette.shared.models import Analysis, Severity, Verdict
 from vedette.storage.models import finding_analysis, findings, llm_cache, llm_calls
 from vedette.storage.store import StoredFinding, finding_from_row
 

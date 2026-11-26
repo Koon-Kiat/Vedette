@@ -9,8 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from vedette.config import ProfileConfig
-from vedette.llm.schema import Analysis
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Analysis, Finding, Severity
 from vedette.sources.base import DnsEvent
 from vedette.sources.nextdns import parse_log_entry
 from vedette.storage.analysis import AnalysisStore

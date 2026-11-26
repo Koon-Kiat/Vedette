@@ -17,10 +17,7 @@ import pytest
 
 from tests.digest_fixture import PERIOD_END, PERIOD_START, build_fixture
 from tests.integration.web_helpers import logged_in
-from vedette.llm.schema import Analysis
-from vedette.notify.channels import OutgoingMessage
-from vedette.rules.allowlist import AllowlistEntry
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import AllowlistEntry, Analysis, Finding, OutgoingMessage, Severity
 from vedette.sources.nextdns import parse_log_entry
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.health import HealthCheck, HealthStore

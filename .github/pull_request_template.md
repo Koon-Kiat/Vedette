@@ -23,6 +23,7 @@ change they belong to.
 
 - [ ] `ruff check .` and `ruff format --check .`
 - [ ] `mypy`
+- [ ] `lint-imports`
 - [ ] `pytest`
 
 ## Notes

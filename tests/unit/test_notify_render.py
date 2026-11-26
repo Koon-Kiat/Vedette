@@ -4,10 +4,9 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from vedette.llm.schema import Analysis
 from vedette.notify.render import alert_key, render_alert, render_health, render_test
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Severity
+from vedette.shared.models import Analysis, Severity
 from vedette.storage.store import StoredFinding
 
 SGT = ZoneInfo("Asia/Singapore")

@@ -15,8 +15,8 @@ from tests.integration.conftest import wait_until
 from tests.integration.fake_nextdns import API_KEY, FakeNextDns
 from tests.unit.test_reference_parsing import tranco_zip
 from vedette.config import load_settings
-from vedette.llm.schema import Analysis
 from vedette.pipeline.runner import Pipeline
+from vedette.shared.models import Analysis
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.store import Store, StoredFinding
 

@@ -38,15 +38,16 @@ from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from vedette.enrich.lexical import lexical_features
 from vedette.eval.datasets import Crafted, Name
 from vedette.eval.stats import wilson
 from vedette.llm.analyst import Analyst
 from vedette.llm.guards import sanitize_model_text
 from vedette.llm.ollama import OllamaClient
-from vedette.llm.schema import RESPONSE_SCHEMA, Verdict, parse_verdicts
+from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules import prefilter
-from vedette.rules.model import Finding, RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.models import Finding, Severity, Verdict
+from vedette.shared.names import lexical_features
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.store import StoredFinding
 

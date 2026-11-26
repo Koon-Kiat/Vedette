@@ -8,7 +8,7 @@ import pytest
 from tests.digest_fixture import PROFILES, _event
 from tests.integration.test_web_xss import audit
 from tests.integration.web_helpers import NOW, logged_in, make_client
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 from vedette.storage.series import SeriesQueries
 from vedette.storage.store import Store
 

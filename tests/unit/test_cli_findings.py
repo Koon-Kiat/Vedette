@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from vedette.cli import app
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 from vedette.storage.migrate import run_migrations
 from vedette.storage.store import Store
 
@@ -193,7 +193,7 @@ def test_profile_wide_findings_show_the_profile_label_not_its_id(database: str) 
 
 
 def seed_analysis(url: str, **overrides: Any) -> None:
-    from vedette.llm.schema import Analysis
+    from vedette.shared.models import Analysis
     from vedette.storage.analysis import AnalysisStore
 
     async def write() -> None:

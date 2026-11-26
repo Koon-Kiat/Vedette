@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from starlette.exceptions import HTTPException
 
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 from vedette.storage.store import StoredFinding
 from vedette.storage.triage import STATUSES, TriageStore
 from vedette.web.dashboard import DashboardDep, SessionDep, ViewDep, is_htmx, safe_next

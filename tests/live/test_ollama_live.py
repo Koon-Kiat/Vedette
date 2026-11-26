@@ -19,7 +19,7 @@ from vedette.llm.analyst import Analyst
 from vedette.llm.guards import sanitize_model_text
 from vedette.llm.ollama import OllamaClient
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.migrate import run_migrations
 from vedette.storage.store import Store, StoredFinding

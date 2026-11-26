@@ -32,8 +32,7 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
-from vedette.enrich.threat_intel import Feed
-from vedette.rules.allowlist import AllowlistEntry
+from vedette.shared.models import AllowlistEntry
 
 CONFIG_FILE_ENV = "VEDETTE_CONFIG_FILE"
 DEFAULT_SECRETS_DIR = Path("/run/secrets")
@@ -144,6 +143,23 @@ class RdapConfig(_Section):
     bootstrap_url: NonEmptyStr = "https://data.iana.org/rdap/dns.json"
     max_event_age_hours: int = Field(default=24, ge=0)
     max_lookups_per_batch: int = Field(default=20, ge=0)
+
+
+class Feed(BaseModel):
+    """One threat-intelligence feed.
+
+    Attributes:
+        name: Short name recorded in findings.
+        url: Where to download it.
+        format: ``domains`` (one per line), ``hosts`` (address then name) or
+            ``urls`` (the host name is extracted).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
+    url: str = Field(min_length=1)
+    format: Literal["domains", "hosts", "urls"] = "domains"
 
 
 def _default_feeds() -> list[Feed]:

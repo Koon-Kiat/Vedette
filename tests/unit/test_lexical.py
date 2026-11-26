@@ -1,6 +1,6 @@
 import pytest
 
-from vedette.enrich.lexical import lexical_features, shannon_entropy
+from vedette.shared.names import lexical_features, shannon_entropy
 
 
 def test_entropy_of_a_single_repeated_character_is_zero() -> None:

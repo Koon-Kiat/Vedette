@@ -12,9 +12,9 @@ from vedette.llm.cache import cache_key
 from vedette.llm.fallback import template_analysis
 from vedette.llm.guards import enforce_floor, sanitize_model_text, slug
 from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
-from vedette.llm.schema import RESPONSE_SCHEMA, Verdict, parse_verdicts
+from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity, Verdict
 from vedette.storage.store import StoredFinding
 
 WHEN = datetime(2026, 3, 15, 4, 30, tzinfo=UTC)

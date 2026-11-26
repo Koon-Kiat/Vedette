@@ -14,16 +14,15 @@ from vedette import __version__
 from vedette.config import ConfigError, Settings, load_settings
 from vedette.eval.report import render_markdown
 from vedette.eval.suite import run_suite
-from vedette.llm.schema import Analysis
 from vedette.log import configure_logging
-from vedette.notify.channels import Channel, DeliveryError, OutgoingMessage
-from vedette.notify.defang import clean_text, defang, defang_text
+from vedette.notify.channels import Channel, DeliveryError
 from vedette.notify.digest import DigestBuilder, render_digest
 from vedette.notify.factory import build_channel
 from vedette.notify.render import render_test
 from vedette.pipeline.runner import run_until_signalled
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Severity
+from vedette.shared.defang import clean_text, defang, defang_text
+from vedette.shared.models import Analysis, OutgoingMessage, Severity
 from vedette.sources.base import DnsEvent, SourceError
 from vedette.sources.nextdns import NextDnsSource
 from vedette.sources.nextdns_export import ExportFormatError, read_export

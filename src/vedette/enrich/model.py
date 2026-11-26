@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from vedette.enrich.lexical import LexicalFeatures
+from vedette.shared.names import LexicalFeatures
 from vedette.sources.base import DnsEvent
 
 

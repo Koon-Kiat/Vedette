@@ -7,12 +7,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from vedette.llm.schema import Analysis
-from vedette.notify.channels import Channel, DeliveryError, OutgoingMessage
+from vedette.notify.channels import Channel, DeliveryError
 from vedette.notify.schedule import QuietHours
 from vedette.pipeline.notifier import AlertWorker, DeliveryWorker
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Analysis, Finding, OutgoingMessage, Severity
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.notifications import NotificationStore
 from vedette.storage.store import Store

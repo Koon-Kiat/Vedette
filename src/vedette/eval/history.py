@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 from vedette.storage.models import events, finding_analysis, findings, llm_calls, notifications
 
 #: An event that reached the database within this time of happening came from the live stream.

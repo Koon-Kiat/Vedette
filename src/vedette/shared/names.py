@@ -1,4 +1,8 @@
-"""Lexical features of a domain name: cheap signals for machine-generated names."""
+"""What a domain name says about itself, worked out without any lookup.
+
+Lexical features are cheap signals for machine-generated names; candidates are
+the names a feed match is looked up under.
+"""
 
 import math
 from collections import Counter
@@ -64,3 +68,14 @@ def lexical_features(fqdn: str, root: str | None) -> LexicalFeatures:
         subdomain_depth=subdomain.count(".") + 1 if subdomain else 0,
         subdomain_length=len(subdomain),
     )
+
+
+def candidates(fqdn: str, root: str | None) -> list[str]:
+    """The name and each parent domain down to its root, most specific first."""
+    labels = fqdn.split(".")
+    if root and (fqdn == root or fqdn.endswith("." + root)):
+        shortest = root.count(".") + 1
+    else:
+        shortest = 2
+    shortest = min(shortest, len(labels))
+    return [".".join(labels[start:]) for start in range(len(labels) - shortest + 1)]

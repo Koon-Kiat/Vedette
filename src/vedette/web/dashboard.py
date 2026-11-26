@@ -23,8 +23,8 @@ from starlette.exceptions import HTTPException
 
 from vedette.config import ProfileConfig
 from vedette.notify.render import safe
-from vedette.rules.allowlist import AllowlistEntry
-from vedette.rules.model import RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.models import AllowlistEntry, Severity
 from vedette.storage.dashboard import DashboardQueries, FindingFilter
 from vedette.storage.live import LiveEvent, LiveQueries, LiveStats
 from vedette.storage.series import SeriesFinding, SeriesQueries

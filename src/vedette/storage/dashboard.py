@@ -15,10 +15,8 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from vedette.config import ProfileConfig
-from vedette.enrich.lexical import LexicalFeatures, lexical_features
-from vedette.enrich.threat_intel import candidates
-from vedette.llm.schema import Analysis
-from vedette.rules.model import Severity
+from vedette.shared.models import Analysis, Severity
+from vedette.shared.names import LexicalFeatures, candidates, lexical_features
 from vedette.sources.base import DnsEvent
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.health import HealthRow, HealthStore

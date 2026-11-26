@@ -16,9 +16,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from vedette.llm.schema import Analysis
-from vedette.notify.channels import OutgoingMessage
-from vedette.rules.model import Severity
+from vedette.shared.models import Analysis, OutgoingMessage, Severity
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.models import digests, finding_analysis, findings, notifications
 from vedette.storage.store import StoredFinding, finding_from_row

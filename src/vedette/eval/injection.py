@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from vedette.eval.datasets import Crafted, Name
 from vedette.eval.stats import wilson
 from vedette.llm.analyst import Analyst
+from vedette.llm.context import ContextPacker
 from vedette.llm.guards import sanitize_model_text
 from vedette.llm.ollama import OllamaClient
 from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
@@ -51,6 +52,7 @@ from vedette.rules.model import RuleSpec
 from vedette.shared.models import Finding, Severity, Verdict
 from vedette.shared.names import lexical_features
 from vedette.storage.analysis import AnalysisStore
+from vedette.storage.context import ContextStore
 from vedette.storage.store import StoredFinding
 
 BATCH = 10
@@ -509,13 +511,18 @@ def _texts(answer: Verdict | Any) -> tuple[str, str, str]:
 
 
 def _analyst(client: OllamaClient, specs: Sequence[RuleSpec], scratch: AsyncEngine) -> Analyst:
-    """The production analyst with its cache off."""
+    """The production analyst with its cache off, reading records from ``scratch``.
+
+    Requests hold ten findings each, as the cross-finding test needs: one
+    crafted finding among nine ordinary ones in a single request.
+    """
     return Analyst(
         client,
         AnalysisStore(scratch),
         specs,
         max_batch=BATCH,
         cache_ttl=timedelta(0),
+        context=ContextPacker(ContextStore(scratch)),
         clock=lambda: datetime.now(UTC),
     )
 

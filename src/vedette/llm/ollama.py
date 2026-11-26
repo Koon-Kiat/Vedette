@@ -52,6 +52,11 @@ class OllamaClient:
         """The model tag in use."""
         return self._model
 
+    @property
+    def num_ctx(self) -> int:
+        """The context window, in tokens, the model is run with."""
+        return int(self._options["num_ctx"])
+
     async def aclose(self) -> None:
         """Close the underlying HTTP connections."""
         await self._client.aclose()

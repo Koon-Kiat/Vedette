@@ -34,6 +34,7 @@ from vedette.health.monitor import HealthMonitor, OllamaProbe
 from vedette.health.server import start_health_server
 from vedette.health.state import HealthState
 from vedette.llm.analyst import Analyst
+from vedette.llm.context import ContextPacker
 from vedette.llm.ollama import OllamaClient
 from vedette.notify.digest import DigestBuilder
 from vedette.notify.factory import build_channel
@@ -50,6 +51,7 @@ from vedette.rules.loader import load_rules
 from vedette.rules.model import RuleSpec
 from vedette.sources.nextdns import NextDnsSource
 from vedette.storage.analysis import AnalysisStore
+from vedette.storage.context import ContextStore
 from vedette.storage.health import HealthStore
 from vedette.storage.migrate import run_migrations
 from vedette.storage.notifications import NotificationStore
@@ -221,6 +223,10 @@ class Pipeline:
                 max_batch=llm.max_findings_per_batch,
                 cache_ttl=timedelta(hours=llm.cache_ttl_hours),
                 context_tokens=llm.num_ctx,
+                context=ContextPacker(
+                    ContextStore(store.engine),
+                    is_platform=lambda root: suffixes.known and suffixes.is_platform_name(root),
+                ),
             )
             queue: MemoryQueue[Batch] = MemoryQueue()
             tz = ZoneInfo(settings.timezone)

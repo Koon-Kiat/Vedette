@@ -1,7 +1,7 @@
 """The LLM analyst against a real database and a mocked Ollama."""
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,7 +13,7 @@ from sqlalchemy import text
 from vedette.llm import analyst as analyst_module
 from vedette.llm.analyst import Analyst
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
-from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
+from vedette.llm.prompts import build_payload, system_prompt
 from vedette.rules.loader import load_rules
 from vedette.shared.models import Analysis, Finding, Severity
 from vedette.storage.analysis import AnalysisStore
@@ -267,14 +267,15 @@ async def test_calls_are_sized_to_the_context_window(
     long = {"fqdn": "x" * 200, "sample": ["y" * 200] * 10}
     findings = await seed(store, analysis_store, 5, evidence=long)
     specs = load_rules()
+    by_id = {s.id: s for s in specs}
     share = (
-        len(build_payload([findings[0]], {s.id: s for s in specs})) / analyst_module.CHARS_PER_TOKEN
+        len(build_payload([findings[0]], by_id)) / analyst_module.CHARS_PER_TOKEN
         + analyst_module.ANSWER_TOKENS
     )
-    window = 4096
-    budget = (
-        window * analyst_module.CONTEXT_USE - len(SYSTEM_PROMPT) / analyst_module.CHARS_PER_TOKEN
-    )
+    window = 8192
+    # Room is kept for the longest system message: every rule's notes in it.
+    longest = system_prompt(by_id, by_id)
+    budget = window * analyst_module.CONTEXT_USE - len(longest) / analyst_module.CHARS_PER_TOKEN
     per_call = int(budget // share)
     assert 1 <= per_call < 5  # the window, not max_batch, is what limits the calls here
     analyst = Analyst(
@@ -535,3 +536,76 @@ async def test_model_calls_are_recorded_for_later_reporting(
 
     calls = await analysis_store.call_outcomes()
     assert calls == ["invalid", "ok"]
+
+
+# --- context and notes ------------------------------------------------------------------
+
+
+class Packs:
+    """A context source that hands back a fixed pack per finding and counts its calls."""
+
+    def __init__(self) -> None:
+        self.asked: list[list[int]] = []
+
+    async def packs(self, found: Sequence[StoredFinding]) -> dict[int, dict[str, Any]]:
+        self.asked.append([finding.id for finding in found])
+        return {finding.id: {"lookups_within_5_minutes": ["vendor.example"]} for finding in found}
+
+
+async def test_each_finding_goes_with_its_pack_and_its_rules_notes(
+    store: Store,
+    analysis_store: AnalysisStore,
+    client: OllamaClient,
+    clock: Clock,
+    ollama: FakeOllama,
+) -> None:
+    findings = await seed(store, analysis_store, 2, rule="dga-like", severity="medium")
+    source = Packs()
+    analyst = Analyst(
+        client,
+        analysis_store,
+        load_rules(),
+        max_batch=20,
+        cache_ttl=timedelta(0),
+        context=source,
+        clock=clock,
+    )
+    ollama.say(*(verdict(f.id, priority="medium") for f in findings))
+
+    await analyst.analyse(findings)
+
+    (request,) = ollama.requests
+    system, user = (message["content"] for message in request["messages"])
+    assert "dga-like: Harmless look-alikes to rule out:" in system
+    assert "young-domain:" not in system
+    sent = json.loads(user)["findings"]
+    assert [item["context"] for item in sent] == [
+        {"lookups_within_5_minutes": ["vendor.example"]}
+    ] * 2
+    assert source.asked == [[f.id for f in findings]], "one lookup of the records per pass"
+
+
+async def test_cached_findings_are_not_packed(
+    store: Store,
+    analysis_store: AnalysisStore,
+    client: OllamaClient,
+    clock: Clock,
+    ollama: FakeOllama,
+) -> None:
+    findings = await seed(store, analysis_store, 1)
+    source = Packs()
+    analyst = Analyst(
+        client,
+        analysis_store,
+        load_rules(),
+        max_batch=20,
+        cache_ttl=timedelta(hours=1),
+        context=source,
+        clock=clock,
+    )
+    ollama.say(verdict(findings[0].id))
+    await analyst.analyse(findings)
+
+    await analyst.analyse(findings)
+
+    assert source.asked == [[findings[0].id]], "the second pass came from the cache"

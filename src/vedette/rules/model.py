@@ -8,6 +8,20 @@ from pydantic import BaseModel, ConfigDict, Field
 from vedette.shared.models import Severity
 
 
+class AnalystNotes(BaseModel):
+    """What the local model should weigh for one rule, sent with its findings as trusted text.
+
+    Attributes:
+        look_alikes: Harmless activity that trips the rule, to rule out first.
+        checks: Steps worth suggesting to the owner.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    look_alikes: list[str] = Field(min_length=1)
+    checks: list[str] = Field(min_length=1)
+
+
 class RuleSpec(BaseModel):
     """One declarative rule, as written in the rules YAML file.
 
@@ -22,6 +36,8 @@ class RuleSpec(BaseModel):
             finding: ``once`` ever, or once per ``daily`` / ``hourly`` bucket.
         params: Thresholds for the detector.
         evidence: Names of the evidence fields the rule records.
+        analyst_notes: Look-alikes and checks the local model is given for
+            this rule's findings.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -34,6 +50,7 @@ class RuleSpec(BaseModel):
     dedupe: Literal["once", "daily", "hourly"]
     params: dict[str, Any] = Field(default_factory=dict)
     evidence: list[str] = Field(min_length=1)
+    analyst_notes: AnalystNotes | None = None
 
 
 def bucket(dedupe: str, ts: datetime) -> str:

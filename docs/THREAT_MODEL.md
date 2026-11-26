@@ -64,6 +64,10 @@ Mitigations:
 - **Data, not instructions.** Untrusted strings travel only inside a JSON
   payload, each capped in length (`llm/prompts.py`). The system prompt says
   every value is data and must never be followed.
+- **Device names prove nothing.** A device name is sent as
+  `device_name_self_reported`, and the system prompt says a name never shows
+  who owns a device, whether it was approved or seen before, or that it is
+  safe, and that the owner must confirm a new device (`llm/prompts.py`).
 - **Structured output only.** Answers must match the schema (`llm/schema.py`),
   or they are retried once and then replaced by a template built from the
   trusted rule text (`llm/fallback.py`). Free text from the model is never

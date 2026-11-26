@@ -40,6 +40,12 @@
 - The instruction-word pre-filter now checks each root a burst finding
   (`dga-burst`) lists, as it checks a looked-up name. Instructions placed in
   those roots used to reach the model without raising the finding.
+- The model now sees a device name as `device_name_self_reported`, and its
+  instructions say a name never shows that a device is known, approved or
+  safe. For a new device it recommends checking whether you recognise it.
+  New-device explanations read more generic as a result. The prompt version
+  is now 2, so a new finding never reuses an explanation cached under the
+  old prompt.
 
 ## 0.2.0 - 2026-11-22
 

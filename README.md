@@ -253,6 +253,14 @@ about, the profile and device, how many events triggered it, the local model's
 summary, likely cause and recommended action, and the evidence. A finding the
 model has not reached yet says "not analysed yet"; one the model could not
 explain gets a standard explanation and says so.
+
+The model reads more than the rule that fired. Each finding goes with the
+records around it: when the device was first seen and how busy it usually is,
+the domain's popularity, age and feeds, what else the device looked up in the
+same few minutes, its other findings that hour, and how you handled earlier
+findings like it. Each rule also carries notes in `rules.yaml` on the harmless
+activity that trips it and the checks worth suggesting; change them in your
+rules override file like any other rule field.
 Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs
 are attacker-controlled, so they are never shown in a form a terminal or chat
 client would turn into a link. `--json` prints them raw for scripts.
@@ -461,7 +469,11 @@ bursts, fast, slow and sustained tunnels, and domains with given registration
 dates) and a
 held-out set of 315 crafted prompt-injection items (names, device names and
 lists of roots, written without reading the defences) through the real rules
-and the local model, with the defences on and off. A sample of those items is
+and the local model, with the defences on and off. The model also explains a
+gold set of 60 synthetic findings, each with the records around it, three
+times; the answers are scored for the right cause, a fitting step and
+invented facts, against the standard explanation. `--no-injection` runs only
+that part. A sample of those items is
 also put among ordinary findings, to see whether one crafted finding changes
 what the model says about the others. It also replays all of your stored history
 through the rules as they are now, which shows how often each rule would fire

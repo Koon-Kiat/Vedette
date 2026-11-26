@@ -85,8 +85,19 @@ Mitigations:
   link.
 - **Truncation at the edge.** Over-long names and strings from NextDNS are cut
   to fixed limits when parsed (`sources/nextdns.py`).
+- **The context pack is data too.** The records sent with a finding (names
+  the device looked up around it, its other findings' targets, its
+  self-reported name) travel inside the JSON payload, capped in count and
+  length, and a name holding instruction-like words is replaced by a
+  placeholder before it is sent (`llm/context.py`). The analyst notes in the
+  system message come from `rules.yaml`, which only the owner can change.
 
 Residual risk:
+- The context pack is a new way for a name to reach the model: a device that
+  looks up a crafted name just before a real finding puts that name in the
+  finding's context. Names with instruction words are withheld, but the
+  injection test does not yet plant names in the context, so how often one
+  without such words steers the model is not measured.
 - The model can still write misleading prose. For example it can call an
   attack routine, even though it cannot change the priority. The evaluation
   counts such "echoes" with a heuristic and lists every case.

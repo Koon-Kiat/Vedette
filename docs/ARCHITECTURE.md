@@ -133,9 +133,16 @@ with a valid analysis, from the first of these that applies:
    evidence features (exact subdomains left out, numbers bucketed by powers of
    two), so a finding that recurs the next day is not sent to the model again.
 2. **Model.** One call to Ollama's chat API with the JSON schema in `format`,
-   `think` off, temperature 0.1, `num_ctx` 8192 and `keep_alive` 5m. The answer
-   must parse into the schema or it is discarded whole. An invalid or
-   incomplete answer is retried once.
+   `think` off, temperature 0.1, `num_ctx` 8192 and `keep_alive` 5m. Each
+   finding goes with its evidence and a context pack read from the database
+   (`llm/context.py`): the device's age and usual queries an hour, the
+   domain's top-sites band, age, feeds, platform flag and spread across
+   devices, the names the device looked up within five minutes, its other
+   findings within the hour, and how earlier findings like it were triaged.
+   The system message adds two worked examples and the analyst notes of the
+   rules in the request: harmless look-alikes to rule out and checks worth
+   suggesting, from `rules.yaml`. The answer must parse into the schema or it
+   is discarded whole. An invalid or incomplete answer is retried once.
 3. **Template.** Text built from the rule's own description and the defanged
    target, at the rule's floor, marked as not written by the model.
 
@@ -149,6 +156,7 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 | Rules own severity: the model may raise priority, never lower it | `enforce_floor` in `llm/guards.py`, applied in code after validation, to cached verdicts too |
 | The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
 | Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
+| The records around a finding are data too | `build_pack` in `llm/context.py`: the context pack travels inside the JSON payload, every part is capped, and a name holding instruction-like words is withheld (decision 112) |
 | A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety (decision 104) |
 | Structured output only | `parse_verdicts` in `llm/schema.py`: extra fields, wrong types and free text are rejected |
 | No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
@@ -755,6 +763,24 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      from published analyses, each checked against the sample names its
      analysis lists, and never used to set a threshold. Held by
      `test_each_family_reproduces_its_published_sample`.
+111. **Explanations are measured on a gold set**: 60 synthetic findings, six
+     per rule, each with the records around it seeded into a scratch
+     database, and patterns for the right cause, a fitting step and claims
+     it must not make. Every model explains it three times, against the
+     template. Held by `test_the_packaged_gold_set_covers_every_rule_six_times`
+     and `test_the_report_compares_the_model_s_explanations_with_the_template`.
+112. **The model gets the records around each finding** as a capped context
+     pack built at analysis time; names with instruction-like words are
+     withheld. The cache key leaves the pack out, so a recurring finding reuses
+     its verdict for `cache_ttl_hours`. Held by
+     `test_the_facts_hold_the_device_domain_neighbours_and_earlier_triage`,
+     `test_a_neighbour_that_reads_like_an_instruction_is_withheld` and
+     `test_each_finding_goes_with_its_pack_and_its_rules_notes`.
+113. **Each rule carries notes for the model** in `rules.yaml`, sent as
+     trusted text for the rules in a request only, with two worked examples
+     on reserved `.example` names. Held by
+     `test_every_packaged_rule_carries_notes_for_the_model` and
+     `test_a_request_gets_the_notes_of_its_own_rules_only`.
 
 ## Verified facts the design relies on
 

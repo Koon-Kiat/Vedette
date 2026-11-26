@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Explanations
+
+- The local model now gets the records around each finding: when the device
+  was first seen and its usual queries an hour, the domain's top-sites band,
+  age, feeds and spread across your devices, the names the device looked up
+  within five minutes, its other findings that hour, and how earlier findings
+  like it were triaged. Names that read like instructions are withheld.
+- Each rule in `rules.yaml` carries `analyst_notes`: harmless look-alikes to
+  rule out and checks to suggest, sent with that rule's findings. The prompt
+  adds two worked examples and asks for a cause grounded in the data and a
+  step that fits it. The prompt version is now 3, so cached explanations are
+  not reused.
+- On a gold set of 60 findings, qwen3:8b gets the cause, a fitting step and
+  no invented fact right in 37 to 39 per run, against 15 to 16 with the
+  earlier prompt and 16 for the standard explanation. For harmless
+  look-alikes it is right in 34 of 90 answers, against none before.
+- The cost: with the defences on, five of 315 crafted items steered the
+  model by calling themselves benign or verified, against one before.
+
 ### Detection
 
 - `dga-like` now judges the registered label, the one left of the public
@@ -25,6 +44,13 @@
 
 ### Evaluation
 
+- New explanation-quality test: a gold set of 60 synthetic findings, six per
+  rule, with the records around each and patterns for the right cause, a
+  fitting step and claims to avoid. Each model explains it three times; the
+  report scores it per rule and kind of finding against the standard
+  explanation, lists every miss and invented fact, and the Evaluation page
+  shows the totals. `vedette eval --no-injection` runs it without the
+  injection tests.
 - `dga-like` is tested on 13 real malware families' domain generation
   algorithms, re-implemented from published analyses and checked against
   their sample names: bare, behind `www.` and similar, and as customer names

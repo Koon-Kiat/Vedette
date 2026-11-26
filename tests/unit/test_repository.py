@@ -196,3 +196,71 @@ def test_design_and_agent_working_files_stay_local() -> None:
     ignored = set((ROOT / ".gitignore").read_text(encoding="utf-8").splitlines())
     missing = {"/PRODUCT.md", "/DESIGN.md", "/docs/superpowers/"} - ignored
     assert missing == set(), f"Keep {sorted(missing)} in .gitignore (decision 87)."
+
+
+def _compose() -> dict[str, Any]:
+    compose: dict[str, Any] = _load_yaml(ROOT / "docker-compose.yml")
+    return compose
+
+
+def test_ollama_has_no_route_to_the_internet() -> None:
+    compose = _compose()
+    internal = {name for name, net in compose["networks"].items() if (net or {}).get("internal")}
+    ollama = compose["services"]["ollama"]
+    assert set(ollama["networks"]) <= internal and "ports" not in ollama, (
+        "Ollama joins only internal networks and publishes no port (decision 9)."
+    )
+    assert ollama["environment"]["OLLAMA_NO_CLOUD"] == "1", "Keep OLLAMA_NO_CLOUD set (decision 9)."
+    assert compose["services"]["ollama-volume-owner"]["network_mode"] == "none"
+
+
+def test_the_dev_container_can_reach_the_model() -> None:
+    compose = _compose()
+    assert "llm" in compose["services"]["dev"]["networks"], (
+        "The dev container joins the llm network so pytest --live reaches Ollama (decision 38)."
+    )
+
+
+def test_every_published_port_is_on_loopback() -> None:
+    published = [
+        (name, str(port))
+        for name, service in _compose()["services"].items()
+        for port in service.get("ports", [])
+    ]
+    exposed = [(name, port) for name, port in published if not port.startswith("127.0.0.1:")]
+    assert published and exposed == [], (
+        f"Publish {exposed} on 127.0.0.1 only; the dashboard listens on every interface "
+        "inside the container (decision 55)."
+    )
+
+
+def test_ollama_runs_unprivileged_with_a_read_only_root() -> None:
+    services = _compose()["services"]
+    for name in ("ollama", "ollama-pull"):
+        assert services[name]["user"] == "10002:10002", name
+        assert services[name]["read_only"] is True, name
+        assert services[name]["cap_drop"] == ["ALL"], name
+    owner = services["ollama-volume-owner"]
+    assert sorted(owner["cap_add"]) == ["CHOWN", "DAC_READ_SEARCH"], (
+        "Only the one-shot volume owner runs as root, with CHOWN and DAC_READ_SEARCH (decision 64)."
+    )
+
+
+def test_the_gpu_kernel_cache_lives_in_the_model_volume() -> None:
+    ollama = _compose()["services"]["ollama"]
+    mounts = [volume.split(":")[1] for volume in ollama["volumes"]]
+    cache = ollama["environment"]["CUDA_CACHE_PATH"]
+    assert any(cache.startswith(mount + "/") for mount in mounts), (
+        f"CUDA_CACHE_PATH {cache} must sit in a mounted volume, or the read-only root "
+        "makes the GPU kernels compile on every load (decision 80)."
+    )
+
+
+def test_ci_runs_weekly_and_builds_the_image() -> None:
+    workflow = _load_yaml(ROOT / ".github" / "workflows" / "ci.yml")
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers.get("schedule"), "CI runs on a weekly schedule (decision 89)."
+    steps = [step.get("uses", "") for step in workflow["jobs"]["image"]["steps"]]
+    assert any(uses.startswith("docker/build-push-action@") for uses in steps), (
+        "CI builds the image on every run (decision 89)."
+    )

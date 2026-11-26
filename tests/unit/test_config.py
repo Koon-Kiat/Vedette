@@ -140,6 +140,15 @@ def test_api_key_in_the_yaml_file_is_rejected(tmp_path: Path, key: str) -> None:
     assert "k-leaked-into-yaml" not in str(excinfo.value)
 
 
+def test_an_unknown_key_in_the_yaml_file_is_an_error(tmp_path: Path) -> None:
+    path = write_yaml(tmp_path, "timezone: UTC\nlog_levl: DEBUG\n")
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_settings(path)
+
+    assert "log_levl" in str(excinfo.value)
+
+
 def test_missing_config_file_is_an_error_naming_the_path(tmp_path: Path) -> None:
     missing = tmp_path / "nope.yaml"
 

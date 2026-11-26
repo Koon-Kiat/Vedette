@@ -1,3 +1,4 @@
+import contextlib
 import sqlite3
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -5,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect
+from sqlalchemy.pool import QueuePool
 
 from vedette.shared.models import Finding, Severity
 from vedette.sources.base import DnsEvent
@@ -57,6 +59,29 @@ def test_migrations_create_exactly_the_tables_the_models_describe(tmp_path: Path
         migrated = {column["name"] for column in inspector.get_columns(table.name)}
         assert migrated == {column.name for column in table.columns}, table.name
     engine.dispose()
+
+
+async def test_the_pool_serves_every_worker_and_the_dashboard_at_once(database_url: str) -> None:
+    run_migrations(database_url)
+    store = Store.open(database_url)
+    try:
+        async with contextlib.AsyncExitStack() as stack:
+            held = [await stack.enter_async_context(store.engine.connect()) for _ in range(25)]
+            assert len(held) == 25
+        pool = store.engine.pool
+        assert isinstance(pool, QueuePool) and pool.size() == 15
+    finally:
+        await store.close()
+
+
+async def test_timestamps_come_back_timezone_aware(store: Store) -> None:
+    saved = make_event(1)
+    await store.save_events([saved])
+
+    (stored,) = await store.list_events("abc123")
+
+    assert stored.ts.utcoffset() == timedelta(0)
+    assert stored.ts == saved.ts
 
 
 def test_migrations_can_run_twice(database_url: str) -> None:

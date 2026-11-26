@@ -1,6 +1,7 @@
 """The dashboard runs inside the pipeline, over real TCP, and stops with it."""
 
 import asyncio
+import logging
 import socket
 from pathlib import Path
 
@@ -41,7 +42,10 @@ async def get(port: int, path: str) -> tuple[int, str]:
     return int(head.split(" ")[1]), head
 
 
-async def test_the_dashboard_serves_while_the_pipeline_runs(server: FakeNextDns, port: int) -> None:
+async def test_the_dashboard_serves_while_the_pipeline_runs(
+    server: FakeNextDns, port: int, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="uvicorn.access")
     server.add_entries(3)
     with capture_logs() as logs:
         async with running_pipeline():
@@ -57,6 +61,10 @@ async def test_the_dashboard_serves_while_the_pipeline_runs(server: FakeNextDns,
             status, head = await get(port, "/")
             assert status == 303
             assert "content-security-policy" in head.lower()
+            headers = [line.split(":", 1)[0].lower() for line in head.splitlines()[1:]]
+            assert "server" not in headers and "date" not in headers
+
+    assert not [record for record in caplog.records if record.name == "uvicorn.access"]
 
     with pytest.raises(OSError):
         await get(port, "/login")

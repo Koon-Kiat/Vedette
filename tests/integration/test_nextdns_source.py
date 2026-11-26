@@ -1,3 +1,4 @@
+import inspect
 from datetime import timedelta
 
 import httpx
@@ -85,6 +86,11 @@ async def test_every_request_sends_the_api_key_header_and_page_size(
     for request in [*server.log_requests, *server.stream_requests]:
         assert request.headers["X-Api-Key"] == API_KEY
     assert {request.url.params["limit"] for request in server.log_requests} == {"10"}
+
+
+def test_a_silent_stream_is_reopened_after_five_minutes_by_default() -> None:
+    default = inspect.signature(NextDnsSource).parameters["stream_idle_timeout"].default
+    assert default == 300.0
 
 
 async def test_raw_is_off_by_default(server: FakeNextDns, source: NextDnsSource) -> None:

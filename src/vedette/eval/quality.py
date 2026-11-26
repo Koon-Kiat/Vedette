@@ -13,6 +13,7 @@ names an owner, a malware family or a reputation service that is not in the
 data, or states a registration date when none was given.
 """
 
+import hashlib
 import json
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -654,6 +655,11 @@ class QualityResult:
         return mean(self.durations_ms) if self.durations_ms else None
 
 
+def _shuffled(ident: str) -> str:
+    """A sort key that mixes items the same way on every run."""
+    return hashlib.sha256(ident.encode()).hexdigest()
+
+
 def _payload_items(requests: Iterable[str]) -> dict[int, str]:
     """What the model was given about each finding, from the recorded requests."""
     given: dict[int, str] = {}
@@ -688,8 +694,16 @@ async def model_quality(
     *,
     think: bool,
 ) -> QualityResult:
-    """Ask the production analyst, cache off, about every gold item, and score the answers."""
-    asked = await settle(analyst.analyse(batch) for batch in batched(found, BATCH, strict=False))
+    """Ask the production analyst, cache off, about every gold item, and score the answers.
+
+    The findings go ten at a time in a fixed order shuffled by item id, so each
+    request mixes rules as the service's do. Sent in file order, a request would
+    hold one rule's findings only, and a model tends to copy one verdict across
+    them.
+    """
+    order = sorted(range(len(found)), key=lambda index: _shuffled(items[index].id))
+    mixed = [found[index] for index in order]
+    asked = await settle(analyst.analyse(batch) for batch in batched(mixed, BATCH, strict=False))
     analyses = {analysis.finding_id: analysis for batch in asked for analysis in batch}
     given = _payload_items(client.requests)
     result = QualityResult(source=client.model, think=think, durations_ms=client.durations_ms)

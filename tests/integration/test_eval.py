@@ -611,6 +611,29 @@ async def test_the_evaluation_page_shows_the_latest_run(store: Store) -> None:
     assert "True by construction: A sanity check." in page.text
     assert page.text.count("True by construction") == 1
     assert "No evaluation has run yet" not in page.text
+    assert "Real DGA families" not in page.text, "a run from before the families has no table"
+
+
+async def test_the_evaluation_page_lists_each_real_dga_family(store: Store) -> None:
+    family = {"family": "Necurs", "style": "random letters, 7 to 21", "items": 40}
+    await EvalStore(store.engine).save(
+        started_at=NOW,
+        finished_at=NOW,
+        summary={
+            **_minimal_summary(),
+            "dga_families": [{**family, "flagged": 21, "prefixed_flagged": 20}],
+        },
+        report="# Evaluation",
+    )
+
+    async with logged_in(store) as (client_, _):
+        page = await client_.get("/evaluation")
+
+    assert '<h2 id="families-title">Real DGA families</h2>' in page.text
+    assert (
+        '<td>Necurs</td><td>random letters, 7 to 21</td><td class="num">40</td>'
+        '<td class="num">21</td><td class="num">20</td>'
+    ) in page.text
 
 
 def _minimal_summary() -> dict[str, Any]:

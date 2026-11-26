@@ -1,0 +1,24 @@
+#!/bin/sh
+# Checks the commit message with tools/conventions.py. Enabled together with
+# the pre-commit hook:  git config core.hooksPath .githooks
+#
+# It uses a Python 3.10+ already on the host if there is one, and otherwise
+# the Dockerfile's pinned base image, so nothing has to be installed.
+set -eu
+
+top=$(git rev-parse --show-toplevel)
+
+for python in python3 python; do
+    if "$python" -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
+        exec "$python" "$top/tools/conventions.py" commit-msg "$1"
+    fi
+done
+
+image=$(sed -n 's/^FROM \(python:[^ ]*\) AS base$/\1/p' "$top/Dockerfile")
+if [ -z "$image" ]; then
+    echo "commit-msg: no Python found and no python base image in the Dockerfile; commit refused." >&2
+    exit 1
+fi
+MSYS_NO_PATHCONV=1 exec docker run --rm -i --network none \
+    -v "${top}/tools:/tools:ro" "$image" \
+    python /tools/conventions.py commit-msg - <"$1"

@@ -52,6 +52,7 @@ packages = ["src/vedette"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tools"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers --strict-config"
@@ -70,7 +71,7 @@ omit = ["*/storage/migrations/*"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["src", "tests"]
+src = ["src", "tests", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "BLE", "D", "RUF"]
@@ -105,5 +106,6 @@ layers = [
 [tool.mypy]
 strict = true
 python_version = "3.14"
-files = ["src", "tests"]
+files = ["src", "tests", "tools"]
+mypy_path = "tools"
 plugins = ["pydantic.mypy"]

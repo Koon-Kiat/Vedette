@@ -103,8 +103,10 @@ docker compose --profile dev run --rm dev pytest
 docker compose --profile dev run --rm dev pytest --live tests/live   # real model
 ```
 
-Enable the secret-scanning commit hook once per clone (it runs gitleaks through
-Docker, so nothing is installed on the host):
+Enable the commit hooks once per clone. One scans staged changes for secrets
+with gitleaks through Docker; the other checks the commit message with
+`tools/conventions.py`, using a Python already on the host or the Dockerfile's
+pinned image, so nothing is installed:
 
 ```powershell
 git config core.hooksPath .githooks

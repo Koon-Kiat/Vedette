@@ -53,7 +53,7 @@ async def test_findings_are_titled_by_rule_name_with_the_id_beside_it(filled: St
     # What the rule checks is on every finding's page, analysed or not.
     for html in (page, analysed):
         assert "<h3>What the rule checks</h3>" in html
-    assert "random-looking label" in analysed
+    assert "random characters rather than words" in analysed
 
 
 async def test_a_reason_is_shown_by_name_with_its_id_beside_it(filled: Store) -> None:

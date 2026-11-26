@@ -54,6 +54,11 @@ class RuleEngine:
                 Only the evaluation suite turns this off, to measure its effect.
         """
         self._specs = {spec.id: spec for spec in specs if spec.enabled}
+        # Platforms whose customer names the provider generates, per rule.
+        self._assigned = {
+            spec.id: frozenset(spec.params.get("assigned_name_platforms", ()))
+            for spec in self._specs.values()
+        }
         self._allowlist = allowlist
         self._learning = learning
         self._prefilter = instruction_prefilter
@@ -232,6 +237,14 @@ class RuleEngine:
         event = item.event
         return self._allowlist.allows(event.profile_id, event.device_id, event.fqdn, event.root)
 
+    def _assigned_name(self, spec: RuleSpec, root: str | None) -> bool:
+        """Whether ``root`` is under a platform that names its customers' resources itself."""
+        platforms = self._assigned[spec.id]
+        if not root or not platforms:
+            return False
+        labels = root.split(".")
+        return any(".".join(labels[start:]) in platforms for start in range(len(labels)))
+
     def _new_device(self, item: EnrichedEvent) -> list[Finding]:
         spec = self._specs.get("new-device")
         event = item.event
@@ -304,10 +317,10 @@ class RuleEngine:
             spec is None
             or event.status == _BLOCKED
             or lexical.label_length < spec.params["min_label_length"]
-            or lexical.entropy < spec.params["min_entropy"]
+            or lexical.randomness < spec.params["min_randomness"]
             or not item.popularity_known
             or item.popularity_rank is not None
-            or item.is_platform
+            or self._assigned_name(spec, event.root)
             or self._allowed(item)
         ):
             return []
@@ -317,7 +330,7 @@ class RuleEngine:
             "status": event.status,
             "label": lexical.label,
             "label_length": lexical.label_length,
-            "entropy": round(lexical.entropy, 3),
+            "randomness": round(lexical.randomness, 1),
             "digit_ratio": round(lexical.digit_ratio, 3),
         }
         return [self._finding(spec, item, event.root or event.fqdn, evidence)]
@@ -412,7 +425,7 @@ class RuleEngine:
             or not new
             or not item.popularity_known
             or item.popularity_rank is not None
-            or item.is_platform
+            or self._assigned_name(spec, event.root)
             or self._learning_now(event.profile_id, event.ts)
             or self._allowed(item)
         ):

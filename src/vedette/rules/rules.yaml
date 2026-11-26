@@ -8,6 +8,48 @@
 #
 # When NextDNS reports no device for an event (typical for a router profile),
 # per-device rules count per profile instead.
+#
+# Hosting platforms that name each customer resource themselves (storage
+# buckets, CDN distributions, cloud endpoints). A random-looking label under
+# one says nothing about malware, so the name-based rules skip them. Names
+# under platforms where the customer picks the label (github.io, pages.dev,
+# duckdns.org) are still judged. A root matches an entry when it is the entry
+# or ends in "." plus the entry.
+assigned_name_platforms: &assigned_name_platforms
+  # Amazon Web Services
+  - amazonaws.com
+  - cloudfront.net
+  - awsglobalaccelerator.com
+  - on.aws
+  - amplifyapp.com
+  # Microsoft Azure
+  - windows.net
+  - azure.com
+  - azureedge.net
+  - azurefd.net
+  - azurewebsites.net
+  - azurestaticapps.net
+  - azurecontainer.io
+  - cloudapp.net
+  - trafficmanager.net
+  # Google Cloud
+  - googleapis.com
+  - googleusercontent.com
+  - usercontent.goog
+  - run.app
+  - cloudfunctions.net
+  # Content delivery networks
+  - akamai.net
+  - akamaiedge.net
+  - akamaihd.net
+  - akamaized.net
+  - edgekey.net
+  - edgesuite.net
+  - fastly.net
+  - fastly-edge.com
+  - fastlylb.net
+  # Other clouds
+  - yandexcloud.net
 
 rules:
   - id: new-device
@@ -50,13 +92,20 @@ rules:
     severity: medium
     dedupe: daily
     description: >-
-      An allowed query used a long, random-looking label on a domain outside
-      the top-sites list. Malware often generates such names to find its
-      command-and-control server.
+      An allowed query went to a domain outside the top-sites list whose
+      registered name looks like random characters rather than words. Malware
+      often generates such names to find its command-and-control server.
     params:
-      min_entropy: 3.5        # bits per character of the leftmost label
-      min_label_length: 12
-    evidence: [fqdn, root, status, label, label_length, entropy, digit_ratio]
+      # The label judged is the one left of the public suffix (or a
+      # customer's name on a hosting platform), whatever stands in front.
+      # min_randomness: bits by which random characters explain it better than real
+      # domain labels do. 20 bits is odds of about a million to one; it flags
+      # 0.4% of real registered labels of 8 or more characters
+      # (tools/label_model.py prints the calibration).
+      min_randomness: 20
+      min_label_length: 8
+      assigned_name_platforms: *assigned_name_platforms
+    evidence: [fqdn, root, status, label, label_length, randomness, digit_ratio]
 
   - id: tunnel-like
     name: Possible DNS tunnelling
@@ -100,6 +149,7 @@ rules:
     params:
       min_new_roots: 20           # fires when the count exceeds this
       window_minutes: 10
+      assigned_name_platforms: *assigned_name_platforms
     evidence: [new_roots_in_window, window_minutes, sample_roots]
 
   - id: volume-spike

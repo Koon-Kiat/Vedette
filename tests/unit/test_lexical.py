@@ -1,36 +1,60 @@
 import pytest
 
-from vedette.shared.names import lexical_features, shannon_entropy
+from vedette.shared.names import lexical_features, registered_label
+
+RANDOM_LABEL = "xkq7vbn2mtrp9zlw"
 
 
-def test_entropy_of_a_single_repeated_character_is_zero() -> None:
-    assert shannon_entropy("aaaaaaaa") == 0.0
-
-
-def test_entropy_of_two_equally_likely_characters_is_one_bit() -> None:
-    assert shannon_entropy("abababab") == 1.0
-
-
-def test_entropy_of_four_equally_likely_characters_is_two_bits() -> None:
-    assert shannon_entropy("abcdabcd") == 2.0
-
-
-def test_entropy_of_an_empty_string_is_zero() -> None:
-    assert shannon_entropy("") == 0.0
-
-
-def test_random_looking_label_has_higher_entropy_than_a_word() -> None:
-    assert shannon_entropy("xkq7vbn2mtrp9zlw") > shannon_entropy("accounts")
-
-
-def test_features_describe_the_leftmost_label() -> None:
+def test_features_describe_the_registered_label_not_the_leftmost() -> None:
     features = lexical_features("ab12.cdn.example.org", "example.org")
 
-    assert features.label == "ab12"
-    assert features.label_length == 4
-    assert features.digit_ratio == 0.5
+    assert features.label == "example"
+    assert features.label_length == 7
+    assert features.digit_ratio == 0.0
     assert features.subdomain_depth == 2
     assert features.subdomain_length == len("ab12.cdn")
+
+
+@pytest.mark.parametrize("prefix", ["", "www.", "mail.", "a.b.c."])
+def test_a_prefix_in_front_of_a_random_domain_does_not_hide_it(prefix: str) -> None:
+    root = f"{RANDOM_LABEL}.com"
+
+    features = lexical_features(prefix + root, root)
+
+    assert features.label == RANDOM_LABEL
+    assert features.randomness == lexical_features(root, root).randomness
+    assert features.randomness > 20
+
+
+def test_a_random_subdomain_under_a_word_domain_is_not_the_label_judged() -> None:
+    features = lexical_features(f"{RANDOM_LABEL}.example.org", "example.org")
+
+    assert features.label == "example"
+    assert features.randomness < 0
+    assert features.subdomain_length == len(RANDOM_LABEL)
+
+
+def test_a_customer_name_on_a_platform_is_judged_on_the_customer_label() -> None:
+    features = lexical_features(f"www.{RANDOM_LABEL}.github.io", f"{RANDOM_LABEL}.github.io")
+
+    assert features.label == RANDOM_LABEL
+    assert features.subdomain_depth == 1
+
+
+@pytest.mark.parametrize(
+    ("fqdn", "root", "label"),
+    [
+        ("www.example.org", None, "example"),
+        ("example.org", None, "example"),
+        ("localhost", None, "localhost"),
+        ("a.b.example.org", "other.test", "example"),
+        ("shop.example.co.uk", "example.co.uk", "example"),
+    ],
+)
+def test_the_registered_label_falls_back_to_the_second_to_last_label(
+    fqdn: str, root: str | None, label: str
+) -> None:
+    assert registered_label(fqdn, root) == label
 
 
 def test_a_bare_root_has_no_subdomain() -> None:

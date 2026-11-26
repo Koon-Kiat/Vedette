@@ -32,7 +32,7 @@ FINDINGS
 
 5. MEDIUM Random-looking domain name: c2-site[.]example (pc, device D1)
    1 finding, 1 event, last 2026-03-14 16:00 (Asia/Singapore)
-   An allowed query used a long, random-looking label on a domain outside the top-sites list. Malware often generates such names to find its command-and-control server.
+   An allowed query went to a domain outside the top-sites list whose registered name looks like random characters rather than words. Malware often generates such names to find its command-and-control server.
    Not explained by the local model. Rule: dga-like.
 
 NEW DEVICES

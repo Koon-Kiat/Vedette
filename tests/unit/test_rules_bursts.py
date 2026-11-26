@@ -92,16 +92,46 @@ def test_a_slow_trickle_of_new_domains_is_ordinary_browsing() -> None:
     assert fired(found, "dga-burst") == []
 
 
-def test_ranked_known_or_platform_domains_do_not_count() -> None:
+def test_ranked_or_known_domains_do_not_count() -> None:
     rules = engine()
     kinds: list[dict[str, Any]] = [
         {"popularity_rank": 4000},
         {"new_root_for_device": False, "new_root_for_profile": False},
-        {"platform": True},
     ]
     found = []
     for index in range(30):
-        found += rules.evaluate(new_root(index, seconds=index * 5, **kinds[index % 3]))
+        found += rules.evaluate(new_root(index, seconds=index * 5, **kinds[index % 2]))
+
+    assert fired(found, "dga-burst") == []
+
+
+def platform_root(index: int, platform: str) -> Any:
+    root = f"k{index:03d}qzxv.{platform}"
+    return enriched(
+        event(fqdn=root, root=root, at=timedelta(seconds=index * 5), n=index),
+        popularity_rank=None,
+        platform=True,
+        platform_rank=40,
+        new_root_for_device=True,
+        new_root_for_profile=True,
+    )
+
+
+def test_new_customer_names_on_a_platform_count_towards_a_burst() -> None:
+    rules = engine()
+    found = []
+    for index in range(25):
+        found += rules.evaluate(platform_root(index, "ddns.net"))
+
+    (burst,) = fired(found, "dga-burst")
+    assert all(root.endswith(".ddns.net") for root in burst.evidence["sample_roots"])
+
+
+def test_names_a_platform_assigned_itself_do_not_count_towards_a_burst() -> None:
+    rules = engine()
+    found = []
+    for index in range(25):
+        found += rules.evaluate(platform_root(index, "cloudfront.net"))
 
     assert fired(found, "dga-burst") == []
 

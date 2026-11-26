@@ -81,13 +81,14 @@ async def test_detection_uses_the_real_rules(store: Store, tmp_path: Path) -> No
     assert popular.flagged == 0
     assert (fast_result.flagged, fast_result.items) == (20, 20)
     assert fast_result.by_rule["tunnel-like"] == 20
-    # Too slow for tunnel-like, but the random hex labels still look like DGA output.
+    # Too slow for tunnel-like. dga-like judges each root, not the hex data in front
+    # of it, and one of the ten roots (t26rcxuyz) happens to read as random.
     assert "tunnel-like" not in slow_result.by_rule
-    assert slow_result.by_rule == {"dga-like": 10}
+    assert slow_result.by_rule == {"dga-like": 1}
 
 
-#: dga-like fires on this label when it is not ranked: 14 characters, all different.
-RANDOM = "q8z3k1x9w7m2v5.example"
+#: dga-like fires on this label when it is not ranked: it reads as random characters.
+RANDOM = "xkq7vbn2mtrp9zlw.example"
 #: A root the registry said was registered 5 days ago: only RDAP writes this cache,
 #: and only for roots from the owner's own traffic.
 YOUNG_ROOT_AGE = DomainAgeRecord(

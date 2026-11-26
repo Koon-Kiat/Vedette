@@ -293,7 +293,18 @@ def test_the_architecture_names_only_files_and_tests_that_exist() -> None:
             r"^(?:async )?def (test_[a-z0-9_]+)", path.read_text(encoding="utf-8"), re.MULTILINE
         )
     }
-    missing_files = sorted({path for path in REPO_PATH.findall(text) if not (ROOT / path).exists()})
+    ignored = {
+        line.strip("/")
+        for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        if line.startswith("/")
+    }
+    missing_files = sorted(
+        {
+            path
+            for path in REPO_PATH.findall(text)
+            if not (ROOT / path).exists() and path.strip("/") not in ignored
+        }
+    )
     missing_tests = sorted(set(TEST_NAME.findall(text)) - tests)
     assert (missing_files, missing_tests) == ([], []), (
         f"docs/ARCHITECTURE.md names files {missing_files} and tests {missing_tests} that "

@@ -119,6 +119,14 @@ Pull requests are titled as a Conventional Commit, the same as the squashed
 commit, and their description follows `.github/pull_request_template.md`: a
 summary, the changes, how they were tested, and optional notes.
 
+Commit messages follow git's own convention: a subject, a blank line, then
+a body wrapped at 72 characters, which is how `git log`, email patches and
+review tools show it. Only a single word such as a URL may run over. The
+commit-msg hook, the pull request checks and a check on every push to main
+hold this, squash merges included. Dependabot writes its own commit bodies,
+so on its pull requests only the title is checked; its squash merge on main
+has the title and an empty body.
+
 CI (`.github/workflows/ci.yml`) runs lint, types and tests on Python 3.14 and
 3.15, pip-audit, gitleaks over the full history, and a build of the image
 that Trivy scans for fixable high or critical vulnerabilities, on every push

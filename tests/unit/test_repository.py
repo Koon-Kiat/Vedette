@@ -321,3 +321,19 @@ def test_every_decision_cited_exists() -> None:
         if not 1 <= int(number) <= last
     ]
     assert cited == [], f"{cited} cite decisions that docs/ARCHITECTURE.md does not have."
+
+
+def test_every_commit_pushed_to_main_is_checked() -> None:
+    workflow = _load_yaml(ROOT / ".github" / "workflows" / "conventions.yml")
+    triggers = workflow.get("on", workflow.get(True))
+    assert "main" in triggers["push"]["branches"]
+    runs = [
+        step.get("run", "")
+        for job in workflow["jobs"].values()
+        if job.get("if") == "github.event_name == 'push'"
+        for step in job["steps"]
+    ]
+    assert any("tools/conventions.py commits" in run for run in runs), (
+        "The Conventions workflow checks every commit pushed to main, squash merges "
+        "included (decision 106)."
+    )

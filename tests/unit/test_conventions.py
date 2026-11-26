@@ -72,6 +72,45 @@ def test_a_long_commit_subject_is_accepted_since_only_the_title_is_squashed() ->
     assert conventions.check_commit("fix: " + "a" * 90) == []
 
 
+WRAPPED = (
+    "chore: enforce import layers, writing rules and stricter lint (#8)\n\n"
+    "Rules that lived only in review comments and prose are now checked by\n"
+    "code, so every later change is held to them.\n\n"
+    "- Packages import only the layers below them. The shared types,\n"
+    "  defanging and lexical features moved to vedette.shared, and\n"
+    "  lint-imports holds the order in CI.\n"
+)
+
+
+def test_a_body_wrapped_at_72_columns_passes() -> None:
+    assert conventions.check_commit(WRAPPED) == []
+
+
+def test_a_paragraph_written_on_one_long_line_is_refused() -> None:
+    paragraph = " ".join(["The injection test used names written alongside the pre-filter."] * 4)
+    problems = conventions.check_commit(f"feat(eval): measure injection (#6)\n\n{paragraph}\n")
+    assert len(problems) == 1
+    assert "body line 3 is" in problems[0]
+    assert "wrap the body at 72" in problems[0]
+
+
+def test_every_long_line_is_counted_in_one_problem() -> None:
+    long = " ".join(["word"] * 20)
+    problems = conventions.check_commit(f"fix: keep the root\n\n{long}\n{long}\n\n{long}\n")
+    assert len(problems) == 1
+    assert "and 2 more" in problems[0]
+
+
+def test_a_single_long_word_such_as_a_url_may_run_over() -> None:
+    url = "https://github.com/Koon-Kiat/Vedette/actions/runs/45805025583/job/139857874109"
+    assert conventions.check_commit(f"ci: fix the image job\n\nThe failing run:\n{url}\n") == []
+
+
+def test_the_body_is_separated_from_the_subject_by_a_blank_line() -> None:
+    problems = conventions.check_commit("fix: keep the root\nbecause it matters\n")
+    assert problems == ["commit message: leave a blank line between the subject and the body."]
+
+
 @pytest.mark.parametrize(
     "line",
     [

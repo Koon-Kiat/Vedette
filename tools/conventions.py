@@ -1,7 +1,8 @@
 """Checks commit messages and pull requests against the project's writing rules.
 
 ``.githooks/commit-msg`` runs it on every commit, and the conventions workflow on
-every pull request. Each problem it reports says what to write instead.
+every pull request and every push to main. Each problem it reports says what to
+write instead.
 
     python tools/conventions.py commit-msg FILE        (FILE may be -)
     git log --format=%x1e%h%n%B BASE..HEAD | python tools/conventions.py commits -
@@ -30,6 +31,7 @@ TYPES = (
 CONVENTIONAL = re.compile(rf"^(?:{'|'.join(TYPES)})(?:\([a-z0-9][a-z0-9-]*\))?!?: \S")
 GIT_SUBJECTS = ("Merge ", 'Revert "', "fixup! ", "squash! ", "amend! ")
 SUBJECT_LIMIT = 72
+BODY_WIDTH = 72
 
 _ASSISTANTS = r"(?:claude|anthropic|chatgpt|openai|copilot|gemini|codex)"
 AI_ATTRIBUTION = re.compile(
@@ -99,6 +101,26 @@ def message_text(raw: str) -> str:
     return "\n".join(kept).strip()
 
 
+def _body_problems(where: str, text: str) -> list[str]:
+    lines = text.splitlines()
+    if len(lines) > 1 and lines[1].strip():
+        return [f"{where}: leave a blank line between the subject and the body."]
+    long = [
+        (number, len(line))
+        for number, line in enumerate(lines, 1)
+        if number > 1 and len(line) > BODY_WIDTH and " " in line.strip()
+    ]
+    if not long:
+        return []
+    number, length = long[0]
+    more = f" and {len(long) - 1} more" if len(long) > 1 else ""
+    return [
+        f"{where}: body line {number} is {length} characters{more}; wrap the body at "
+        f"{BODY_WIDTH}, as git log, email patches and review tools show it as written. "
+        "Only a single word, such as a URL, may run over."
+    ]
+
+
 def check_commit(raw: str, *, where: str = "commit message") -> list[str]:
     """Problems with one commit message, as written in the editor or by ``-m``."""
     text = message_text(raw)
@@ -108,7 +130,7 @@ def check_commit(raw: str, *, where: str = "commit message") -> list[str]:
     problems = []
     if not subject.startswith(GIT_SUBJECTS) and not CONVENTIONAL.match(subject):
         problems.append(_conventional_problem(f"{where} subject"))
-    return problems + _text_problems(where, text)
+    return problems + _body_problems(where, text) + _text_problems(where, text)
 
 
 def _section_problems(body: str) -> list[str]:

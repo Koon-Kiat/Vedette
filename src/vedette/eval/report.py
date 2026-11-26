@@ -609,7 +609,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"Production model: {summary['production_model']}.",
         "",
         "Thresholds and prompts were set before this evaluation and were not changed in "
-        "response to it. Names sampled from your history and from the threat feeds are only "
+        "response to it, with one exception: two prompt-injection defences were changed after "
+        "the held-out set's results had been read, as the method note under Prompt injection "
+        "explains. Names sampled from your history and from the threat feeds are only "
         "counted here; none of them appears in this report. Flagged names from the two "
         "public lists (top sites and popular hostnames) are shown, even when a feed also "
         "lists one.",

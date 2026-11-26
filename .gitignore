@@ -34,6 +34,9 @@ coverage.xml
 /PRODUCT.md
 /DESIGN.md
 
+# Plans written by coding agents: working notes, not project documentation
+/docs/superpowers/
+
 # Editors and OS
 .vscode/
 .idea/

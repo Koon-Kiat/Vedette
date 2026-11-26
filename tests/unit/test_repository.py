@@ -42,6 +42,8 @@ RENAME_RECORDS = {
     ROOT / "docs" / "ARCHITECTURE.md",
     Path(__file__).resolve(),
 }
+MARKUP = {".html", ".js", ".css"}
+MILESTONE_EXAMPLES = {ROOT / "tests" / "unit" / "test_conventions.py"}
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 REGISTRY_IMAGE = re.compile(
     r"\b(?:ghcr\.io|docker\.io|quay\.io)/[\w./-]+:[\w.-]+(?:@sha256:[0-9a-f]{64})?"
@@ -83,6 +85,20 @@ def test_prose_names_the_work_not_the_milestone(path: Path) -> None:
     codes = conventions.MILESTONE_CODE.findall(path.read_text(encoding="utf-8"))
     assert codes == [], (
         f"{path.name} uses milestone codes {sorted(set(codes))}; name the work instead "
+        "(scaffold, collector, enrichment and rules, dashboard, ...)."
+    )
+
+
+def test_code_and_configuration_name_the_work_not_the_milestone() -> None:
+    found = [
+        f"{path.relative_to(ROOT).as_posix()}:{number}"
+        for path in _text_files()
+        if path.suffix not in MARKUP and path not in MILESTONE_EXAMPLES
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if conventions.MILESTONE_CODE.search(line)
+    ]
+    assert found == [], (
+        f"Milestone codes at {found}; name the work instead "
         "(scaffold, collector, enrichment and rules, dashboard, ...)."
     )
 

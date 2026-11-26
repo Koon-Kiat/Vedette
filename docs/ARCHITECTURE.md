@@ -40,10 +40,10 @@ NextDNS API (per profile)
 | Log export reader | `src/vedette/sources/nextdns_export.py` | Done: `vedette import` loads a dashboard CSV export |
 | Storage | `src/vedette/storage/` | Done for events, collector state, findings, reference data, the stored allowlist, the audit log and evaluation runs: SQLite (WAL), Alembic migrations, retention purge, owner-only files |
 | Collector | `src/vedette/pipeline/collector.py` | Done: backfill, stream, resume, gap-fill |
-| Enrichment | `src/vedette/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds, lexical features |
+| Enrichment | `src/vedette/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds |
 | Rules | `src/vedette/rules/` | Done: ten declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
 | Enricher and rule workers | `src/vedette/pipeline/processor.py` | Done |
-| Defanging | `src/vedette/notify/defang.py` | Done: CLI, alerts and digests |
+| Shared types and helpers | `src/vedette/shared/` | Findings, severities, verdicts, analyses, allowlist entries and outgoing messages; defanging; lexical features and feed-lookup candidates. Every package may import it; it imports none (decision 105) |
 | LLM analyst | `src/vedette/llm/`, `src/vedette/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
 | Notifier | `src/vedette/notify/`, `src/vedette/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
 | Health monitor | `src/vedette/health/` | Done: six kinds of check, alerts on change, `/healthz` |
@@ -432,7 +432,8 @@ repository. Each decision that departs from it says so.
    the `vedette` console script; hatchling is small and widely used.
 4. **`tzdata` and `pyyaml` are direct dependencies.** `python:3.14-slim` has no
    system time zone database, and the config loader parses YAML itself so it
-   can refuse secrets placed in the file.
+   can refuse secrets placed in the file. `tests/unit/test_repository.py`
+   holds this.
 5. **Dependencies are pinned with hashes in `uv.lock`.** Images install with
    `uv sync --locked`, which verifies every hash. `pip-audit` runs against a
    hashed export of the same lock file.
@@ -628,7 +629,8 @@ repository. Each decision that departs from it says so.
     batch.
 57. **Web-facing dependencies are pinned exactly** (`fastapi`, `jinja2`,
     `python-multipart`, `uvicorn`), to releases at least two weeks old, as
-    well as being locked with hashes.
+    well as being locked with hashes. `tests/unit/test_repository.py` holds
+    the exact pins; the age is checked by hand when a pin changes.
 58. **Less on the wire and in the logs.** FastAPI's `/docs`, `/redoc` and
     `/openapi.json` are off, uvicorn sends no `Server` or `Date` header, and
     there is no access log, so filter values such as device names do not end
@@ -833,14 +835,18 @@ repository. Each decision that departs from it says so.
     match: the command, the Python package and module, the `VEDETTE_`
     settings prefix, the cookies and the Docker names. NextDNS is still named
     where it describes the service Vedette reads, such as `NEXTDNS_API_KEY`
-    and the README's note that the project is independent.
+    and the README's note that the project is independent. A test in
+    `tests/unit/test_repository.py` fails if the old name appears anywhere
+    but here and in the CHANGELOG.
 86. **The default time zone is UTC.** The spec set Asia/Singapore, the owner's
     zone, which new users elsewhere would get without noticing: digests and
     quiet hours an hour or more off. `config.example.yaml` asks for an IANA
     zone. Tests that need a fixed zone still name Asia/Singapore themselves.
 87. **The design tools' briefs stay local.** `PRODUCT.md` and `DESIGN.md` are
     read by the Impeccable and Intent design tools and are git-ignored, at
-    the owner's request.
+    the owner's request. So are the plans coding agents write under
+    `docs/superpowers/`: they are working notes, not documentation. A test
+    in `tests/unit/test_repository.py` holds both.
 88. **CI actions are pinned to a release's commit.** A tag can be moved to
     other code; a commit cannot. Each `uses:` line names the commit and, in a
     comment, the release (`actions/checkout` v7.0.1,
@@ -849,7 +855,8 @@ repository. Each decision that departs from it says so.
     publishes exact releases only. Base images are
     pinned by digest too (decision 93). With the pinned actions, CI passed on GitHub on
     2026-11-21: lint, types and tests on Python 3.14 and 3.15, pip-audit
-    and gitleaks.
+    and gitleaks. `tests/unit/test_repository.py` fails on a `uses:` line
+    that names a tag instead of a commit.
 89. **CI also runs weekly and builds the image.** A new advisory for a locked
     dependency shows up on a Monday without a push, and a change that breaks
     the Dockerfile fails a pull request rather than the release.
@@ -858,7 +865,8 @@ repository. Each decision that departs from it says so.
     through Dependabot's cooldown to the Python lock, the CI actions, the
     Dockerfile's base images and the Ollama image. Security updates skip the
     wait. Minor and patch updates come grouped, one pull request per
-    ecosystem; a major update comes alone.
+    ecosystem; a major update comes alone. `tests/unit/test_repository.py`
+    holds the 14-day cooldown for every ecosystem.
 91. **Releases come from a version tag.** `.github/workflows/release.yml`
     runs on a `v*.*.*` tag. It first calls the CI workflow, so nothing is
     published unless every check passes at that commit. It then refuses a
@@ -898,7 +906,9 @@ repository. Each decision that departs from it says so.
     moves cannot change what is built or run. Dependabot proposes the tag
     and digest together (decision 90), which is what made this cheap. The
     gitleaks image runs from a `docker run` line that Dependabot does not
-    read and is bumped by hand.
+    read and is bumped by hand. `tests/unit/test_repository.py` fails on an
+    image without a digest, and when the gitleaks copies in `ci.yml`,
+    `.githooks/pre-commit` and `.pre-commit-config.yaml` differ.
 94. **A heartbeat for what no alert can report.** A stopped computer, a
     stopped Docker or a broken alert channel cannot raise an alert, and Docker
     Desktop stopped twice in one day on the owner's machine. So Vedette can
@@ -1136,6 +1146,28 @@ repository. Each decision that departs from it says so.
     the name out of the payload (the strongest, but the explanation loses it
     and the device row would read zero by construction). The cost: new-device
     explanations are more generic, and qwen3:8b often leaves the name out.
+105. **Packages import downward only.** From the top: `cli`; `pipeline` and
+    `eval`; `web`; `health`; `llm` and `notify`; `rules`; `enrich`;
+    `storage`; `config` and `sources`; `shared`, `retry` and `log`. A
+    package may import any layer below it, never one above, and two
+    packages on the same layer do not import each other. Types every stage
+    passes on (`Severity`, `Finding`, `Verdict`, `Analysis`,
+    `AllowlistEntry`, `OutgoingMessage`), defanging and the lexical features
+    live in `shared`, which imports no other package; before, they sat in
+    the packages that first needed them, and storage, the model, the
+    notifier and the rules imported one another. `lint-imports` checks the
+    contract in `pyproject.toml` in CI, and a new package must be given a
+    layer before it passes.
+106. **Corrections become checks.** Rules the owner gave in review are
+    enforced, not only written down. `tools/conventions.py` checks commit
+    messages (from `.githooks/commit-msg`) and pull requests (from the
+    conventions workflow): Conventional Commit subjects; a pull request
+    title that leaves room for ` (#N)` within 72 characters; no AI or
+    assistant attribution; no milestone codes; no backlog ids; only the
+    template's sections. Dependabot's descriptions quote upstream notes, so
+    only its title and commits are checked. `tests/unit/test_repository.py`
+    checks the repository's files the same way, and each check's message
+    says what to write instead.
 
 ## Verified facts the design relies on
 

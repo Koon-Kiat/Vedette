@@ -47,6 +47,19 @@
   is now 2, so a new finding never reuses an explanation cached under the
   old prompt.
 
+### Development
+
+- Packages now import only the layers below them, checked by `lint-imports`
+  in CI. The types every stage shares, defanging and the lexical features
+  moved to a new `vedette.shared` package.
+- A commit-msg hook and a pull request workflow check commit messages, titles
+  and descriptions against the project's writing rules, and tests check the
+  repository's pins and names.
+- More lint rules (commented-out code, `print`, naive datetimes, complexity
+  and others) and property-based tests with Hypothesis for defanging, text
+  cleaning, lexical features, the Public Suffix List and the pre-filter.
+- Plans written by coding agents under `docs/superpowers/` are git-ignored.
+
 ## 0.2.0 - 2026-11-22
 
 ### Knowing when Vedette itself stops

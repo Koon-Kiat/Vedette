@@ -323,3 +323,61 @@ def test_an_empty_as_if_unlisted_row_is_not_stated() -> None:
     report = render_markdown(summary(detection=[_row("Top sites, as if unlisted", items=0)]))
 
     assert "Without the top-sites exemption" not in report
+
+
+def test_family_names_are_their_own_roots_and_the_same_every_run() -> None:
+    families = datasets.family_names(5)
+
+    assert families == datasets.family_names(5)
+    assert all(name.fqdn == name.root for names in families.values() for name in names)
+    assert sum(len(names) for names in families.values()) == 5 * len(families)
+
+
+def test_prefixed_names_keep_their_root_and_take_each_prefix_in_turn() -> None:
+    names = [datasets.Name(f"k{n}qzxv.com", f"k{n}qzxv.com") for n in range(5)]
+
+    shown = datasets.prefixed(names)
+
+    assert [name.fqdn.split(".")[0] for name in shown] == ["www", "mail", "cdn", "api", "www"]
+    assert [name.root for name in shown] == [name.root for name in names]
+
+
+def test_platform_hosted_names_go_on_platforms_where_anyone_picks_a_name() -> None:
+    hosted = datasets.platform_hosted(datasets.family_names(), per_family=3)
+    platforms = {name.root.split(".", 1)[1] for name in hosted}
+
+    assert platforms == set(datasets.USER_NAMED_PLATFORMS)
+    assert all(name.fqdn == name.root and datasets.valid_dns_name(name.root) for name in hosted)
+
+
+def family_row(family: str, flagged: int, prefixed: int, items: int = 40) -> dict[str, Any]:
+    return {
+        "family": family,
+        "style": "random letters",
+        "items": items,
+        "flagged": flagged,
+        "prefixed_flagged": prefixed,
+    }
+
+
+def test_the_report_gives_each_real_family_and_names_the_ones_missed() -> None:
+    report = render_markdown(
+        summary(
+            dga_families=[family_row("Necurs", 36, 36), family_row("Simda", 0, 0)],
+            detection=[_row("DGA labels on hosting platforms", items=100, flagged=60, rate=0.6)],
+        )
+    )
+
+    assert "### Real DGA families" in report
+    assert "| Necurs | random letters | 40 | 36 | 90% | 36 |" in report
+    assert "- dga-like flags 36 of 80 names (45%) from 2 real malware families" in report
+    assert "With www., mail., cdn. or api. in front it flags 36 (45%)" in report
+    assert "- It misses most names from Simda 0%." in report
+    assert "60% of the family labels are flagged" in report
+
+
+def test_a_summary_without_real_families_has_no_family_section() -> None:
+    report = render_markdown(summary())
+
+    assert "### Real DGA families" not in report
+    assert "real malware families" not in report

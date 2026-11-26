@@ -297,6 +297,31 @@ def _by_name(rows: list[dict[str, Any]], dataset: str) -> dict[str, Any] | None:
     return next((row for row in rows if row["dataset"] == dataset), None)
 
 
+def _family_section(summary: dict[str, Any]) -> list[str]:
+    """The dga-like rule on each real malware family."""
+    rows = summary.get("dga_families") or []
+    if not rows:
+        return []
+    lines = [
+        "### Real DGA families",
+        "",
+        "Each family's domain generation algorithm was re-implemented from a published "
+        "analysis and checked against the sample names that analysis lists; see "
+        "`src/vedette/eval/dga_families.py`. No threshold was set on these names. Each row "
+        "counts what dga-like flags, with the feed lookup and registration dates off, on the "
+        "generated names and again with a subdomain in front.",
+        "",
+        "| Family | Names look like | Names | Flagged | Rate | Flagged behind a prefix |",
+        "| --- | --- | ---: | ---: | ---: | ---: |",
+    ]
+    lines += [
+        f"| {row['family']} | {row['style']} | {row['items']} | {row['flagged']} | "
+        f"{_share(row['flagged'], row['items'])} | {row['prefixed_flagged']} |"
+        for row in rows
+    ]
+    return [*lines, ""]
+
+
 def _replay_section(replay: dict[str, Any] | None) -> list[str]:
     """What the current rules raise on the stored history, rule by rule."""
     if not replay:
@@ -329,6 +354,7 @@ def _findings(summary: dict[str, Any]) -> list[str]:
     detection = summary["detection"]
     combined = _combined(summary)
     out = [
+        *_family_findings(summary),
         *_dga_findings(detection),
         *_tunnel_findings(detection),
         *_burst_findings(detection),
@@ -344,22 +370,64 @@ def _findings(summary: dict[str, Any]) -> list[str]:
     return out or ["- Nothing failed in this run."]
 
 
+def _share(count: int, items: int) -> str:
+    return _pct(count / items if items else None)
+
+
+def _family_findings(summary: dict[str, Any]) -> list[str]:
+    """What dga-like catches in the real families, and which ones it misses."""
+    rows = summary.get("dga_families") or []
+    items = sum(row["items"] for row in rows)
+    if not items:
+        return []
+    flagged = sum(row["flagged"] for row in rows)
+    behind = sum(row["prefixed_flagged"] for row in rows)
+    missed = [
+        f"{row['family']} {_share(row['flagged'], row['items'])}"
+        for row in rows
+        if row["flagged"] < row["items"] / 2
+    ]
+    out = [
+        f"- dga-like flags {flagged} of {items} names ({_share(flagged, items)}) from "
+        f"{len(rows)} real malware families, re-implemented from published analyses and never "
+        "used to set a threshold. With www., mail., cdn. or api. in front it flags "
+        f"{behind} ({_share(behind, items)}): the rule judges the registered label, whatever "
+        "stands before it."
+    ]
+    if missed:
+        out.append(
+            f"- It misses most names from {', '.join(missed)}. Their names are pronounceable, "
+            "built from words, or short, and read like real domain labels; "
+            "dga-burst, which counts new unknown domains whatever they look like, is the rule "
+            "for those."
+        )
+    return out
+
+
 def _dga_findings(detection: list[dict[str, Any]]) -> list[str]:
     """Where the dga-like rule misses generated names."""
     out: list[str] = []
+    hosted = _by_name(detection, "DGA labels on hosting platforms")
+    if hosted and hosted["items"]:
+        out.append(
+            f"- Put on platforms where anyone picks a name (duckdns.org, github.io and others), "
+            f"{_pct(hosted['rate'])} of the family labels are flagged: customer names there are "
+            "judged like registered domains. Platforms that name each customer resource "
+            "themselves (cloud storage, CDN endpoints) are skipped."
+        )
     words = _by_name(detection, "Dictionary-word DGA names")
     if words and (words["rate"] or 0) < 0.5:
         out.append(
             f"- Dictionary-word DGA names are mostly missed ({_pct(words['rate'])} flagged). "
-            "The dga-like rule measures how random the leftmost label's characters are, and "
-            "names built from real words do not look random."
+            "The dga-like rule scores how much the registered label reads like random "
+            "characters rather than a real domain label, and names built from words do not."
         )
     random_dga = _by_name(detection, "Random-character DGA names")
     if random_dga and (random_dga["rate"] or 0) < 1:
         out.append(
             f"- Random-character DGA names are flagged {_pct(random_dga['rate'])} of the time. "
-            "Labels shorter than 12 characters, or with too few distinct characters, stay below "
-            "the rule's length and entropy thresholds."
+            "Each character adds evidence, so a short random label rarely reaches the rule's "
+            "20-bit threshold: most misses are under 12 characters."
         )
     return out
 
@@ -374,13 +442,7 @@ def _tunnel_findings(detection: list[dict[str, Any]]) -> list[str]:
         out.append(
             f"- The tunnel-like rule catches {caught} of {slow['items']} short slow tunnels: it "
             "needs more than 30 different long subdomains within 10 minutes, and these send 20 "
-            "in all."
-            + (
-                f" {other} were still flagged by another rule (their random-looking labels "
-                "also trip dga-like), which a tunnel using dictionary words would not."
-                if other > 0
-                else ""
-            )
+            "in all." + (f" {other} were flagged by another rule." if other > 0 else "")
         )
     sustained = _by_name(detection, "Tunnels, a lookup a minute for 2 hours")
     if sustained and sustained["items"]:
@@ -461,6 +523,7 @@ def _false_positive_findings(detection: list[dict[str, Any]]) -> list[str]:
     for dataset in (
         "Top sites, local list",
         "Popular hostnames (Cisco Umbrella)",
+        "Popular hostnames on hosting platforms",
         "Your own history, sample",
     ):
         benign = _by_name(detection, dataset)
@@ -722,12 +785,25 @@ def render_markdown(summary: dict[str, Any]) -> str:
         + (f"{sizes['hostnames']} popular hostnames, " if sizes.get("hostnames") else "")
         + f"{sizes['own_history']} names from your "
         f"history, {sizes['feeds']} feed domains, {sizes['dga_random']} random and "
-        f"{sizes['dga_words']} word-based DGA names, {sizes['tunnels_fast']} fast, "
+        f"{sizes['dga_words']} word-based DGA names, "
+        + (
+            f"{sizes['dga_families']} names from {sizes['families']} real DGA families, "
+            f"{sizes['platform_hosted']} family labels on hosting platforms, "
+            if sizes.get("dga_families")
+            else ""
+        )
+        + (
+            f"{sizes['platform_hostnames']} popular hostnames on hosting platforms, "
+            if sizes.get("platform_hostnames")
+            else ""
+        )
+        + f"{sizes['tunnels_fast']} fast, "
         f"{sizes['tunnels_slow']} short slow and {sizes['tunnels_sustained']} sustained tunnels, "
         f"{sizes['bursts_random']} random and {sizes['bursts_words']} word-based bursts, "
         f"{sizes['young']} young and {sizes['old']} older dated domains, "
         f"{sizes['injection']} crafted injection names.",
         "",
+        *_family_section(summary),
         *_examples_section(summary["detection"]),
         *_replay_section(summary.get("replay")),
         "",
@@ -779,7 +855,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "- The replay treats your history as benign too, and starts with fresh first "
         "sightings, so its first days are spent learning, as a new install's are.",
         *_hostname_limit(summary),
-        "- Synthetic DGA and tunnelling names imitate common patterns; real malware varies more.",
+        "- The real DGA families each run on one date or seed. Real campaigns change these, "
+        "but a family's style of name stays the same. Tunnelling names are synthetic.",
         "- The echo check is a heuristic and may miss or over-count; the listed cases are the "
         "evidence. Its precision and recall have not been measured against labelled answers.",
         "- Every crafted item is forced in front of the model. In real use a name reaches the "

@@ -16,7 +16,7 @@ from tests.integration.list_helpers import HOSTNAMES_URL, zipped
 from tests.integration.web_helpers import logged_in
 from vedette.cli import app
 from vedette.config import load_settings
-from vedette.eval import datasets
+from vedette.eval import datasets, dga_families
 from vedette.eval.datasets import Crafted
 from vedette.eval.detection import Detector
 from vedette.eval.injection import (
@@ -181,6 +181,48 @@ async def test_popular_hostnames_are_sampled_with_their_registered_roots(
         datasets.Name("events.data.example.com", "example.com"),
         datasets.Name("foo.github.io", "foo.github.io"),
     ]
+
+
+async def test_platform_hostnames_are_the_customer_names_under_a_platform(
+    store: Store, tmp_path: Path
+) -> None:
+    async with store.engine.begin() as connection:
+        await connection.execute(
+            public_suffixes.insert(),
+            [
+                {"rule": "com", "private": False},
+                {"rule": "io", "private": False},
+                {"rule": "net", "private": False},
+                {"rule": "github.io", "private": True},
+                {"rule": "cloudfront.net", "private": True},
+            ],
+        )
+        await connection.execute(
+            eval_hostnames.insert(),
+            [
+                {"name": "www.example.com", "rank": 1},
+                {"name": "foo.github.io", "rank": 2},
+                {"name": "d1abc2def3.cloudfront.net", "rank": 3},
+                {"name": "github.io", "rank": 4},
+                {"name": "www.bar.github.io", "rank": 5},
+                {"name": "deep.github.io", "rank": 200_000},
+            ],
+        )
+    scratch = await scratch_store(tmp_path)
+    try:
+        async with Detector(store.engine, scratch.engine, load_rules(), NOW) as detector:
+            names = await datasets.platform_hostnames(
+                store.engine, detector.root_of, detector.is_platform
+            )
+    finally:
+        await scratch.close()
+
+    # github.io is the suffix itself and deep.github.io is outside the top 100,000.
+    assert set(names) == {
+        datasets.Name("foo.github.io", "foo.github.io"),
+        datasets.Name("d1abc2def3.cloudfront.net", "d1abc2def3.cloudfront.net"),
+        datasets.Name("www.bar.github.io", "bar.github.io"),
+    }
 
 
 async def test_without_a_suffix_list_roots_are_the_last_two_labels(
@@ -417,6 +459,14 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
     assert summary["held_out_categories"] == {"spoof": 1, "device": 1, "sample-roots": 1}
     assert summary["prefilter"]["held_out"]["sample-roots"] == [1, 0]
     assert summary["dataset_sizes"]["injection_held_out"] == 3
+    assert [row["family"] for row in summary["dga_families"]] == [
+        family.name for family in dga_families.FAMILIES
+    ]
+    assert {
+        "Real DGA families",
+        "Real DGA families, behind a prefix",
+        "DGA labels on hosting platforms",
+    } <= {row["dataset"] for row in summary["detection"]}
     json.dumps(summary)
     assert "Items steered at least once" in report
     assert "### By category" in report

@@ -13,7 +13,7 @@ import httpx
 import structlog
 
 from vedette.config import LlmConfig, Settings
-from vedette.eval import datasets
+from vedette.eval import datasets, dga_families
 from vedette.eval.detection import DetectionResult, Detector
 from vedette.eval.history import history_metrics
 from vedette.eval.hostnames import ensure_hostnames
@@ -46,6 +46,7 @@ TOP_SITES_CONSTRUCTION = (
     "The rules skip domains on the top-sites list, so only a threat-feed match on a domain "
     "outside the top 1,000 can flag one. A sanity check, not a false-alert rate."
 )
+NAME_RULES_ONLY = "name rules only: feed lookup and registration dates off"
 FEEDS_CONSTRUCTION = (
     "The feeds are the same ones the threat-intel rule matches, so recall with the feed "
     "match on is high by construction."
@@ -54,6 +55,108 @@ FEEDS_CONSTRUCTION = (
 
 def _detection(result: DetectionResult) -> dict[str, Any]:
     return {**asdict(result), "rate": result.rate}
+
+
+async def _hostname_rows(
+    detector: Detector, hostnames: list[datasets.Name], platform_names: list[datasets.Name]
+) -> list[DetectionResult]:
+    """The popular-hostname sets, when the list could be had."""
+    rows = []
+    if hostnames:
+        rows += [
+            await detector.names(
+                "Popular hostnames (Cisco Umbrella)",
+                "benign",
+                hostnames,
+                dates=False,
+                note="full names, every 100th of the top 100,000",
+                examples=EXAMPLES,
+            ),
+            await detector.names(
+                "Popular hostnames, as if unlisted",
+                "benign",
+                hostnames,
+                ranks=False,
+                dates=False,
+                examples=EXAMPLES,
+            ),
+        ]
+    if platform_names:
+        rows.append(
+            await detector.names(
+                "Popular hostnames on hosting platforms",
+                "benign",
+                platform_names,
+                dates=False,
+                note="customer names under a platform, from the top 100,000",
+                examples=EXAMPLES,
+            )
+        )
+    return rows
+
+
+async def _generated_rows(
+    detector: Detector, families: dict[str, list[datasets.Name]]
+) -> list[DetectionResult]:
+    """Generated domain names: synthetic ones, then the real families three ways."""
+    dga_random, dga_words = datasets.dga_names()
+    generated = [name for names in families.values() for name in names]
+    return [
+        await detector.names(
+            "Random-character DGA names",
+            "malicious",
+            dga_random,
+            note="synthetic, like the labels the threshold was set on",
+        ),
+        await detector.names("Dictionary-word DGA names", "malicious", dga_words),
+        await detector.names(
+            "Real DGA families",
+            "malicious",
+            generated,
+            feeds=False,
+            dates=False,
+            note=f"{len(families)} families, held out; {NAME_RULES_ONLY}",
+        ),
+        await detector.names(
+            "Real DGA families, behind a prefix",
+            "malicious",
+            datasets.prefixed(generated),
+            feeds=False,
+            dates=False,
+            note="the same names under www., mail., cdn. or api.",
+        ),
+        await detector.names(
+            "DGA labels on hosting platforms",
+            "malicious",
+            datasets.platform_hosted(families),
+            feeds=False,
+            dates=False,
+            note="customer names on duckdns.org, github.io and eight more",
+        ),
+    ]
+
+
+async def _families(
+    detector: Detector, families: dict[str, list[datasets.Name]]
+) -> list[dict[str, Any]]:
+    """What dga-like flags in each real malware family, bare and behind a prefix."""
+    rows = []
+    for family in dga_families.FAMILIES:
+        names = families[family.name]
+        bare = await detector.names(family.name, "malicious", names, feeds=False, dates=False)
+        behind = await detector.names(
+            family.name, "malicious", datasets.prefixed(names), feeds=False, dates=False
+        )
+        rows.append(
+            {
+                "family": family.name,
+                "style": family.style,
+                "items": bare.items,
+                "flagged": bare.by_rule.get("dga-like", 0),
+                "prefixed_flagged": behind.by_rule.get("dga-like", 0),
+            }
+        )
+    return rows
 
 
 def _injection(result: InjectionResult) -> dict[str, Any]:
@@ -211,6 +314,7 @@ async def run_suite(
         sustained = datasets.sustained_tunnel_sessions()
         bursts_random, bursts_words = datasets.dga_bursts()
         young, old = datasets.dated_domains()
+        families = datasets.family_names()
         injection = datasets.injection_names()
         held_out = datasets.held_out_injection()
         sample = mixed_sample(held_out, cross_per_category) if cross else []
@@ -231,6 +335,13 @@ async def run_suite(
                 else []
             )
             suffix_list = detector.suffixes_known
+            platform_names = (
+                await datasets.platform_hostnames(
+                    store.engine, detector.root_of, detector.is_platform
+                )
+                if listing.available and suffix_list
+                else []
+            )
             if hostnames and not suffix_list:
                 errors.append(
                     "No Public Suffix List is stored yet, so popular hostnames were grouped "
@@ -256,25 +367,7 @@ async def run_suite(
                     examples=EXAMPLES,
                 ),
             ]
-            if hostnames:
-                detection += [
-                    await detector.names(
-                        "Popular hostnames (Cisco Umbrella)",
-                        "benign",
-                        hostnames,
-                        dates=False,
-                        note="full names, every 100th of the top 100,000",
-                        examples=EXAMPLES,
-                    ),
-                    await detector.names(
-                        "Popular hostnames, as if unlisted",
-                        "benign",
-                        hostnames,
-                        ranks=False,
-                        dates=False,
-                        examples=EXAMPLES,
-                    ),
-                ]
+            detection += await _hostname_rows(detector, hostnames, platform_names)
             detection += [
                 await detector.names("Your own history, sample", "benign", own),
                 await detector.names(
@@ -287,8 +380,9 @@ async def run_suite(
                     feeds=False,
                     note="what the other rules catch without the feed match",
                 ),
-                await detector.names("Random-character DGA names", "malicious", dga_random),
-                await detector.names("Dictionary-word DGA names", "malicious", dga_words),
+            ]
+            detection += await _generated_rows(detector, families)
+            detection += [
                 await detector.sessions("Tunnels, 40 lookups in 5 minutes", fast),
                 await detector.sessions("Tunnels, 20 lookups in 10 minutes", slow),
                 await detector.sessions("Tunnels, a lookup a minute for 2 hours", sustained),
@@ -313,6 +407,7 @@ async def run_suite(
                     note="the looked-up names of the held-out set",
                 ),
             ]
+            family_rows = await _families(detector, families)
             replay = await detector.replay(
                 store,
                 profile_ids,
@@ -369,6 +464,10 @@ async def run_suite(
             "feeds": len(feeds),
             "dga_random": len(dga_random),
             "dga_words": len(dga_words),
+            "dga_families": sum(len(names) for names in families.values()),
+            "families": len(families),
+            "platform_hosted": len(datasets.platform_hosted(families)),
+            "platform_hostnames": len(platform_names),
             "tunnels_fast": len(fast),
             "tunnels_slow": len(slow),
             "tunnels_sustained": len(sustained),
@@ -385,6 +484,7 @@ async def run_suite(
         },
         "prefilter": prefilter,
         "detection": [_detection(result) for result in detection],
+        "dga_families": family_rows,
         "history": {
             **asdict(history),
             "alerts_per_day": history.alerts_per_day,

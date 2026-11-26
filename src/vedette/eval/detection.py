@@ -116,6 +116,10 @@ class Detector:
         """Whether a Public Suffix List is available locally."""
         return self._suffixes.known
 
+    def is_platform(self, root: str) -> bool:
+        """Whether ``root`` is a customer name on a hosting platform, by the stored list."""
+        return self._suffixes.known and self._suffixes.is_platform_name(root)
+
     def root_of(self, name: str) -> str | None:
         """The registered domain ``name`` belongs to, as NextDNS would report its root.
 

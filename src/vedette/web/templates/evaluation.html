@@ -46,6 +46,23 @@
   </div>
 </section>
 
+{% if s.get("dga_families") %}
+<section class="block" aria-labelledby="families-title">
+  <h2 id="families-title">Real DGA families</h2>
+  <p class="note">Re-implemented from published analyses and never used to set a threshold. What dga-like flags in each family's names, bare and with a subdomain in front.</p>
+  <div class="table-wrap">
+  <table class="sortable" id="t-families">
+    <thead><tr><th>Family</th><th>Names look like</th><th class="num">Names</th><th class="num">Flagged</th><th class="num">Behind a prefix</th></tr></thead>
+    <tbody>
+      {% for row in s.dga_families %}
+      <tr><td>{{ row.family|text }}</td><td>{{ row.style|text }}</td><td class="num">{{ row["items"]|num }}</td><td class="num">{{ row.flagged|num }}</td><td class="num">{{ row.prefixed_flagged|num }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 <div class="trio">
   <section class="block" aria-labelledby="schema-title">
     <h2 id="schema-title">Model answers</h2>

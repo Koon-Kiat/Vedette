@@ -338,41 +338,52 @@ def _model_name(row: dict[str, Any]) -> str:
     return f"{row['source']}, thinking {'on' if row['think'] else 'off'}"
 
 
+def _runs(row: dict[str, Any]) -> str:
+    """How many runs a model's counts add up, and how each run did."""
+    runs = row.get("runs", 1)
+    if runs <= 1:
+        return ""
+    each = ", ".join(str(count) for count in row.get("correct_by_run", []))
+    return f" Counts add up {runs} runs of the gold set; all three were right in {each} per run."
+
+
 def _quality_table(template: dict[str, Any], model: dict[str, Any]) -> list[str]:
     """Template against one model, per rule, overall and per kind of finding."""
     lines = [
-        f"**{_model_name(model)}**",
+        f"**{_model_name(model)}**.{_runs(model)}",
         "",
-        "| Rule | Items | Template: cause | Template: step | Template: all three "
-        "| Model: cause | Model: step | Model: invented | Model: all three |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Rule | Template: items | Template: cause | Template: step | Template: all three "
+        "| Model: answers | Model: cause | Model: step | Model: invented | Model: all three |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for rule, scores in model["by_rule"].items():
-        base = template["by_rule"].get(rule, {"cause": 0, "action": 0, "correct": 0})
-        items = scores["items"]
+    empty = {"items": 0, "cause": 0, "action": 0, "correct": 0}
+    rows = [
+        (rule, template["by_rule"].get(rule, empty), scores)
+        for rule, scores in model["by_rule"].items()
+    ]
+    rows.append(("**All**", template, model))
+    for name, base, scores in rows:
+        items, base_items = scores["items"], base["items"]
         lines.append(
-            f"| {rule} | {items} | {_of(base['cause'], items)} | {_of(base['action'], items)} "
-            f"| {_of(base['correct'], items)} | {_of(scores['cause'], items)} "
-            f"| {_of(scores['action'], items)} | {_of(scores['invented'], items)} "
-            f"| {_of(scores['correct'], items)} |"
+            f"| {name} | {base_items} | {_of(base['cause'], base_items)} "
+            f"| {_of(base['action'], base_items)} | {_of(base['correct'], base_items)} "
+            f"| {items} | {_of(scores['cause'], items)} | {_of(scores['action'], items)} "
+            f"| {_of(scores['invented'], items)} | {_of(scores['correct'], items)} |"
         )
-    items = model["items"]
-    lines.append(
-        f"| **All** | {items} | {_of(template['cause'], items)} | {_of(template['action'], items)} "
-        f"| {_of(template['correct'], items)} | {_of(model['cause'], items)} "
-        f"| {_of(model['action'], items)} | {_of(model['invented'], items)} "
-        f"| {_of(model['correct'], items)} |"
-    )
     lines += [
         "",
-        "| Kind of finding | Items | Template: all three | Model: all three |",
-        "| --- | ---: | ---: | ---: |",
+        "| Kind of finding | Template: items | Template: all three | Model: answers "
+        "| Model: all three |",
+        "| --- | ---: | ---: | ---: | ---: |",
     ]
     for kind, name in KIND_NAMES.items():
         count, right = model["by_kind"].get(kind, [0, 0])
-        base = template["by_kind"].get(kind, [0, 0])[1]
+        base_count, base = template["by_kind"].get(kind, [0, 0])
         if count:
-            lines.append(f"| {name} | {count} | {_of(base, count)} | {_of(right, count)} |")
+            lines.append(
+                f"| {name} | {base_count} | {_of(base, base_count)} | {count} "
+                f"| {_of(right, count)} |"
+            )
     return lines
 
 
@@ -381,15 +392,18 @@ def _quality_cases(model: dict[str, Any]) -> list[str]:
     cases = model["cases"]
     if not cases:
         return []
-    lines = ["", f"Answers to check, {_model_name(model)}:", ""]
+    several = model.get("runs", 1) > 1
+    scope = " (every miss of the first run, and invented facts from any run)" if several else ""
+    lines = ["", f"Answers to check{scope}, {_model_name(model)}:", ""]
     for case in cases:
         problems = []
         if case["missing"]:
             problems.append(f"missed the {case['missing']}")
         if case["invented"]:
             problems.append(f"invented {case['invented']}")
+        run = f", run {case['run']}" if case.get("run") else ""
         lines.append(
-            f"- `{case['id']}` ({case['rule']}): {'; '.join(problems)}. "
+            f"- `{case['id']}` ({case['rule']}{run}): {'; '.join(problems)}. "
             f'Cause given: "{case["cause"]}" Step given: "{case["action"]}"'
         )
     return lines
@@ -440,11 +454,16 @@ def _quality_findings(summary: dict[str, Any]) -> list[str]:
     out = []
     for model in found["models"]:
         items = model["items"]
+        runs = model.get("runs", 1)
+        over = f", over {runs} runs of {items // runs} gold findings" if runs > 1 else ""
         line = (
-            f"- {_model_name(model)} names the right cause for {model['cause']} of {items} gold "
-            f"findings, a fitting step for {model['action']} and gets all three right for "
-            f"{_of(model['correct'], items)}, against the template's {template['cause']}, "
-            f"{template['action']} and {_of(template['correct'], items)}. "
+            f"- {_model_name(model)} names the right cause in {_of(model['cause'], items)} of "
+            f"{items} answers{over}, a fitting step in "
+            f"{_share(model['action'], items)} and gets all three right in "
+            f"{_share(model['correct'], items)}, against the template's "
+            f"{_share(template['cause'], template['items'])}, "
+            f"{_share(template['action'], template['items'])} and "
+            f"{_share(template['correct'], template['items'])}. "
         )
         line += (
             f"{_of(model['invented'], items)} of its answers state a fact the data does not hold."
@@ -462,11 +481,13 @@ def _quality_target(summary: dict[str, Any]) -> str:
     models = found.get("models") or []
     if not models:
         return "not run"
-    best = max(models, key=lambda row: row["correct"])
+    best = max(models, key=lambda row: row["correct"] / max(row["items"], 1))
     items = best["items"]
+    template = found["template"]
     return (
         f"{_share(best['correct'], items)} right, {_share(best['invented'], items)} inventing "
-        f"a fact ({_model_name(best)}); template {_share(found['template']['correct'], items)}"
+        f"a fact ({_model_name(best)}); template "
+        f"{_share(template['correct'], template['items'])}"
     )
 
 

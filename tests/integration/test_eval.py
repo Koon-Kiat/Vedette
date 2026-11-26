@@ -245,11 +245,13 @@ class FakeModel:
 
     def __init__(self, router: respx.MockRouter) -> None:
         self.calls = 0
+        self.users: list[str] = []
         router.post(f"{OLLAMA}/api/chat").mock(side_effect=self._chat)
 
     def _chat(self, request: httpx.Request) -> httpx.Response:
         self.calls += 1
         user = json.loads(request.content)["messages"][1]["content"]
+        self.users.append(user)
         ids = sorted(
             {
                 int(n)
@@ -470,6 +472,7 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
     explained = summary["quality"]
     assert explained["items"] == 60
     assert [row["source"] for row in explained["models"]] == ["fake:1b", "fake:2b"]
+    assert [row["items"] for row in explained["models"]] == [180, 180]
     assert explained["template"]["items"] == 60
     assert "## Explanation quality" in report
     json.dumps(summary)
@@ -800,6 +803,9 @@ async def test_without_the_injection_test_the_model_still_explains_the_gold_set(
     assert summary["injection"] == []
     assert summary["cross_finding"] == []
     assert summary["injection_run"] is False
-    assert [row["items"] for row in summary["quality"]["models"]] == [60]
-    assert model.calls == 6, "only the gold set's six batches went to the model"
+    assert [row["items"] for row in summary["quality"]["models"]] == [180]
+    assert [row["runs"] for row in summary["quality"]["models"]] == [3]
+    # Requests are sized to the model's window, so a run takes six or more.
+    assert model.calls >= 18
+    assert all("eval-" not in user for user in model.users), "no injection item was sent"
     assert "The injection test was not run in this evaluation (`--no-injection`)." in report

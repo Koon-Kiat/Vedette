@@ -135,6 +135,28 @@ def test_an_item_s_forbidden_claims_count_as_invented() -> None:
     assert [(fact.kind, fact.text) for fact in found] == [("forbidden", "is your")]
 
 
+def test_runs_add_up_and_keep_every_invented_fact_but_only_the_first_misses() -> None:
+    (item,) = gold()
+    first, second = quality.QualityResult(source="m"), quality.QualityResult(source="m")
+    first.add(item, answer("A spike.", "An update.", "No action."), quality.Score(True, True, ()))
+    first.correct_by_run = [1]
+    invented = quality.Invented("name", "x.example", "See x.example.")
+    second.add(item, answer("A spike.", "Malware.", "Scan it."), quality.Score(False, False, ()))
+    second.add(
+        item, answer("A spike.", "An update.", "Nothing."), quality.Score(True, True, (invented,))
+    )
+    second.correct_by_run = [0]
+
+    first.merge(second)
+
+    assert (first.items, first.correct, first.invented, first.runs) == (3, 1, 1, 2)
+    assert first.correct_by_run == [1, 0]
+    assert first.by_rule["volume-spike"].items == 3
+    assert [(case["run"], case["invented"]) for case in first.cases] == [
+        ("2", "name 'x.example' in: See x.example.")
+    ]
+
+
 def test_scores_are_counted_per_rule_and_kind_and_every_miss_is_kept() -> None:
     (item,) = gold()
     result = quality.QualityResult(source="m")

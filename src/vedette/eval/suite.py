@@ -250,18 +250,24 @@ async def _ask_model(
         finally:
             await recording.aclose()
 
+    async def explain_once(run: int) -> quality.QualityResult:
+        log.info("eval_quality_round", model=model, think=think, run=run)
+        recording = _client(llm, model, think, limit)
+        try:
+            analyst = quality.production_analyst(
+                recording, specs, scratch.engine, context_tokens=recording.num_ctx
+            )
+            return await quality.model_quality(recording, analyst, gold, gold_findings, think=think)
+        finally:
+            await recording.aclose()
+
     async def explain() -> list[quality.QualityResult]:
         if not gold:
             return []
-        log.info("eval_quality_round", model=model, think=think)
-        recording = _client(llm, model, think, limit)
-        try:
-            analyst = quality.production_analyst(recording, specs, scratch.engine)
-            return [
-                await quality.model_quality(recording, analyst, gold, gold_findings, think=think)
-            ]
-        finally:
-            await recording.aclose()
+        first, *others = await settle(explain_once(run) for run in range(1, quality.RUNS + 1))
+        for other in others:
+            first.merge(other)
+        return [first]
 
     rounds = [
         (repeat, defended)

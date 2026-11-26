@@ -29,11 +29,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from vedette.eval.injection import BATCH, RecordingClient, settle
 from vedette.llm.analyst import Analyst
+from vedette.llm.context import ContextPacker
 from vedette.llm.fallback import template_analysis
 from vedette.rules.model import RuleSpec
 from vedette.shared.models import Analysis, Severity
 from vedette.shared.names import lexical_features
 from vedette.storage.analysis import AnalysisStore
+from vedette.storage.context import ContextStore
 from vedette.storage.models import (
     domain_age,
     events,
@@ -45,6 +47,8 @@ from vedette.storage.models import (
 from vedette.storage.store import StoredFinding, finding_from_row
 
 GOLD_FILE = "analyst_gold.yaml"
+#: Times each model explains the gold set: one run varies by a few items.
+RUNS = 3
 KINDS = ("benign", "suspicious", "uncertain")
 #: How long before ``now`` each gold finding happened.
 _AGO = timedelta(days=3)
@@ -82,6 +86,9 @@ _AGE = re.compile(
     re.IGNORECASE,
 )
 _KNOWN_AGE = re.compile(r'"(?:domain_)?age_days": \d')
+#: A target that is an identifier (a device id, an address, "blocklist:oisd"),
+#: not a plain word such as the category "gambling" an answer should name.
+_IDENTIFIER = re.compile(r"[^A-Za-z ]")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -563,14 +570,15 @@ def invented_facts(text: str, known: str, forbidden: Sequence[str] = ()) -> list
 
 
 def _words(text: str, target: str = "") -> str:
-    """Text with every domain name and the target taken out.
+    """Text with every domain name and an identifier-like target taken out.
 
     A cause then has to be stated in words. Without this, repeating a name such
-    as homelab-metrics.net, or a target such as the category id "gambling",
-    would match a cause pattern by itself.
+    as homelab-metrics.net, or a target such as the device id dev-esp-3a7f,
+    would match a cause pattern by itself. A plain-word target such as the
+    category "gambling" stays: naming it is the right answer.
     """
     text = _readable(text).lower()
-    if target:
+    if _IDENTIFIER.search(target):
         text = text.replace(target.lower(), " ")
     return _NAME.sub(" ", text)
 
@@ -615,9 +623,31 @@ class QualityResult:
     by_rule: dict[str, RuleQuality] = field(default_factory=dict)
     by_kind: dict[str, list[int]] = field(default_factory=dict)  # kind: [items, correct]
     template_answers: int = 0  # the model's answer was unusable and the template stood in
+    runs: int = 1
+    #: Answers fully right in each run, to show how much runs vary.
+    correct_by_run: list[int] = field(default_factory=list)
     durations_ms: list[float] = field(default_factory=list)
-    #: Every answer with an invented fact, and every miss, for checking by eye.
+    #: For checking by eye: every miss of the first run, and every answer of any
+    #: run that invented a fact.
     cases: list[dict[str, str]] = field(default_factory=list)
+
+    def merge(self, other: QualityResult) -> None:
+        """Add another run of the same model, keeping its answers that invented a fact."""
+        run = str(self.runs + 1)
+        self.cases += [{**case, "run": run} for case in other.cases if case["invented"]]
+        for name in ("items", "cause", "action", "invented", "correct", "template_answers"):
+            setattr(self, name, getattr(self, name) + getattr(other, name))
+        for rule, scores in other.by_rule.items():
+            mine = self.by_rule.setdefault(rule, RuleQuality())
+            for name in ("items", "cause", "action", "invented", "correct"):
+                setattr(mine, name, getattr(mine, name) + getattr(scores, name))
+        for kind, (count, right) in other.by_kind.items():
+            mine_kind = self.by_kind.setdefault(kind, [0, 0])
+            mine_kind[0] += count
+            mine_kind[1] += right
+        self.runs += other.runs
+        self.correct_by_run += other.correct_by_run
+        self.durations_ms += other.durations_ms
 
     def add(self, item: GoldItem, analysis: Analysis, result: Score) -> None:
         """Count one scored answer."""
@@ -711,17 +741,28 @@ async def model_quality(
         analysis = analyses[finding.id]
         result.template_answers += analysis.source == "template"
         result.add(item, analysis, score(item, analysis, given.get(finding.id, "")))
+    result.correct_by_run = [result.correct]
     return result
 
 
 def production_analyst(
-    client: RecordingClient, specs: Sequence[RuleSpec], scratch: AsyncEngine
+    client: RecordingClient,
+    specs: Sequence[RuleSpec],
+    scratch: AsyncEngine,
+    *,
+    context_tokens: int | None = None,
 ) -> Analyst:
-    """The analyst as the service builds it, with its cache off."""
+    """The analyst as the service builds it, with its cache off, reading ``scratch``.
+
+    ``context_tokens`` is the model's window: requests are then sized to fit
+    it, as the service's are, so none is cut short.
+    """
     return Analyst(
         client,
         AnalysisStore(scratch),
         specs,
         max_batch=BATCH,
         cache_ttl=timedelta(0),
+        context_tokens=context_tokens,
+        context=ContextPacker(ContextStore(scratch)),
     )

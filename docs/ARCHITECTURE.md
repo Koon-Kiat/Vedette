@@ -14,7 +14,7 @@ NextDNS API (per profile)
                                       |
                                       v
 [2 Normaliser + Enricher]  first-seen, popularity rank, domain age (RDAP),
-                           threat-intel match, entropy/DGA score, device info
+                           threat-intel match, label randomness, device info
         |
         v
 [3 Rule engine]  deterministic detections -> Finding(severity floor, evidence)
@@ -90,7 +90,9 @@ and retried after 30 seconds.
      event is less than 24 hours old;
    - matches against the threat feeds, for the name and each parent down to
      its root;
-   - lexical features of the leftmost label.
+   - lexical features of the registered label (the one left of the public
+     suffix, or a platform customer's name): its length, share of digits and
+     how random it reads; and the length of the subdomain in front of it.
 2. **Queue.** The enriched batch is published and the enricher waits until it
    has been acknowledged, so at most one batch is in flight.
 3. **Rule worker.** Evaluates every rule, then in one transaction stores the
@@ -726,6 +728,33 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      commit pushed to main is checked, squash merges included. Held by
      `test_a_paragraph_written_on_one_long_line_is_refused` and
      `test_every_commit_pushed_to_main_is_checked`.
+107. **`dga-like` judges the registered label**: the one left of the public
+     suffix, or a customer's name on a hosting platform. What stands in
+     front of it is left to the tunnel rules, so a `www.` neither hides a
+     generated domain nor makes a random subdomain of a word domain fire.
+     Held by `test_dga_like_judges_the_registered_label_behind_a_prefix` and
+     `test_what_stands_in_front_of_the_root_never_changes_the_label_judged`.
+108. **A label's randomness is weighed against real domain labels**, not
+     measured as entropy, which a short label cannot reach. A character
+     trigram model counted by `tools/label_model.py` from the registered
+     labels of Tranco list V354N gives the bits by which random characters
+     explain a label better than real labels do. The 20-bit threshold was
+     set on labels kept out of the counts and on random labels, before any
+     real DGA family was run. Held by
+     `test_the_packaged_model_names_the_list_it_was_built_from` and
+     `test_a_longer_random_label_gives_more_evidence_than_a_short_one`.
+109. **Customer names on hosting platforms are judged by the name rules**,
+     except under platforms that name each customer resource themselves
+     (`assigned_name_platforms` in `rules.yaml`: cloud storage, CDN and cloud
+     endpoints). `young-domain` still skips every platform name, which has no
+     registration date. Held by
+     `test_dga_like_fires_for_a_random_customer_name_on_a_platform`,
+     `test_dga_like_skips_platforms_that_name_their_customers_themselves` and
+     `test_new_customer_names_on_a_platform_count_towards_a_burst`.
+110. **The evaluation tests `dga-like` on real DGA families**, re-implemented
+     from published analyses, each checked against the sample names its
+     analysis lists, and never used to set a threshold. Held by
+     `test_each_family_reproduces_its_published_sample`.
 
 ## Verified facts the design relies on
 

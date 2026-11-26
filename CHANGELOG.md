@@ -2,7 +2,35 @@
 
 ## Unreleased
 
+### Detection
+
+- `dga-like` now judges the registered label, the one left of the public
+  suffix. `www.k3j9x2m8q1z7.com` used to be judged on `www` and never fired,
+  while a random subdomain under an ordinary domain did. Subdomains are left
+  to the tunnel rules.
+- `dga-like` scores how much more likely a label is as random characters than
+  as a real domain label, in bits, from a character model of 900,000
+  registered labels on a pinned Tranco list (`tools/label_model.py` rebuilds
+  it). Raw entropy could not judge short labels: a 12-character label fired
+  only if every character differed. The new `min_randomness: 20` replaces
+  `min_entropy`, and `min_label_length` drops from 12 to 8. A rules override
+  that still sets `min_entropy` is refused with a message naming its
+  replacement. Findings show the score as "Randomness, bits".
+- Customer names on hosting platforms (`duckdns.org`, `github.io`,
+  `pages.dev`) are no longer exempt from `dga-like` and `dga-burst`; their
+  customer label is judged. Platforms that name each customer resource
+  themselves (CDN endpoints, cloud storage and compute) are skipped through
+  a new `assigned_name_platforms` list in `rules.yaml`. `young-domain` still
+  skips every platform name.
+
 ### Evaluation
+
+- `dga-like` is tested on 13 real malware families' domain generation
+  algorithms, re-implemented from published analyses and checked against
+  their sample names: bare, behind `www.` and similar, and as customer names
+  on hosting platforms. The report has a table per family.
+- New known-good set: 1,000 customer names on hosting platforms from Cisco
+  Umbrella's top 100,000, to measure what judging platform names costs.
 
 - The top-sites set is now labelled a sanity check: the rules skip listed
   domains, so it cannot show false alerts. Results that could not have come

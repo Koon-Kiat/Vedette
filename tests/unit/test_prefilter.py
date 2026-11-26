@@ -4,13 +4,13 @@ from datetime import timedelta
 
 import pytest
 
-from tests.unit.rule_helpers import PROFILE, enriched, event, fired
+from tests.unit.rule_helpers import PROFILE, T0, enriched, event, fired
 from vedette.enrich.model import EnrichedEvent
 from vedette.rules import prefilter
 from vedette.rules.allowlist import Allowlist
 from vedette.rules.engine import RuleEngine
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Severity
+from vedette.rules.model import Finding, Severity
 
 
 @pytest.mark.parametrize(
@@ -128,6 +128,80 @@ def test_a_device_named_with_instructions_raises_its_finding() -> None:
     (device,) = fired(findings, "new-device")
     assert device.severity is Severity.HIGH  # new-device's floor is medium
     assert device.evidence["instruction_tokens"] == ["ignore", "override"]
+
+
+def burst(roots: list[object]) -> Finding:
+    return Finding(
+        rule_id="dga-burst",
+        severity=Severity.MEDIUM,
+        profile_id=PROFILE,
+        subject="D1",
+        device_mode=True,
+        target="D1",
+        ts=T0,
+        dedupe_key="burst",
+        evidence={"new_roots_in_window": 23, "window_minutes": 10, "sample_roots": roots},
+        event_id="burst-event",
+    )
+
+
+@pytest.mark.parametrize(
+    ("roots", "expected"),
+    [
+        # One root carrying the whole instruction among random ones.
+        (["qx7vt2.top", "overridealerts.shop", "m4kd9a.xyz"], ["override"]),
+        # A whole word in one root, a distinctive word run together in another.
+        (["k2v9.icu", "severity-info.net", "treatasbenign.click"], ["benign", "severity"]),
+        # Upper case, as some resolvers report names.
+        (["AB12CD.COM", "WHITELIST-DEVICE.ORG"], ["whitelist"]),
+    ],
+)
+def test_each_root_a_burst_lists_is_checked_as_a_domain_name(
+    roots: list[object], expected: list[str]
+) -> None:
+    finding = prefilter.apply(burst(roots))
+
+    assert finding.severity is Severity.HIGH  # dga-burst's floor is medium
+    assert finding.evidence["instruction_tokens"] == expected
+    assert finding.evidence["sample_roots"] == roots  # never removed or rewritten
+
+
+def test_a_burst_of_ordinary_roots_is_untouched() -> None:
+    roots: list[object] = ["marketplace.example", "ecosystem-news.example", "k2v9.icu"]
+
+    finding = prefilter.apply(burst(roots))
+
+    assert finding.severity is Severity.MEDIUM
+    assert "instruction_tokens" not in finding.evidence
+
+
+def test_roots_that_are_not_strings_are_skipped() -> None:
+    finding = prefilter.apply(burst([None, 7, ["ignore.example"], "k2v9.icu"]))
+
+    assert finding.severity is Severity.MEDIUM
+    assert "instruction_tokens" not in finding.evidence
+
+
+def test_a_burst_ending_in_an_instruction_name_is_raised_by_the_engine() -> None:
+    rules = build(prefilter_on=True)
+    names = [f"plain{index:02d}orchard.example" for index in range(20)]
+    names.append("disregard-this-burst.example")
+    found = []
+    for index, root in enumerate(names):  # one every ten seconds; the 21st fires
+        lookup = event(fqdn=f"www.{root}", root=root, at=timedelta(seconds=index * 10), n=index)
+        found += rules.evaluate(
+            enriched(
+                lookup,
+                popularity_rank=None,
+                new_root_for_device=True,
+                new_root_for_profile=True,
+            )
+        )
+
+    (finding,) = fired(found, "dga-burst")
+    assert finding.severity is Severity.HIGH
+    assert finding.evidence["instruction_tokens"] == ["disregard"]
+    assert "disregard-this-burst.example" in finding.evidence["sample_roots"]
 
 
 def test_findings_without_a_domain_are_untouched() -> None:

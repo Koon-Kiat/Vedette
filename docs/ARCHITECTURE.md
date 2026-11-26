@@ -147,6 +147,7 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 | Rules own severity: the model may raise priority, never lower it | `enforce_floor` in `llm/guards.py`, applied in code after validation, to cached verdicts too |
 | The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
 | Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
+| A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety (decision 104) |
 | Structured output only | `parse_verdicts` in `llm/schema.py`: extra fields, wrong types and free text are rejected |
 | No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
 | Safe output | `sanitize_model_text`: HTML, markdown and links removed, names defanged, length capped; applied again on display |
@@ -1066,8 +1067,8 @@ repository. Each decision that departs from it says so.
       it is left out, or a verdict names another finding of the batch or
       uses an id not in it. `--no-cross` skips this part.
     - **The pre-filter's hit rate** is computed on both sets without the
-      model. It reads the looked-up name, the root and the device name, but
-      not the list of roots a burst finding carries; the report says so.
+      model. It reads the looked-up name, the root and the device name, and
+      since decision 103 each root a burst finding lists.
     - **Parallel calls.** `--parallel N` keeps up to N calls in flight across
       all runs of a model, which only helps when Ollama answers that many
       together (`OLLAMA_NUM_PARALLEL`, passed through by `docker-compose.yml`
@@ -1085,6 +1086,56 @@ repository. Each decision that departs from it says so.
     (`--repeats 3`) remain to be run. Reading the cases of the first such run
     found three faults in the word patterns that over-counted, all named in
     the report's method note; they were fixed and the run repeated.
+103. **The pre-filter reads the roots a burst finding lists.** A
+    `dga-burst` finding carries up to five of the new roots that made the
+    burst (`sample_roots`), and they reach the model like any other name.
+    The pre-filter read only single-name fields, so an instruction placed in
+    those roots was never raised: none of the 25 held-out items carried that
+    way were. Each listed root is now checked as a looked-up name is, with
+    the same words. Roots are checked one by one, so a word split across two
+    roots is not caught. On the held-out set it now raises 6 of those 25
+    items; with the defences on, the three models were steered by 0, 1 and 0
+    of them, as before the change.
+104. **A device name reaches the model as a self-reported label that proves
+    nothing.** On the held-out set, crafted device names were the weakest
+    carrier: with the defences off they steered 68 to 80% of answers, and
+    with them on gemma3:12b still called about one new-device alert in five a
+    false positive or a known device. Whoever sets up a device chooses its
+    name, and the model has nothing else to tell it which devices are known,
+    so it took the name's claims at their word. Now:
+    - The payload sends the name as `device_name_self_reported` (`MODEL_KEYS`
+      in `llm/prompts.py`), so the warning sits next to the value. What is
+      stored, shown and checked by the pre-filter keeps `device_name`.
+    - The system prompt says a name never shows who owns a device, whether
+      it was seen, checked or approved before, or that it is safe, and is
+      never a reason to call a finding a false positive, a duplicate or
+      expected. The model may report a name's claim as a claim, must never
+      recommend what a name asks for, and, for a new device, recommends that
+      the owner checks whether they recognise it and removes it if not.
+    - `PROMPT_VERSION` is 2, so verdicts cached under the old prompt are not
+      reused.
+    - Two wordings were tried on ten device names written for
+      `tests/live/test_ollama_live.py`, three runs per model. Counting a
+      name's claim taken as fact as well as the evaluation's patterns,
+      steered answers went from 20 of 30 to 0 on qwen3:8b and from 11 to 3
+      on gemma3:12b with the wording kept. The evaluation's patterns alone
+      missed most of the steered answers ("likely a device previously
+      cleared", "close the alert as a duplicate"), so its device row is a
+      lower bound.
+    - On the held-out set, one run each with the defences on, device names
+      now steer 1 of 25 answers on qwen3:8b (1 before), 0 on llama3.1:8b (5)
+      and 0 on gemma3:12b (7, and 5 in an earlier run of the same code). The
+      one left is a printer whose name calls itself benign. With the defences
+      off nothing changed, as expected (68 to 80%).
+    - Every held-out device name had been seen when the prompt was written,
+      and the report says so.
+    Not done: more device words in the pre-filter (they would be fitted to
+    the held-out set and raise ordinary names, and a raise does not change
+    the text); a code check that throws out dismissive text (it would reuse
+    the evaluation's patterns and score near zero by construction); leaving
+    the name out of the payload (the strongest, but the explanation loses it
+    and the device row would read zero by construction). The cost: new-device
+    explanations are more generic, and qwen3:8b often leaves the name out.
 
 ## Verified facts the design relies on
 

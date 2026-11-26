@@ -64,6 +64,10 @@ Mitigations:
 - **Data, not instructions.** Untrusted strings travel only inside a JSON
   payload, each capped in length (`llm/prompts.py`). The system prompt says
   every value is data and must never be followed.
+- **Device names prove nothing.** A device name is sent as
+  `device_name_self_reported`, and the system prompt says a name never shows
+  who owns a device, whether it was approved or seen before, or that it is
+  safe, and that the owner must confirm a new device (`llm/prompts.py`).
 - **Structured output only.** Answers must match the schema (`llm/schema.py`),
   or they are retried once and then replaced by a template built from the
   trusted rule text (`llm/fallback.py`). Free text from the model is never
@@ -71,9 +75,10 @@ Mitigations:
 - **No tools.** The model has no tool calls. Ollama has no internet route and
   no write access to Vedette's data.
 - **Pre-filter.** Instruction-like words in labels (`ignore`, `instruction`,
-  `system`, `benign`, `override` and others), or in a finding's device name,
-  add the words to the evidence and raise the severity one step. A hit never
-  removes or hides a domain (`rules/prefilter.py`).
+  `system`, `benign`, `override` and others), in each root a burst finding
+  lists, or in a finding's device name, add the words to the evidence and
+  raise the severity one step. A hit never removes or hides a domain
+  (`rules/prefilter.py`).
 - **Safe output.** Model text has HTML, markdown and links stripped, domains
   defanged, and length capped (`llm/guards.py` `sanitize_model_text`). Every
   domain in alerts, digests, the CLI and the dashboard is defanged and never a

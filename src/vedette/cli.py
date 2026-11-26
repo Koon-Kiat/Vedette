@@ -58,9 +58,30 @@ def _load_or_exit(config: Path | None) -> Settings:
         raise typer.Exit(code=2) from None
 
 
-def _secret_values(settings: Settings) -> list[str]:
-    """Secret values the log redactor must scrub."""
-    return settings.secret_values()
+ConfigOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--config",
+        "-c",
+        help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
+    ),
+]
+
+
+def _configure_logging(settings: Settings) -> None:
+    """Log as configured, with every secret value scrubbed."""
+    configure_logging(settings.log_level, secrets=settings.secret_values())
+
+
+def _migrated_database(settings: Settings) -> str | None:
+    """The database URL, migrated; ``None``, after saying so, if the pipeline never ran."""
+    database_url = settings.storage.database_url
+    missing = _database_missing(database_url)
+    if missing is not None:
+        typer.echo(f"No database yet at {missing}: start the pipeline with 'vedette run' first.")
+        return None
+    run_migrations(database_url)
+    return database_url
 
 
 @app.callback()
@@ -81,18 +102,11 @@ def main(
 
 @app.command()
 def run(
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Run the pipeline until interrupted."""
     settings = _load_or_exit(config)
-    configure_logging(settings.log_level, secrets=_secret_values(settings))
+    _configure_logging(settings)
     asyncio.run(run_until_signalled(settings))
 
 
@@ -214,14 +228,7 @@ def _as_text(item: StoredFinding, analysis: Analysis | None, settings: Settings)
 
 @app.command()
 def findings(
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
     profile: Annotated[
         str | None, typer.Option("--profile", help="Only this profile (label or id).")
     ] = None,
@@ -253,12 +260,9 @@ def findings(
             typer.echo("Unknown severity: use info, low, medium, high or critical.", err=True)
             raise typer.Exit(code=2) from None
 
-    database_url = settings.storage.database_url
-    missing = _database_missing(database_url)
-    if missing is not None:
-        typer.echo(f"No database yet at {missing}: start the pipeline with 'vedette run' first.")
+    database_url = _migrated_database(settings)
+    if database_url is None:
         return
-    run_migrations(database_url)
     items = asyncio.run(_load_findings(database_url, profile_id, rule, severity, limit))
 
     if as_json:
@@ -288,14 +292,7 @@ def import_export(
     profile: Annotated[
         str, typer.Option("--profile", help="Profile the file was exported from (label or id).")
     ],
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Load history from a NextDNS log export instead of the API.
 
@@ -372,14 +369,7 @@ def notify(
     test: Annotated[
         bool, typer.Option("--test", help="Send a test message through the configured channel.")
     ] = False,
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Check that notifications reach you."""
     if not test:
@@ -432,14 +422,7 @@ def digest(
             help="End of the 24-hour period, local time (YYYY-MM-DDTHH:MM). Defaults to now.",
         ),
     ] = None,
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Print the digest for the last 24 hours. Nothing is sent or stored."""
     settings = _load_or_exit(config)
@@ -452,12 +435,9 @@ def digest(
         except ValueError:
             typer.echo("--at must look like 2026-03-15T08:00", err=True)
             raise typer.Exit(code=2) from None
-    database_url = settings.storage.database_url
-    missing = _database_missing(database_url)
-    if missing is not None:
-        typer.echo(f"No database yet at {missing}: start the pipeline with 'vedette run' first.")
+    database_url = _migrated_database(settings)
+    if database_url is None:
         return
-    run_migrations(database_url)
     title, body = asyncio.run(_build_digest(settings, period_end))
     typer.echo(f"{title}\n\n{body}")
 
@@ -486,14 +466,7 @@ def benign(
         int, typer.Argument(help="Finding number, as shown by 'vedette findings'.")
     ],
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Mark a finding benign. For a domain finding, the rules stop flagging that domain.
 
@@ -501,12 +474,9 @@ def benign(
     the dashboard to undo it.
     """
     settings = _load_or_exit(config)
-    database_url = settings.storage.database_url
-    missing = _database_missing(database_url)
-    if missing is not None:
-        typer.echo(f"No database yet at {missing}: start the pipeline with 'vedette run' first.")
+    database_url = _migrated_database(settings)
+    if database_url is None:
         raise typer.Exit(code=2)
-    run_migrations(database_url)
     finding = asyncio.run(_find(database_url, finding_id))
     if finding is None:
         typer.echo(f"No finding {finding_id}.", err=True)
@@ -562,14 +532,7 @@ def backfill(
             help="How many days back to read. Default: ingest.backfill_days.",
         ),
     ] = None,
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Read a period of history from the NextDNS API and store it.
 
@@ -578,7 +541,7 @@ def backfill(
     the background. Reading many days makes many API requests.
     """
     settings = _load_or_exit(config)
-    configure_logging(settings.log_level, secrets=_secret_values(settings))
+    _configure_logging(settings)
     api_key = settings.nextdns_api_key
     if api_key is None:
         typer.echo("NEXTDNS_API_KEY is not set.", err=True)
@@ -699,14 +662,7 @@ def evaluate(
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Where to write the report (Markdown).")
     ] = Path("EVALUATION.md"),
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Measure detection, false alerts, prompt-injection resistance, speed and load.
 
@@ -717,7 +673,7 @@ def evaluate(
     appear on the dashboard's Evaluation page.
     """
     settings = _load_or_exit(config)
-    configure_logging(settings.log_level, secrets=_secret_values(settings))
+    _configure_logging(settings)
     modes = {"off": [False], "on": [True], "both": [False, True]}
     if think not in modes:
         typer.echo("--think must be off, on or both.", err=True)
@@ -781,14 +737,7 @@ def purge(
         ),
     ] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
-    config: Annotated[
-        Path | None,
-        typer.Option(
-            "--config",
-            "-c",
-            help="YAML config file. Defaults to the VEDETTE_CONFIG_FILE environment variable.",
-        ),
-    ] = None,
+    config: ConfigOption = None,
 ) -> None:
     """Delete data older than the retention settings now, or everything with --all.
 

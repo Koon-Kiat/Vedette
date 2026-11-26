@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from vedette.shared.models import Severity
+from vedette.storage.analysis import analysis_sources
 from vedette.storage.models import events, finding_analysis, findings, llm_calls, notifications
 
 #: An event that reached the database within this time of happening came from the live stream.
@@ -136,15 +137,7 @@ async def history_metrics(
                 )
             ).scalar_one()
         )
-        sources: dict[str, int] = dict(
-            (
-                await connection.execute(
-                    select(finding_analysis.c.source, func.count())
-                    .where(finding_analysis.c.created_at >= week)
-                    .group_by(finding_analysis.c.source)
-                )
-            ).all()
-        )
+        sources = await analysis_sources(connection, since=week)
     answered = sources.get("cache", 0) + sources.get("llm", 0)
     return HistoryMetrics(
         days=days,

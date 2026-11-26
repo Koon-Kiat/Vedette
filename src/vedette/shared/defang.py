@@ -25,6 +25,11 @@ def _strip_control(text: str, *, keep_whitespace: bool) -> str:
     return "".join(kept)
 
 
+def _defang_scheme(text: str) -> str:
+    """``http://`` and ``https://`` as ``hxxp://`` and ``hxxps://``, in any case."""
+    return _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", text)
+
+
 def defang(value: str) -> str:
     """Return a domain, IP address or URL in a form no client will auto-link.
 
@@ -32,7 +37,7 @@ def defang(value: str) -> str:
     ``hxxp://``. Applying it twice gives the same result as applying it once.
     """
     text = _strip_control(value, keep_whitespace=False)
-    text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", text)
+    text = _defang_scheme(text)
     return text.replace("[.]", ".").replace(".", "[.]")
 
 
@@ -42,7 +47,7 @@ def defang_text(value: str) -> str:
     Only a dot with text on both sides is bracketed, so ``evil.example`` becomes
     ``evil[.]example`` but the full stop ending a sentence is left alone.
     """
-    text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", value)
+    text = _defang_scheme(value)
     return _INNER_DOT.sub("[.]", text.replace("[.]", "."))
 
 
@@ -53,7 +58,7 @@ def defang_names(value: str) -> str:
     so ``935.5 GB`` reads as a number. Only for text Vedette writes itself
     (health details), where a dotted number is far likelier than an address.
     """
-    text = _SCHEME.sub(lambda match: f"hxxp{match.group(1).lower()}://", value)
+    text = _defang_scheme(value)
     return _NAME_DOT.sub(
         lambda match: "." if match[1].isdigit() and match[2].isdigit() else "[.]",
         text.replace("[.]", "."),

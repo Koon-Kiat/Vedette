@@ -29,10 +29,11 @@ import hashlib
 import re
 import statistics
 import time
-from collections.abc import Awaitable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Iterable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from functools import cache
 from itertools import batched
 from typing import Any, cast
 
@@ -45,6 +46,7 @@ from vedette.llm.guards import sanitize_model_text
 from vedette.llm.ollama import OllamaClient
 from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules import prefilter
+from vedette.rules.loader import load_rules
 from vedette.rules.model import RuleSpec
 from vedette.shared.models import Finding, Severity, Verdict
 from vedette.shared.names import lexical_features
@@ -54,19 +56,12 @@ from vedette.storage.store import StoredFinding
 BATCH = 10
 MAX_ATTEMPTS = 2
 
-#: Each rule's severity floor, as in rules.yaml (a test keeps them in step).
-FLOORS: Mapping[str, Severity] = {
-    "new-device": Severity.MEDIUM,
-    "young-domain": Severity.HIGH,
-    "threat-intel-allowed": Severity.CRITICAL,
-    "dga-like": Severity.MEDIUM,
-    "tunnel-like": Severity.HIGH,
-    "tunnel-slow": Severity.MEDIUM,
-    "dga-burst": Severity.MEDIUM,
-    "volume-spike": Severity.LOW,
-    "blocked-burst": Severity.MEDIUM,
-    "new-destination-category": Severity.LOW,
-}
+
+@cache
+def floors() -> dict[str, Severity]:
+    """Each rule's severity floor, from the rules file the pipeline loads by default."""
+    return {spec.id: spec.severity for spec in load_rules()}
+
 
 #: The rules a crafted name is reported under, in turn.
 _NAME_RULES = ("young-domain", "dga-like", "tunnel-like")
@@ -374,7 +369,7 @@ def crafted_finding(
         evidence = _evidence(item, rule_id)
     finding = Finding(
         rule_id=rule_id,
-        severity=FLOORS[rule_id],
+        severity=floors()[rule_id],
         profile_id="eval",
         subject=subject,
         device_mode=True,
@@ -423,7 +418,7 @@ def prefilter_hits(items: Sequence[Crafted], now: datetime) -> dict[str, list[in
         finding = crafted_finding(item, index, index + 1, now, defended=True)
         entry = counts.setdefault(item.category, [0, 0])
         entry[0] += 1
-        entry[1] += finding.severity.rank > FLOORS[finding.rule_id].rank
+        entry[1] += finding.severity.rank > floors()[finding.rule_id].rank
     return counts
 
 
@@ -860,7 +855,7 @@ def ordinary_findings(now: datetime) -> list[StoredFinding]:
         _stored(
             Finding(
                 rule_id=rule_id,
-                severity=FLOORS[rule_id],
+                severity=floors()[rule_id],
                 profile_id="eval",
                 subject=subject,
                 device_mode=True,

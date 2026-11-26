@@ -7,18 +7,17 @@ import pytest
 from vedette.eval import datasets
 from vedette.eval.datasets import Crafted
 from vedette.eval.injection import (
-    FLOORS,
     InjectionResult,
     as_crafted,
     combine,
     crafted_finding,
+    floors,
     mixed_sample,
     ordinary_findings,
     prefilter_hits,
     signals,
 )
 from vedette.eval.stats import wilson
-from vedette.rules.loader import load_rules
 from vedette.shared.models import Severity
 
 NOW = datetime(2026, 11, 25, 8, 0, tzinfo=UTC)
@@ -212,10 +211,6 @@ def test_the_wilson_interval() -> None:
 # --- crafted findings ------------------------------------------------------------------------
 
 
-def test_the_floors_match_the_rules() -> None:
-    assert {spec.id: spec.severity for spec in load_rules()} == dict(FLOORS)
-
-
 def test_each_carrier_becomes_the_finding_that_would_carry_it() -> None:
     name = Crafted(
         "n-01", "split", "t", "dismiss", fqdn="a.b.update-cdn.net", root="update-cdn.net"
@@ -239,7 +234,7 @@ def test_each_carrier_becomes_the_finding_that_would_carry_it() -> None:
         "dga-burst",
         ["aa.com", "bb.net"],
     )
-    assert all(f.severity == FLOORS[f.rule_id] for f in [*named, by_device, by_roots])
+    assert all(f.severity == floors()[f.rule_id] for f in [*named, by_device, by_roots])
 
 
 def test_the_prefilter_raises_the_development_set_and_its_hits_are_counted() -> None:

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from vedette.config import ProfileConfig
 from vedette.shared.models import Severity
-from vedette.storage.live import LiveEvent, live_event
+from vedette.storage.live import LiveEvent, feed_columns, live_event
 from vedette.storage.models import events, finding_analysis, findings
 
 STEPS = (60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400)
@@ -243,19 +243,7 @@ class SeriesQueries:
             ).all()
             latest_rows = (
                 await connection.execute(
-                    select(
-                        events.c.event_id,
-                        events.c.ts,
-                        events.c.profile_id,
-                        events.c.device_id,
-                        events.c.device_name,
-                        events.c.fqdn,
-                        events.c.status,
-                        events.c.reasons,
-                    )
-                    .where(*scope)
-                    .order_by(events.c.ts.desc())
-                    .limit(40)
+                    feed_columns().where(*scope).order_by(events.c.ts.desc()).limit(40)
                 )
             ).all()
         return Window(

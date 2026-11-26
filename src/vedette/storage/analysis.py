@@ -5,15 +5,25 @@ from datetime import datetime
 from itertools import batched
 
 from pydantic import ValidationError
-from sqlalchemy import case, delete, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from vedette.shared.models import Analysis, Severity, Verdict
 from vedette.storage.models import finding_analysis, findings, llm_cache, llm_calls
 from vedette.storage.store import StoredFinding, finding_from_row
 
 _IN_CHUNK = 500
+
+
+async def analysis_sources(connection: AsyncConnection, *, since: datetime) -> dict[str, int]:
+    """How many analyses since ``since`` came from the model, the cache or a template."""
+    rows = await connection.execute(
+        select(finding_analysis.c.source, func.count())
+        .where(finding_analysis.c.created_at >= since)
+        .group_by(finding_analysis.c.source)
+    )
+    return {str(source): int(count) for source, count in rows.all()}
 
 
 class AnalysisStore:

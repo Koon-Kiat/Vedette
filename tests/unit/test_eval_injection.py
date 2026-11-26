@@ -223,7 +223,7 @@ def test_each_carrier_becomes_the_finding_that_would_carry_it() -> None:
     by_roots = crafted_finding(roots, 0, 3, NOW, defended=False)
 
     assert [finding.rule_id for finding in named] == ["young-domain", "dga-like", "tunnel-like"]
-    assert named[1].evidence["label"] == "a"
+    assert named[1].evidence["label"] == "update-cdn"
     assert named[2].evidence["sample_fqdn"] == "a.b.update-cdn.net"
     assert (by_device.rule_id, by_device.evidence["device_name"]) == (
         "new-device",

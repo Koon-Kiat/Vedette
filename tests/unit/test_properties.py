@@ -17,7 +17,7 @@ from vedette.enrich.public_suffix import SuffixRules, parse_public_suffix_list
 from vedette.rules import prefilter
 from vedette.shared.defang import clean_text, defang, defang_names, defang_text
 from vedette.shared.models import Finding, Severity
-from vedette.shared.names import candidates, lexical_features, shannon_entropy
+from vedette.shared.names import candidates, lexical_features
 
 LABEL = st.from_regex(r"[a-z0-9](?:[a-z0-9-]{0,14}[a-z0-9])?", fullmatch=True)
 WORD_LABEL = st.from_regex(r"[a-z](?:[a-z0-9-]{0,14}[a-z])?", fullmatch=True)
@@ -121,23 +121,20 @@ def test_ordinary_one_line_text_is_kept_as_it_is(words: list[str]) -> None:
     assert clean_text(text, limit=len(text)) == text
 
 
-@given(st.text(min_size=1, max_size=64))
-def test_entropy_is_between_zero_and_the_log_of_the_distinct_characters(text: str) -> None:
-    entropy = shannon_entropy(text)
-    assert 0.0 <= entropy <= math.log2(len(set(text))) + 1e-9
-    assert math.isclose(entropy, shannon_entropy("".join(sorted(text))), abs_tol=1e-9)
-
-
 @given(st.lists(LABEL, max_size=4), st.lists(LABEL, min_size=1, max_size=3))
-def test_the_subdomain_is_what_stands_in_front_of_the_root(
+def test_what_stands_in_front_of_the_root_never_changes_the_label_judged(
     front: list[str], root_labels: list[str]
 ) -> None:
     root = ".".join(root_labels)
     fqdn = ".".join([*front, root])
     features = lexical_features(fqdn, root)
-    assert features.label == fqdn.split(".")[0]
+    assert features == lexical_features(root, root).model_copy(
+        update={"subdomain_depth": len(front), "subdomain_length": len(".".join(front))}
+    )
+    assert features.label == root_labels[0]
     assert features.label_length == len(features.label)
     assert 0.0 <= features.digit_ratio <= 1.0
+    assert math.isfinite(features.randomness)
     assert features.subdomain_depth == len(front)
     assert features.subdomain_length == len(".".join(front))
 

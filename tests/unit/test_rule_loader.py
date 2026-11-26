@@ -64,8 +64,21 @@ def test_a_rule_can_be_disabled_in_the_override_file(tmp_path: Path) -> None:
             "'max_age_days' is missing or not a number",
         ),
         (
-            "rules:\n  - id: dga-like\n    params:\n      min_entropy: true\n",
-            "'min_entropy' is missing or not a number",
+            "rules:\n  - id: dga-like\n    params:\n      min_randomness: true\n",
+            "'min_randomness' is missing or not a number",
+        ),
+        (
+            "rules:\n  - id: dga-like\n    params:\n      min_entropy: 3.2\n",
+            "'min_entropy' is no longer used; it was replaced by min_randomness",
+        ),
+        (
+            "rules:\n  - id: dga-burst\n    params:\n      assigned_name_platforms: cdn.example\n",
+            "'assigned_name_platforms' must be a list of lower-case domain names",
+        ),
+        (
+            "rules:\n  - id: dga-like\n    params:\n"
+            "      assigned_name_platforms: [.CDN.example]\n",
+            "'assigned_name_platforms' must be a list of lower-case domain names",
         ),
     ],
 )
@@ -85,3 +98,26 @@ def test_a_missing_override_file_is_an_error(tmp_path: Path) -> None:
 
 def test_packaged_rules_load_without_an_override() -> None:
     assert len(by_id()) == 10
+
+
+def test_the_assigned_name_platforms_can_be_replaced_in_the_override_file(tmp_path: Path) -> None:
+    path = write(
+        tmp_path,
+        "rules:\n  - id: dga-like\n    params:\n      assigned_name_platforms: [cdn.example]\n",
+    )
+
+    defaults = {spec.id: spec for spec in load_rules()}
+
+    rules = {spec.id: spec for spec in load_rules(path)}
+
+    assert rules["dga-like"].params["assigned_name_platforms"] == ["cdn.example"]
+    assert rules["dga-burst"] == defaults["dga-burst"]
+
+
+def test_both_name_rules_skip_the_same_platforms_by_default() -> None:
+    rules = {spec.id: spec for spec in load_rules()}
+
+    platforms = rules["dga-like"].params["assigned_name_platforms"]
+    assert platforms == rules["dga-burst"].params["assigned_name_platforms"]
+    assert {"cloudfront.net", "amazonaws.com", "googleapis.com"} <= set(platforms)
+    assert not {"github.io", "duckdns.org", "ddns.net", "pages.dev"} & set(platforms)

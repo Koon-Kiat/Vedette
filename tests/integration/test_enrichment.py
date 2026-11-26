@@ -466,7 +466,8 @@ async def test_enricher_adds_every_kind_of_context(
     assert popular.new_device is True
     assert fresh.popularity_rank is None
     assert fresh.domain_age_days == 5
-    assert fresh.lexical.label == "xkq7vbn2mtrp9zlw"
+    assert fresh.lexical.label == "fresh"  # the registered label, not the random subdomain
+    assert fresh.lexical.subdomain_length == len("xkq7vbn2mtrp9zlw")
     assert fresh.new_device is False
     assert fresh.new_root_for_profile is True
     assert listed.threat_feeds == ("phish",)

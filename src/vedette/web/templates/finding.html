@@ -88,7 +88,7 @@
         <li>{% if enrichment.age_days is not none %}Registered {{ enrichment.age_days }} days ago{% if then_age is not none and then_age != enrichment.age_days %} ({{ then_age }} days old when the finding fired){% endif %}{% elif enrichment.age_status %}Registration date unknown (registry answered: {{ enrichment.age_status }}){% else %}Registration date not looked up{% endif %}</li>
         <li>{% if enrichment.threat_feeds %}Listed by: {{ enrichment.threat_feeds|join(", ") }}{% else %}Not on any threat feed{% endif %}</li>
         <li>First seen on this profile: {{ enrichment.first_seen|local(tz) }}</li>
-        {% if enrichment.lexical %}<li>Leftmost label <span class="name">{{ enrichment.lexical.label|text }}</span>: {{ enrichment.lexical.label_length }} characters, entropy {{ "%.2f"|format(enrichment.lexical.entropy) }} bits per character</li>{% endif %}
+        {% if enrichment.lexical %}<li>Registered label <span class="name">{{ enrichment.lexical.label|text }}</span>: {{ enrichment.lexical.label_length }} characters, randomness {{ "%.1f"|format(enrichment.lexical.randomness) }} bits (above 0 reads more like random characters than a real domain label)</li>{% endif %}
       </ul>
     </section>
     {% endif %}

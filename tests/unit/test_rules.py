@@ -171,37 +171,56 @@ def test_threat_intel_respects_the_allowlist(device: str | None) -> None:
 # --- dga-like -----------------------------------------------------------------
 
 
-def dga(device: str | None, label: str = RANDOM_LABEL, **overrides: Any) -> Any:
+def dga(
+    device: str | None, label: str = RANDOM_LABEL, *, prefix: str = "", **overrides: Any
+) -> Any:
+    """A lookup under the root ``<label>.example``, with ``prefix`` in front of it."""
     values: dict[str, Any] = {"popularity_rank": None}
     values.update(overrides)
     status = values.pop("status", "default")
+    root = values.pop("root", f"{label}.example")
     return enriched(
-        event(
-            fqdn=f"{label}.c2-site.example", root="c2-site.example", device=device, status=status
-        ),
-        **values,
+        event(fqdn=f"{prefix}{root}", root=root, device=device, status=status), **values
     )
 
 
 @pytest.mark.parametrize("device", MODES)
-def test_dga_like_fires_for_a_long_high_entropy_label_on_an_unpopular_root(
+def test_dga_like_fires_for_a_random_registered_label_on_an_unpopular_root(
     device: str | None,
 ) -> None:
     (finding,) = fired(engine().evaluate(dga(device)), "dga-like")
 
     assert finding.severity is Severity.MEDIUM
-    assert finding.target == "c2-site.example"
+    assert finding.target == f"{RANDOM_LABEL}.example"
+    assert finding.evidence["label"] == RANDOM_LABEL
     assert finding.evidence["label_length"] == len(RANDOM_LABEL)
-    assert finding.evidence["entropy"] >= 3.5
+    assert finding.evidence["randomness"] >= 20
+    assert "entropy" not in finding.evidence
     check_mode(finding, device)
+
+
+@pytest.mark.parametrize("prefix", ["www.", "mail.", "cdn.static."])
+def test_dga_like_judges_the_registered_label_behind_a_prefix(prefix: str) -> None:
+    (finding,) = fired(engine().evaluate(dga("D1", prefix=prefix)), "dga-like")
+
+    assert finding.evidence["fqdn"] == f"{prefix}{RANDOM_LABEL}.example"
+    assert finding.evidence["label"] == RANDOM_LABEL
+
+
+def test_dga_like_leaves_a_random_subdomain_of_a_word_domain_to_the_tunnel_rules() -> None:
+    item = dga("D1", prefix=f"{RANDOM_LABEL}.", root="harbour-dental.example")
+
+    assert fired(engine().evaluate(item), "dga-like") == []
 
 
 @pytest.mark.parametrize("device", MODES)
 @pytest.mark.parametrize(
     ("label", "overrides"),
     [
-        pytest.param("xkq7vbn2", {}, id="short-label"),
-        pytest.param("aaaaaaaabbbbbbbb", {}, id="low-entropy"),
+        pytest.param("xkq7vbn", {}, id="short-label"),
+        pytest.param("aaaaaaaabbbbbbbb", {}, id="repeated-letters"),
+        pytest.param("elektroheizung-direkt", {}, id="words"),
+        pytest.param("xn--80ak6aa92e", {}, id="punycode"),
         pytest.param(RANDOM_LABEL, {"popularity_rank": 800}, id="popular-root"),
         pytest.param(RANDOM_LABEL, {"popularity_known": False}, id="popularity-list-unavailable"),
         pytest.param(RANDOM_LABEL, {"status": "blocked"}, id="blocked"),
@@ -213,7 +232,7 @@ def test_dga_like_does_not_fire(device: str | None, label: str, overrides: dict[
 
 @pytest.mark.parametrize("device", MODES)
 def test_dga_like_respects_the_allowlist(device: str | None) -> None:
-    rules = engine(allow=(AllowlistEntry(root="c2-site.example"),))
+    rules = engine(allow=(AllowlistEntry(root=f"{RANDOM_LABEL}.example"),))
 
     assert fired(rules.evaluate(dga(device)), "dga-like") == []
 
@@ -562,14 +581,43 @@ def test_home_ip_constant_is_used_by_default() -> None:
     assert event().client_ip == HOME_IP
 
 
-# --- names hosted on a popular platform (root's parent is a top site) ----------------
+# --- names hosted on a platform (a customer name NextDNS reports as its own root) ---------
 
 
 @pytest.mark.parametrize("device", MODES)
-def test_dga_like_does_not_fire_for_a_customer_name_on_a_popular_platform(
-    device: str | None,
+@pytest.mark.parametrize("platform", ["duckdns.org", "github.io", "ddns.net", "pages.dev"])
+def test_dga_like_fires_for_a_random_customer_name_on_a_platform(
+    device: str | None, platform: str
 ) -> None:
-    assert fired(engine().evaluate(dga(device, platform_rank=40)), "dga-like") == []
+    root = f"{RANDOM_LABEL}.{platform}"
+    item = dga(device, root=root, prefix="www.", platform=True, platform_rank=40)
+
+    (finding,) = fired(engine().evaluate(item), "dga-like")
+
+    assert finding.target == root
+    assert finding.evidence["label"] == RANDOM_LABEL
+
+
+@pytest.mark.parametrize(
+    "root",
+    [
+        "d3c3cq33003psk.cloudfront.net",
+        "x7kq2vbn9mtrp4zl.blob.core.windows.net",
+        "ec2-k3j9x2m8q1z7.eu-central-1.compute.amazonaws.com",
+        "cloudfront.net",
+    ],
+)
+def test_dga_like_skips_platforms_that_name_their_customers_themselves(root: str) -> None:
+    item = dga("D1", root=root, platform=True, platform_rank=40)
+
+    assert fired(engine().evaluate(item), "dga-like") == []
+
+
+def test_with_no_assigned_name_platforms_every_customer_name_is_judged() -> None:
+    rules = engine(params={"dga-like": {"assigned_name_platforms": []}})
+    item = dga("D1", root="d3c3cq33003psk.cloudfront.net", platform=True)
+
+    assert len(fired(rules.evaluate(item), "dga-like")) == 1
 
 
 @pytest.mark.parametrize("device", MODES)

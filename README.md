@@ -383,6 +383,11 @@ to the host names `127.0.0.1` and `localhost` (`dashboard.allowed_hosts`).
 - To change a threshold, copy the rule's `id` and the `params` to change into
   a YAML file, mount it into the container and set `rules.file` to its path.
   The defaults are in `src/vedette/rules/rules.yaml`.
+- `dga-like` and `dga-burst` judge customer names on hosting platforms
+  (`duckdns.org`, `github.io`) like registered domains, but skip platforms
+  that name each customer resource themselves, such as CDN endpoints and cloud
+  storage. If one of those fills your findings, add its suffix to
+  `assigned_name_platforms` for both rules.
 
 ## Loading history from a log export (optional)
 
@@ -448,9 +453,12 @@ disable the profiles in `config.yaml` or remove `NEXTDNS_API_KEY`.
 ## Measuring how well it works
 
 `vedette eval` runs known-good names (the top-sites list, 1,000 popular full
-hostnames from Cisco Umbrella's list and a sample of your own history),
-known-bad names (threat-feed domains, synthetic DGA names and bursts, fast,
-slow and sustained tunnels, and domains with given registration dates) and a
+hostnames from Cisco Umbrella's list, 1,000 of its customer names on hosting
+platforms and a sample of your own history), known-bad names (threat-feed
+domains, names from 13 real malware families' domain generation algorithms,
+bare, behind a `www.` and on hosting platforms, synthetic DGA names and
+bursts, fast, slow and sustained tunnels, and domains with given registration
+dates) and a
 held-out set of 315 crafted prompt-injection items (names, device names and
 lists of roots, written without reading the defences) through the real rules
 and the local model, with the defences on and off. A sample of those items is

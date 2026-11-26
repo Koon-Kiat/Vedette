@@ -59,8 +59,10 @@ EVIDENCE_LABELS = {
     "popularity_rank": "Top-sites rank",
     "threat_feeds": "Threat feeds",
     "threat_match": "Matched on",
-    "label": "Leftmost label",
+    "label": "Label judged",
     "label_length": "Label length",
+    "randomness": "Randomness, bits",
+    # Findings recorded before the randomness score replaced entropy.
     "entropy": "Entropy, bits per character",
     "digit_ratio": "Share of digits",
     "unique_subdomains": "Distinct subdomains",

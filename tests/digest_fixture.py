@@ -163,7 +163,7 @@ def _findings() -> list[Finding]:
             "def456",
             "c2-site.example",
             s + timedelta(hours=8),
-            {"fqdn": "xkq7vbn2mtrp9zlw.c2-site.example", "entropy": 3.75, "label_length": 16},
+            {"fqdn": "www.c2-site.example", "randomness": 24.6, "label_length": 7},
             subject="D1",
         ),
         _finding(

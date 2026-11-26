@@ -14,7 +14,7 @@ REQUIRED_PARAMS: dict[str, dict[str, type | tuple[type, ...]]] = {
     "new-device": {},
     "young-domain": {"max_age_days": int},
     "threat-intel-allowed": {"trusted_rank": int},
-    "dga-like": {"min_entropy": (int, float), "min_label_length": int},
+    "dga-like": {"min_randomness": (int, float), "min_label_length": int},
     "tunnel-like": {
         "min_unique_subdomains": int,
         "window_minutes": int,
@@ -40,6 +40,20 @@ REQUIRED_PARAMS: dict[str, dict[str, type | tuple[type, ...]]] = {
     "new-destination-category": {},
 }
 
+#: Optional parameters that hold a list of domain names.
+NAME_LIST_PARAMS: dict[str, tuple[str, ...]] = {
+    "dga-like": ("assigned_name_platforms",),
+    "dga-burst": ("assigned_name_platforms",),
+}
+
+#: Parameters a rule no longer reads, with what replaced them.
+RETIRED_PARAMS: dict[tuple[str, str], str] = {
+    ("dga-like", "min_entropy"): (
+        "min_randomness, in bits for the whole label rather than per character (see the "
+        "packaged rules.yaml)"
+    ),
+}
+
 
 class RuleFileError(Exception):
     """The rule file is missing, malformed or inconsistent."""
@@ -61,6 +75,20 @@ def _check_params(spec: RuleSpec) -> None:
         value = spec.params.get(name)
         if isinstance(value, bool) or not isinstance(value, expected):
             raise RuleFileError(f"rule {spec.id}: parameter {name!r} is missing or not a number")
+    for name in NAME_LIST_PARAMS.get(spec.id, ()):
+        value = spec.params.get(name, [])
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and item and item == item.strip(" .").lower() for item in value
+        ):
+            raise RuleFileError(
+                f"rule {spec.id}: parameter {name!r} must be a list of lower-case domain names"
+            )
+    for (rule_id, name), replacement in RETIRED_PARAMS.items():
+        if spec.id == rule_id and name in spec.params:
+            raise RuleFileError(
+                f"rule {spec.id}: parameter {name!r} is no longer used; it was replaced by "
+                f"{replacement}"
+            )
 
 
 def load_rules(override_file: Path | None = None) -> list[RuleSpec]:

@@ -333,7 +333,7 @@ def _evidence(item: Crafted, rule_id: str) -> dict[str, Any]:
             "status": "default",
             "label": lexical.label,
             "label_length": lexical.label_length,
-            "entropy": round(lexical.entropy, 3),
+            "randomness": round(lexical.randomness, 1),
             "digit_ratio": round(lexical.digit_ratio, 3),
         }
     return {"root": root, "unique_subdomains": 34, "window_minutes": 10, "sample_fqdn": fqdn}
@@ -773,7 +773,7 @@ _NEIGHBOURS: tuple[tuple[str, str, str, dict[str, Any], tuple[str, ...]], ...] =
             "status": "default",
             "label": "qx7vk2pzm9lt",
             "label_length": 12,
-            "entropy": 3.585,
+            "randomness": 41.7,
             "digit_ratio": 0.25,
         },
         ("qx7vk2pzm9lt",),

@@ -20,6 +20,7 @@ import yaml
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from vedette.eval.dga_families import FAMILIES
 from vedette.storage.models import eval_hostnames, events, popularity, threat_intel
 
 SEED = 20261119
@@ -262,6 +263,61 @@ def dga_names(rng: random.Random | None = None) -> tuple[list[Name], list[Name]]
     return random_names, word_names
 
 
+#: Names taken from each real malware family.
+PER_FAMILY = 40
+#: Subdomains put in front of a generated domain, in turn.
+PREFIXES = ("www.", "mail.", "cdn.", "api.")
+#: Hosting platforms where anyone can pick a customer name for free: dynamic
+#: DNS, static hosting and serverless platforms, all on the Public Suffix List.
+USER_NAMED_PLATFORMS = (
+    "duckdns.org",
+    "ddns.net",
+    "hopto.org",
+    "dynu.net",
+    "github.io",
+    "pages.dev",
+    "workers.dev",
+    "netlify.app",
+    "vercel.app",
+    "herokuapp.com",
+)
+
+
+def family_names(count: int = PER_FAMILY) -> dict[str, list[Name]]:
+    """Names from each re-implemented malware family, each its own registered domain.
+
+    A generated name is the domain the malware looks up, so it is its own root,
+    including a customer name on a platform (Symmi's names on ddns.net).
+    """
+    return {
+        family.name: [Name(fqdn=name, root=name) for name in family.names(count)]
+        for family in FAMILIES
+    }
+
+
+def prefixed(names: Sequence[Name]) -> list[Name]:
+    """The same names with a subdomain in front, taking each prefix in turn."""
+    return [
+        Name(fqdn=f"{PREFIXES[index % len(PREFIXES)]}{name.root}", root=name.root)
+        for index, name in enumerate(names)
+    ]
+
+
+def platform_hosted(families: dict[str, list[Name]], per_family: int = 10) -> list[Name]:
+    """Generated labels as customer names on platforms where anyone can pick a name.
+
+    The first ``per_family`` labels of each family go onto the platforms in
+    turn, the way malware using dynamic DNS registers its names.
+    """
+    names: list[Name] = []
+    for generated in families.values():
+        for name in generated[:per_family]:
+            label = name.root.split(".", 1)[0]
+            root = f"{label}.{USER_NAMED_PLATFORMS[len(names) % len(USER_NAMED_PLATFORMS)]}"
+            names.append(Name(fqdn=root, root=root))
+    return names
+
+
 def tunnel_sessions(
     rng: random.Random | None = None,
 ) -> tuple[list[TunnelSession], list[TunnelSession]]:
@@ -389,6 +445,31 @@ async def popular_hostnames(
         if root is not None:
             found.append(Name(fqdn=name, root=root))
     return found
+
+
+async def platform_hostnames(
+    engine: AsyncEngine,
+    root_for: Callable[[str], str | None],
+    is_platform: Callable[[str], bool],
+    count: int = 1000,
+    top: int = 100_000,
+) -> list[Name]:
+    """Popular full hostnames whose root is a customer name on a hosting platform.
+
+    Drawn from the top ``top`` of the stored list, like the other hostname set,
+    and sampled by a hash of the name so the sample does not depend on order.
+    """
+    async with engine.connect() as connection:
+        rows = await connection.execute(
+            select(eval_hostnames.c.name).where(eval_hostnames.c.rank <= top)
+        )
+        names = [row.name for row in rows]
+    roots: dict[str, str] = {}
+    for name in names:
+        root = root_for(name)
+        if root is not None and is_platform(root):
+            roots[name] = root
+    return [Name(fqdn=name, root=roots[name]) for name in _stable_sample(list(roots), count)]
 
 
 async def own_history(engine: AsyncEngine, count: int = 1000) -> list[Name]:

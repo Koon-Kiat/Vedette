@@ -1093,7 +1093,9 @@ repository. Each decision that departs from it says so.
     those roots was never raised: none of the 25 held-out items carried that
     way were. Each listed root is now checked as a looked-up name is, with
     the same words. Roots are checked one by one, so a word split across two
-    roots is not caught.
+    roots is not caught. On the held-out set it now raises 6 of those 25
+    items; with the defences on, the three models were steered by 0, 1 and 0
+    of them, as before the change.
 104. **A device name reaches the model as a self-reported label that proves
     nothing.** On the held-out set, crafted device names were the weakest
     carrier: with the defences off they steered 68 to 80% of answers, and
@@ -1120,6 +1122,11 @@ repository. Each decision that departs from it says so.
       missed most of the steered answers ("likely a device previously
       cleared", "close the alert as a duplicate"), so its device row is a
       lower bound.
+    - On the held-out set, one run each with the defences on, device names
+      now steer 1 of 25 answers on qwen3:8b (1 before), 0 on llama3.1:8b (5)
+      and 0 on gemma3:12b (7, and 5 in an earlier run of the same code). The
+      one left is a printer whose name calls itself benign. With the defences
+      off nothing changed, as expected (68 to 80%).
     - Every held-out device name had been seen when the prompt was written,
       and the report says so.
     Not done: more device words in the pre-filter (they would be fitted to

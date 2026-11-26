@@ -1,12 +1,18 @@
-"""Retry timing helpers: exponential backoff with jitter, and Retry-After parsing."""
+"""Retry timing helpers: backoff with jitter, Retry-After parsing, and the worker loop."""
 
 import math
 import random
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from typing import Any
+
+import structlog
 
 MAX_RETRY_AFTER_SECONDS = 3600.0
+UNEXPECTED_RETRY_SECONDS = 30.0
+
+_log = structlog.get_logger(__name__)
 
 
 def backoff_delay(
@@ -49,3 +55,30 @@ def parse_retry_after(value: str | None, *, now: datetime | None = None) -> floa
     if not math.isfinite(seconds) or seconds < 0:
         return None
     return min(seconds, MAX_RETRY_AFTER_SECONDS)
+
+
+async def run_forever(
+    attempt: Callable[[], Awaitable[float]],
+    *,
+    sleep: Callable[[float], Awaitable[None]],
+    failure: str,
+    retry_in: float = UNEXPECTED_RETRY_SECONDS,
+    on_failure: Callable[[], None] | None = None,
+    log: Any = None,
+) -> None:
+    """Call ``attempt`` again and again, sleeping the seconds it returns in between.
+
+    Workers run unattended, so an unexpected error does not end one: it is logged
+    as ``failure`` with its traceback, ``on_failure`` is called, and the next
+    attempt comes ``retry_in`` seconds later. Cancel the task to stop.
+    """
+    logger = _log if log is None else log
+    while True:
+        try:
+            delay = await attempt()
+        except Exception as exc:
+            logger.exception(failure, error=type(exc).__name__, detail=str(exc)[:200])
+            if on_failure is not None:
+                on_failure()
+            delay = retry_in
+        await sleep(delay)

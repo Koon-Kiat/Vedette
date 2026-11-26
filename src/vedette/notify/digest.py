@@ -16,10 +16,11 @@ from sqlalchemy import bindparam, case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from vedette.config import ProfileConfig
-from vedette.notify.defang import clean_text
 from vedette.notify.render import local_time, prose, reason_name, rule_name, safe
 from vedette.rules.loader import load_rules
-from vedette.rules.model import RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.defang import clean_text
+from vedette.shared.models import Severity
 from vedette.storage.health import HealthStore
 from vedette.storage.models import UtcDateTime, events, finding_analysis, findings
 
@@ -431,45 +432,69 @@ def render_digest(digest: Digest) -> tuple[str, str]:
         "FINDINGS",
         *_findings_line(digest),
         "",
+        *_group_section(digest, tz),
+        "NEW DEVICES",
+        *_device_section(digest, tz),
+        "",
+        "QUERIES AND BLOCKING",
+        *_volume_section(digest),
+        "",
+        "HEALTH",
+        *_health_section(digest, tz),
+        "",
+        "Details: vedette findings",
     ]
-    if digest.groups:
-        for index, group in enumerate(digest.groups, start=1):
-            lines += [*_group_lines(index, group, tz), ""]
-        if digest.groups_total > len(digest.groups):
-            lines += [f"… and {digest.groups_total - len(digest.groups)} more.", ""]
-    else:
-        lines += ["No findings in this period.", ""]
+    return title, "\n".join(lines)
 
-    lines.append("NEW DEVICES")
-    if digest.new_devices:
-        for device in digest.new_devices:
-            what = (
-                f"new address {safe(device.device, limit=64)}"
-                if device.is_address
-                else safe(device.device, limit=64)
-                + (f" ({safe(device.name, limit=64)})" if device.name else "")
-            )
-            lines.append(
-                f"- {clean_text(device.profile, limit=64)}: {what}, "
-                f"first seen {local_time(device.first_seen, tz)}"
-            )
-    else:
-        lines.append("None.")
-    lines += ["", "QUERIES AND BLOCKING"]
-    for volume in digest.volumes:
-        share = 100.0 * volume.blocked / volume.queries if volume.queries else 0.0
-        line = (
-            f"- {clean_text(volume.profile, limit=64)}: {volume.queries:,} queries, "
-            f"{volume.blocked:,} blocked ({share:.1f}%)"
+
+def _group_section(digest: Digest, tz: ZoneInfo) -> list[str]:
+    """Each finding group, then a blank line."""
+    if not digest.groups:
+        return ["No findings in this period.", ""]
+    lines: list[str] = []
+    for index, group in enumerate(digest.groups, start=1):
+        lines += [*_group_lines(index, group, tz), ""]
+    if digest.groups_total > len(digest.groups):
+        lines += [f"… and {digest.groups_total - len(digest.groups)} more.", ""]
+    return lines
+
+
+def _device_section(digest: Digest, tz: ZoneInfo) -> list[str]:
+    """Devices first seen in the period."""
+    lines = []
+    for device in digest.new_devices:
+        what = (
+            f"new address {safe(device.device, limit=64)}"
+            if device.is_address
+            else safe(device.device, limit=64)
+            + (f" ({safe(device.name, limit=64)})" if device.name else "")
         )
-        if volume.avg_queries is not None and volume.avg_blocked_pct is not None:
-            line += (
-                f"; 7-day average {volume.avg_queries:,.0f} queries, "
-                f"{volume.avg_blocked_pct:.1f}% blocked"
-            )
-        if volume.queries and not volume.device_attribution:
-            line += "; device attribution unavailable"
-        lines.append(line)
+        lines.append(
+            f"- {clean_text(device.profile, limit=64)}: {what}, "
+            f"first seen {local_time(device.first_seen, tz)}"
+        )
+    return lines or ["None."]
+
+
+def _volume_line(volume: VolumeLine) -> str:
+    share = 100.0 * volume.blocked / volume.queries if volume.queries else 0.0
+    line = (
+        f"- {clean_text(volume.profile, limit=64)}: {volume.queries:,} queries, "
+        f"{volume.blocked:,} blocked ({share:.1f}%)"
+    )
+    if volume.avg_queries is not None and volume.avg_blocked_pct is not None:
+        line += (
+            f"; 7-day average {volume.avg_queries:,.0f} queries, "
+            f"{volume.avg_blocked_pct:.1f}% blocked"
+        )
+    if volume.queries and not volume.device_attribution:
+        line += "; device attribution unavailable"
+    return line
+
+
+def _volume_section(digest: Digest) -> list[str]:
+    """Queries and blocking for each profile, then the most blocked names and lists."""
+    lines = [_volume_line(volume) for volume in digest.volumes]
     if digest.top_blocked:
         lines.append(
             "Most blocked: "
@@ -482,19 +507,19 @@ def render_digest(digest: Digest) -> tuple[str, str]:
                 f"{clean_text(c.name, limit=80)} ({c.count:,})" for c in digest.top_blocklists
             )
         )
-    lines += ["", "HEALTH"]
+    return lines
+
+
+def _health_section(digest: Digest, tz: ZoneInfo) -> list[str]:
+    """Failing health checks, then how many pass."""
     if digest.health is None:
-        lines.append("No health checks have run yet.")
-    else:
-        problems = [check for check in digest.health if not check.ok]
-        for check in problems:
-            lines.append(
-                f"- PROBLEM since {check.since.astimezone(tz):%Y-%m-%d %H:%M}: "
-                f"{clean_text(check.detail, limit=200)}"
-            )
-        healthy = len(digest.health) - len(problems)
-        lines.append(
-            f"All other checks OK ({healthy})." if problems else f"All checks OK ({healthy})."
-        )
-    lines += ["", "Details: vedette findings"]
-    return title, "\n".join(lines)
+        return ["No health checks have run yet."]
+    problems = [check for check in digest.health if not check.ok]
+    lines = [
+        f"- PROBLEM since {check.since.astimezone(tz):%Y-%m-%d %H:%M}: "
+        f"{clean_text(check.detail, limit=200)}"
+        for check in problems
+    ]
+    healthy = len(digest.health) - len(problems)
+    lines.append(f"All other checks OK ({healthy})." if problems else f"All checks OK ({healthy}).")
+    return lines

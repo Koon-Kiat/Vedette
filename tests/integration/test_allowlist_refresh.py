@@ -9,9 +9,10 @@ from tests.unit.rule_helpers import T0, enriched, event
 from vedette.enrich.model import EnrichedEvent
 from vedette.pipeline.processor import Batch, RuleWorker
 from vedette.pipeline.queue import MemoryQueue
-from vedette.rules.allowlist import Allowlist, AllowlistEntry
+from vedette.rules.allowlist import Allowlist
 from vedette.rules.engine import RuleEngine
 from vedette.rules.loader import load_rules
+from vedette.shared.models import AllowlistEntry
 from vedette.storage.store import Store
 from vedette.storage.triage import TriageStore
 

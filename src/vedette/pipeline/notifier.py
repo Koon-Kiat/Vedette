@@ -18,17 +18,17 @@ from zoneinfo import ZoneInfo
 
 import structlog
 
-from vedette.notify.channels import Channel, DeliveryError, OutgoingMessage
+from vedette.notify.channels import Channel, DeliveryError
 from vedette.notify.digest import DAY, DigestBuilder, render_digest
 from vedette.notify.render import alert_key, render_alert
 from vedette.notify.schedule import QuietHours, latest_occurrence
-from vedette.retry import backoff_delay
-from vedette.rules.model import RuleSpec, Severity
+from vedette.retry import backoff_delay, run_forever
+from vedette.rules.model import RuleSpec
+from vedette.shared.models import OutgoingMessage, Severity
 from vedette.storage.notifications import NotificationStore
 
 log = structlog.get_logger(__name__)
 
-UNEXPECTED_RETRY_SECONDS = 30.0
 _HELD_IN_QUIET_HOURS = frozenset({"alert", "health"})
 
 
@@ -81,14 +81,12 @@ class AlertWorker:
 
     async def run(self) -> None:
         """Run forever. Cancel the task to stop."""
-        while True:
-            try:
-                await self.run_once()
-            except Exception:  # must keep running unattended; logged with traceback
-                log.exception("alert_worker_unexpected_error")
-                await self._sleep(UNEXPECTED_RETRY_SECONDS)
-                continue
-            await self._sleep(self._interval)
+
+        async def attempt() -> float:
+            await self.run_once()
+            return self._interval
+
+        await run_forever(attempt, sleep=self._sleep, failure="alert_worker_unexpected_error")
 
     async def run_once(self) -> int:
         """Decide on every waiting candidate; return how many alerts were queued."""
@@ -178,14 +176,12 @@ class DeliveryWorker:
 
     async def run(self) -> None:
         """Run forever. Cancel the task to stop."""
-        while True:
-            try:
-                await self.run_once()
-            except Exception:  # must keep running unattended; logged with traceback
-                log.exception("delivery_worker_unexpected_error")
-                await self._sleep(UNEXPECTED_RETRY_SECONDS)
-                continue
-            await self._sleep(self._interval)
+
+        async def attempt() -> float:
+            await self.run_once()
+            return self._interval
+
+        await run_forever(attempt, sleep=self._sleep, failure="delivery_worker_unexpected_error")
 
     def _held_until(self, kind: str, priority: Severity, now: datetime) -> datetime | None:
         """End of quiet hours if this message must wait for it, else ``None``."""
@@ -294,12 +290,14 @@ class DigestScheduler:
 
     async def run(self) -> None:
         """Run forever. Cancel the task to stop."""
-        while True:
-            try:
-                await self.run_once()
-            except Exception:  # must keep running unattended; logged with traceback
-                log.exception("digest_unexpected_error")
-            await self._sleep(self._poll)
+
+        async def attempt() -> float:
+            await self.run_once()
+            return self._poll
+
+        await run_forever(
+            attempt, sleep=self._sleep, failure="digest_unexpected_error", retry_in=self._poll
+        )
 
     async def _has_data_before(self, moment: datetime) -> bool:
         if self._oldest_data is None:

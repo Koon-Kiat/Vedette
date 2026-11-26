@@ -14,8 +14,7 @@ from vedette.config import HealthConfig
 from vedette.health.heartbeat import Heartbeat
 from vedette.health.monitor import HealthMonitor
 from vedette.health.state import HealthState
-from vedette.notify.channels import OutgoingMessage
-from vedette.rules.model import Severity
+from vedette.shared.models import OutgoingMessage, Severity
 from vedette.storage.health import HealthStore
 from vedette.storage.notifications import NotificationStore
 from vedette.storage.store import Store

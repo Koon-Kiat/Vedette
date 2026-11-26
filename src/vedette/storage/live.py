@@ -71,7 +71,8 @@ class FeedCursor:
         self.seen_set.add(event_id)
 
 
-def _event_columns() -> Select[Any]:
+def feed_columns() -> Select[Any]:
+    """The events columns a live feed item is built from."""
     return select(
         events.c.event_id,
         events.c.ts,
@@ -113,7 +114,7 @@ class LiveQueries:
         return live_event(row)
 
     def _select(self) -> Select[Any]:
-        return _event_columns().where(events.c.profile_id.in_(self._ids))
+        return feed_columns().where(events.c.profile_id.in_(self._ids))
 
     async def recent(self, limit: int) -> list[LiveEvent]:
         """The newest events, newest first."""
@@ -172,7 +173,7 @@ class LiveQueries:
                     )
                 )
             ).one()
-            by_profile = {pid: 0 for pid in self._ids}
+            by_profile = dict.fromkeys(self._ids, 0)
             newest_finding: int | None = None
             for profile_id, count, newest in (
                 await connection.execute(

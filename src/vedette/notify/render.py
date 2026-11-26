@@ -10,10 +10,9 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from vedette.llm.schema import Analysis
-from vedette.notify.channels import OutgoingMessage
-from vedette.notify.defang import clean_text, defang, defang_text
-from vedette.rules.model import RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.defang import clean_text, defang, defang_text
+from vedette.shared.models import Analysis, OutgoingMessage, Severity
 from vedette.storage.store import StoredFinding
 
 TITLE_LIMIT = 200

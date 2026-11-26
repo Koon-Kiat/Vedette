@@ -9,8 +9,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from vedette.config import ProfileConfig
-from vedette.llm.schema import Analysis
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Analysis, Finding, Severity
 from vedette.sources.base import DnsEvent
 from vedette.sources.nextdns import parse_log_entry
 from vedette.storage.analysis import AnalysisStore
@@ -87,24 +86,24 @@ def _events() -> list[DnsEvent]:
             items.append(_event("abc123", at, "t.tracker.example", blocked=True, reason=WINDOWS))
         else:
             items.append(_event("abc123", at, f"www.site{n % 5}.example"))
-    for n in range(60):
-        items.append(
-            _event(
-                "def456",
-                PERIOD_START + timedelta(minutes=n * 20, seconds=15),
-                f"www.work{n % 3}.example",
-                device=("D1", "Laptop"),
-            )
+    items.extend(
+        _event(
+            "def456",
+            PERIOD_START + timedelta(minutes=n * 20, seconds=15),
+            f"www.work{n % 3}.example",
+            device=("D1", "Laptop"),
         )
-    for n in range(5):
-        items.append(
-            _event(
-                "def456",
-                PERIOD_START + timedelta(hours=20, minutes=n),
-                "www.recipes.example",
-                device=("D2", "Kitchen tablet"),
-            )
+        for n in range(60)
+    )
+    items.extend(
+        _event(
+            "def456",
+            PERIOD_START + timedelta(hours=20, minutes=n),
+            "www.recipes.example",
+            device=("D2", "Kitchen tablet"),
         )
+        for n in range(5)
+    )
     return items
 
 

@@ -32,6 +32,7 @@ from vedette.config import HealthConfig, ProfileConfig
 from vedette.health.state import HealthState
 from vedette.notify.render import render_health
 from vedette.notify.schedule import QuietHours
+from vedette.retry import run_forever
 from vedette.storage.health import HealthCheck, HealthStore
 from vedette.storage.notifications import NotificationStore
 from vedette.storage.store import Store
@@ -39,7 +40,6 @@ from vedette.storage.store import Store
 log = structlog.get_logger(__name__)
 
 OK = "OK"
-UNEXPECTED_RETRY_SECONDS = 30.0
 STALLED_AFTER_INTERVALS = 3
 RESOLVE_AFTER_CHECKS = 2
 PROBLEM_PREFIX = "Health problem: "
@@ -198,14 +198,12 @@ class HealthMonitor:
 
     async def run(self) -> None:
         """Check forever. Cancel the task to stop."""
-        while True:
-            try:
-                await self.run_once()
-            except Exception:  # must keep running unattended; logged with traceback
-                log.exception("health_monitor_unexpected_error")
-                await self._sleep(UNEXPECTED_RETRY_SECONDS)
-                continue
-            await self._sleep(self._config.check_interval_seconds)
+
+        async def attempt() -> float:
+            await self.run_once()
+            return self._config.check_interval_seconds
+
+        await run_forever(attempt, sleep=self._sleep, failure="health_monitor_unexpected_error")
 
     async def run_once(self) -> list[HealthCheck]:
         """Run every check once, store the results and alert on changes."""

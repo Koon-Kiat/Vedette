@@ -23,6 +23,7 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+.hypothesis/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -33,6 +34,9 @@ coverage.xml
 # Design-tool briefs (Impeccable, Intent): kept locally, not published
 /PRODUCT.md
 /DESIGN.md
+
+# Plans written by coding agents: working notes, not project documentation
+/docs/superpowers/
 
 # Editors and OS
 .vscode/

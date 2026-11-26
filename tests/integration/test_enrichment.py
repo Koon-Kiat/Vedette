@@ -10,12 +10,13 @@ import respx
 
 from tests.unit.rule_helpers import T0, event
 from tests.unit.test_reference_parsing import tranco_zip
+from vedette.config import Feed
 from vedette.enrich.enricher import Enricher
 from vedette.enrich.first_seen import FirstSeenTracker
 from vedette.enrich.popularity import PopularityList
 from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges, RdapClient
-from vedette.enrich.threat_intel import Feed, ThreatIntel
+from vedette.enrich.threat_intel import ThreatIntel
 from vedette.storage.reference import ReferenceStore
 from vedette.storage.store import Store
 

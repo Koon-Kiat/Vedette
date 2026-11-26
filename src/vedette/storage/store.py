@@ -19,7 +19,7 @@ from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import ConnectionPoolEntry
 
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 from vedette.sources.base import DnsEvent, Reason
 from vedette.storage.models import collector_state, events, finding_analysis, findings
 

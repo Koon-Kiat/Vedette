@@ -5,7 +5,8 @@ import pytest
 
 from tests.integration.list_helpers import damaged
 from vedette.enrich.popularity import parse_tranco
-from vedette.enrich.threat_intel import candidates, parse_feed
+from vedette.enrich.threat_intel import parse_feed
+from vedette.shared.names import candidates
 
 
 def tranco_zip(text: str, name: str = "top-1m.csv") -> bytes:

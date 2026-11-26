@@ -16,8 +16,8 @@ import jinja2
 from markupsafe import Markup, escape
 
 from vedette.health.monitor import CATCHING_UP, OK, duration
-from vedette.notify.defang import clean_text, defang_names
 from vedette.notify.render import about_text, prose, safe
+from vedette.shared.defang import clean_text, defang_names
 from vedette.storage.store import StoredFinding
 from vedette.web.charts import span
 

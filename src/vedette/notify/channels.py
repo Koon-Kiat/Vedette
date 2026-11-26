@@ -15,16 +15,15 @@ import smtplib
 import ssl
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from typing import Any
 
 import httpx
 
-from vedette.notify.defang import clean_text
 from vedette.retry import parse_retry_after
-from vedette.rules.model import Severity
+from vedette.shared.defang import clean_text
+from vedette.shared.models import OutgoingMessage, Severity
 
 NTFY_MAX_BYTES = 4000  # ntfy turns messages over 4,096 bytes into attachments
 DISCORD_CHUNK = 1900  # Discord allows 2,000 characters per message
@@ -42,16 +41,6 @@ _NTFY_PRIORITY = {
 }
 _DISCORD_SPECIAL = frozenset("\\*_~`|>#-[]()<@:")
 _TIMEOUT = httpx.Timeout(30.0)
-
-
-@dataclass(frozen=True, slots=True)
-class OutgoingMessage:
-    """A notification ready to send: plain text, already made safe."""
-
-    title: str
-    body: str
-    priority: Severity
-    tags: tuple[str, ...] = ()
 
 
 class DeliveryError(Exception):

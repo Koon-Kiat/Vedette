@@ -31,6 +31,8 @@ vedette = "vedette.cli:app"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.170.15",
+    "import-linter>=2.16",
     "mypy>=2.4",
     "pip-audit>=2.10",
     "pytest>=9.2",
@@ -50,6 +52,7 @@ packages = ["src/vedette"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tools"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers --strict-config"
@@ -68,19 +71,44 @@ omit = ["*/storage/migrations/*"]
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["src", "tests"]
+src = ["src", "tests", "tools"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "BLE", "D", "RUF"]
+select = [
+    "ASYNC", "B", "BLE", "C4", "C90", "D", "DTZ", "E", "ERA", "F", "FURB", "I", "PERF",
+    "PGH", "PIE", "PTH", "RET", "RUF", "S", "SIM", "SLF", "T20", "UP", "W",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D", "S101"]
+"tests/**" = ["D", "S101", "S105"]
+
+[tool.importlinter]
+root_package = "vedette"
+
+[[tool.importlinter.contracts]]
+name = "Packages import only the layers below them"
+type = "layers"
+containers = ["vedette"]
+exhaustive = true
+layers = [
+    "cli",
+    "pipeline | eval",
+    "web",
+    "health",
+    "llm | notify",
+    "rules",
+    "enrich",
+    "storage",
+    "config | sources",
+    "shared | retry | log",
+]
 
 [tool.mypy]
 strict = true
 python_version = "3.14"
-files = ["src", "tests"]
+files = ["src", "tests", "tools"]
+mypy_path = "tools"
 plugins = ["pydantic.mypy"]

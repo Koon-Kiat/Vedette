@@ -15,12 +15,10 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from vedette.config import ProfileConfig
-from vedette.enrich.lexical import LexicalFeatures, lexical_features
-from vedette.enrich.threat_intel import candidates
-from vedette.llm.schema import Analysis
-from vedette.rules.model import Severity
+from vedette.shared.models import Analysis, Severity
+from vedette.shared.names import LexicalFeatures, candidates, lexical_features
 from vedette.sources.base import DnsEvent
-from vedette.storage.analysis import AnalysisStore
+from vedette.storage.analysis import AnalysisStore, analysis_sources
 from vedette.storage.health import HealthRow, HealthStore
 from vedette.storage.models import (
     audit_log,
@@ -316,7 +314,7 @@ class DashboardQueries:
     async def shell(self) -> Shell:
         """Open findings, health check results and the newest event, for the rail."""
         async with self._engine.connect() as connection:
-            by_profile = {pid: 0 for pid in self._ids}
+            by_profile = dict.fromkeys(self._ids, 0)
             for profile_id, count in (
                 await connection.execute(
                     select(findings.c.profile_id, func.count())
@@ -773,15 +771,7 @@ class DashboardQueries:
                     )
                 )
             ).all()
-            sources: dict[str, int] = dict(
-                (
-                    await connection.execute(
-                        select(finding_analysis.c.source, func.count())
-                        .where(finding_analysis.c.created_at >= week)
-                        .group_by(finding_analysis.c.source)
-                    )
-                ).all()
-            )
+            sources = await analysis_sources(connection, since=week)
         durations = sorted(float(row.duration_ms) for row in calls if row.outcome == "ok")
         outcomes: dict[str, int] = {}
         for row in calls:

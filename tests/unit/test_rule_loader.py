@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from vedette.rules.loader import RuleFileError, load_rules
-from vedette.rules.model import Severity
+from vedette.shared.models import Severity
 
 
 def write(tmp_path: Path, text: str) -> Path:

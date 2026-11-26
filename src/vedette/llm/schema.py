@@ -1,59 +1,14 @@
-"""The only shapes the LLM stage accepts and produces.
+"""The answer shape the model is held to, and the parser that enforces it.
 
-The model's answer must parse into :class:`Verdict` objects or it is rejected.
-Nothing else from the model (free text, extra fields, tool calls) is used.
+The model's answer must parse into :class:`~vedette.shared.models.Verdict`
+objects or it is rejected. Nothing else from the model (free text, extra
+fields, tool calls) is used.
 """
 
 import json
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from vedette.rules.model import Severity
-
-
-class Verdict(BaseModel):
-    """What the model says about one finding, before any guard is applied."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    finding_id: int
-    summary: str = Field(min_length=1)
-    likely_cause: str
-    recommended_action: str = Field(min_length=1)
-    priority: Severity
-    group_key: str
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
-class Analysis(BaseModel):
-    """The stored explanation of a finding, after every guard has been applied.
-
-    Attributes:
-        finding_id: The finding this explains.
-        summary: One or two plain sentences on what happened.
-        likely_cause: The most probable explanation.
-        recommended_action: What the owner should do.
-        priority: Never below the rule's severity floor.
-        group_key: Findings with the same key belong together in a digest.
-        confidence: The model's stated confidence, 0 to 1 (0 for templates).
-        source: ``llm``, ``cache`` (an earlier model answer) or ``template``
-            (the model was not used or its answer was unusable).
-        model: Model that wrote the text, if any.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    finding_id: int
-    summary: str = Field(min_length=1, max_length=400)
-    likely_cause: str = Field(max_length=300)
-    recommended_action: str = Field(min_length=1, max_length=300)
-    priority: Severity
-    group_key: str = Field(min_length=1, max_length=64)
-    confidence: float = Field(ge=0.0, le=1.0)
-    source: Literal["llm", "cache", "template"]
-    model: str | None = None
-
+from vedette.shared.models import Severity, Verdict
 
 _VERDICT_SCHEMA: dict[str, Any] = {
     "type": "object",

@@ -11,25 +11,11 @@ from datetime import timedelta
 import httpx
 from structlog.testing import capture_logs
 
-from tests.integration.conftest import SleepRecorder, wait_until
-from tests.integration.fake_nextdns import T0, FakeNextDns
+from tests.integration.conftest import SleepRecorder, make_collector, wait_until
+from tests.integration.fake_nextdns import FakeNextDns
 from vedette.pipeline.collector import ProfileCollector
 from vedette.sources.nextdns import NextDnsSource, parse_log_entry
 from vedette.storage.store import Store
-
-NOW = T0 + timedelta(hours=1)
-
-
-def make_collector(source: NextDnsSource, store: Store, sleeps: SleepRecorder) -> ProfileCollector:
-    return ProfileCollector(
-        "abc123",
-        source,
-        store,
-        backfill_days=7,
-        clock=lambda: NOW,
-        sleep=sleeps,
-        rng=lambda: 1.0,
-    )
 
 
 async def run_until(

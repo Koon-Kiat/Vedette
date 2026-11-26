@@ -23,9 +23,10 @@ from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges
 from vedette.enrich.threat_intel import ThreatIntel
 from vedette.eval.datasets import BurstSession, Name, TunnelSession, root_of
-from vedette.rules.allowlist import Allowlist, AllowlistEntry
+from vedette.rules.allowlist import Allowlist
 from vedette.rules.engine import RuleEngine
-from vedette.rules.model import RuleSpec, Severity
+from vedette.rules.model import RuleSpec
+from vedette.shared.models import AllowlistEntry, Severity
 from vedette.sources.base import DnsEvent
 from vedette.storage.reference import DomainAgeRecord, ReferenceStore
 from vedette.storage.store import Store

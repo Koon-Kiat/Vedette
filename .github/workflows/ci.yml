@@ -48,6 +48,8 @@ jobs:
         run: uv run --no-sync ruff format --check .
       - name: mypy --strict
         run: uv run --no-sync mypy
+      - name: import layers
+        run: uv run --no-sync lint-imports
       - name: pytest
         run: uv run --no-sync pytest --cov --cov-report=term-missing
 
@@ -99,6 +101,8 @@ jobs:
           cache-to: type=gha,mode=max
           # The runtime stage installs Debian's newest security fixes: never reuse it.
           no-cache-filters: runtime
+      - name: The runtime image has no pip
+        run: "! docker run --rm --entrypoint python vedette:ci -m pip --version"
       - name: Fail on fixable high or critical vulnerabilities in the image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

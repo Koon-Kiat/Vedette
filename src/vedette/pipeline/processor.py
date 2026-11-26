@@ -25,13 +25,13 @@ import structlog
 from vedette.enrich.enricher import Enricher
 from vedette.enrich.model import EnrichedEvent
 from vedette.pipeline.queue import EventQueue
+from vedette.retry import run_forever
 from vedette.rules.engine import RuleEngine
-from vedette.rules.model import Finding
+from vedette.shared.models import Finding
 from vedette.storage.store import Store
 
 log = structlog.get_logger(__name__)
 
-UNEXPECTED_RETRY_SECONDS = 30.0
 REFRESH_CHECK_SECONDS = 600.0
 
 type Batch = list[EnrichedEvent]
@@ -91,15 +91,11 @@ class EnricherWorker:
 
     async def run(self) -> None:
         """Process forever. Cancel the task to stop."""
-        while True:
-            try:
-                worked = await self._pass()
-            except Exception:  # must keep running unattended; logged with traceback
-                log.exception("enricher_unexpected_error")
-                await self._sleep(UNEXPECTED_RETRY_SECONDS)
-                continue
-            if not worked:
-                await self._sleep(self._idle_seconds)
+
+        async def attempt() -> float:
+            return 0.0 if await self._pass() else self._idle_seconds
+
+        await run_forever(attempt, sleep=self._sleep, failure="enricher_unexpected_error")
 
     async def _refresh_references(self, now: datetime) -> None:
         if time.monotonic() < self._next_refresh_check:

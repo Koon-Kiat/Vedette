@@ -58,6 +58,11 @@ def parse_public_suffix_list(text: str) -> list[tuple[str, bool]]:
     return rules
 
 
+def _labels(name: str) -> list[str]:
+    """A name's labels in lower case, ignoring a trailing dot and empty labels."""
+    return [label for label in name.lower().rstrip(".").split(".") if label]
+
+
 class SuffixRules:
     """Matches names against parsed rules, following the list's own algorithm."""
 
@@ -104,7 +109,7 @@ class SuffixRules:
         True for a customer name under a platform and for the platform's own
         suffix, such as one region under a wildcard rule.
         """
-        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        labels = _labels(name)
         found = self._suffix(labels)
         return found is not None and found[1]
 
@@ -114,7 +119,7 @@ class SuffixRules:
         For a root reported by NextDNS this means NextDNS treats a longer suffix
         as public: a platform it knows that the list does not.
         """
-        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        labels = _labels(name)
         found = self._suffix(labels)
         suffix = found[0] if found is not None else 1  # no rule: the last label is the suffix
         return len(labels) > suffix + 1
@@ -127,7 +132,7 @@ class SuffixRules:
         matching rule the last label is the suffix. ``None`` when ``name`` is
         itself a public suffix.
         """
-        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        labels = _labels(name)
         found = self._suffix(labels)
         size = found[0] if found is not None else 1
         if len(labels) <= size:
@@ -136,7 +141,7 @@ class SuffixRules:
 
     def platform_suffix(self, name: str) -> str | None:
         """The private suffix ``name`` is a customer name under, else ``None``."""
-        labels = [label for label in name.lower().rstrip(".").split(".") if label]
+        labels = _labels(name)
         found = self._suffix(labels)
         if found is None:
             return None

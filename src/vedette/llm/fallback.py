@@ -6,9 +6,9 @@ definition and the defanged target) is stored instead.
 """
 
 from vedette.llm.guards import slug
-from vedette.llm.schema import Analysis
-from vedette.notify.defang import clean_text, defang
 from vedette.rules.model import RuleSpec
+from vedette.shared.defang import clean_text, defang
+from vedette.shared.models import Analysis
 from vedette.storage.store import StoredFinding
 
 _ACTIONS = {

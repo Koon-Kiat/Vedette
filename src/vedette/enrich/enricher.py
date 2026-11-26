@@ -4,12 +4,12 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from vedette.enrich.first_seen import FirstSeenTracker
-from vedette.enrich.lexical import lexical_features
 from vedette.enrich.model import EnrichedEvent
 from vedette.enrich.popularity import PopularityList
 from vedette.enrich.public_suffix import PublicSuffixList
 from vedette.enrich.rdap import DomainAges
 from vedette.enrich.threat_intel import ThreatIntel
+from vedette.shared.names import lexical_features
 from vedette.sources.base import DnsEvent
 
 _BLOCKED = "blocked"

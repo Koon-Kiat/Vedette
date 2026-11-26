@@ -26,6 +26,11 @@ SEED = 20261119
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 
+def _seeded(rng: random.Random | None, stream: int) -> random.Random:
+    """``rng`` if given, else a generator seeded so that every run builds the same names."""
+    return rng or random.Random(SEED + stream)  # noqa: S311
+
+
 @dataclass(frozen=True, slots=True)
 class Name:
     """One domain name to evaluate."""
@@ -213,15 +218,33 @@ def held_out_injection(text: str | None = None) -> list[Crafted]:
 
 # --- synthetic malicious names ----------------------------------------------------------
 
-_WORDS = (
-    "light river stone cloud green paper forest silver market window garden "
-    "summer bright ocean north winter golden castle simple yellow"
-).split()
+_WORDS = [
+    "light",
+    "river",
+    "stone",
+    "cloud",
+    "green",
+    "paper",
+    "forest",
+    "silver",
+    "market",
+    "window",
+    "garden",
+    "summer",
+    "bright",
+    "ocean",
+    "north",
+    "winter",
+    "golden",
+    "castle",
+    "simple",
+    "yellow",
+]
 
 
 def dga_names(rng: random.Random | None = None) -> tuple[list[Name], list[Name]]:
     """Random-character names (lengths 8 to 20) and dictionary-word names."""
-    rng = rng or random.Random(SEED)  # noqa: S311 - repeatable test names, not secrets
+    rng = _seeded(rng, 0)
     alphabet = string.ascii_lowercase + string.digits
     tlds = ("com", "net", "info", "xyz", "top")
     random_names = []
@@ -243,7 +266,7 @@ def tunnel_sessions(
     rng: random.Random | None = None,
 ) -> tuple[list[TunnelSession], list[TunnelSession]]:
     """Fast tunnels (40 lookups in 5 minutes) and slow ones (20 lookups in 10)."""
-    rng = rng or random.Random(SEED + 1)  # noqa: S311 - repeatable test names, not secrets
+    rng = _seeded(rng, 1)
 
     def session(index: int, lookups: int, minutes: float) -> TunnelSession:
         root = (
@@ -262,7 +285,7 @@ def tunnel_sessions(
 
 def sustained_tunnel_sessions(rng: random.Random | None = None) -> list[TunnelSession]:
     """Slow but sustained tunnels: a lookup a minute for two hours, 120 in all."""
-    rng = rng or random.Random(SEED + 2)  # noqa: S311 - repeatable test names, not secrets
+    rng = _seeded(rng, 2)
     sessions = []
     for index in range(10):
         root = (
@@ -289,7 +312,7 @@ def dga_bursts(rng: random.Random | None = None) -> tuple[list[BurstSession], li
 
     Each burst is new to its device, as a generated domain is.
     """
-    rng = rng or random.Random(SEED + 3)  # noqa: S311 - repeatable test names, not secrets
+    rng = _seeded(rng, 3)
     alphabet = string.ascii_lowercase + string.digits
     tlds = ("com", "net", "info", "xyz", "top")
 
@@ -398,7 +421,7 @@ def dated_domains(
 
     The names are built from words, so the random-name rule stays out of it.
     """
-    rng = rng or random.Random(SEED + 4)  # noqa: S311 - repeatable test names, not secrets
+    rng = _seeded(rng, 4)
     tlds = ("com", "net", "info", "shop", "online")
 
     def name(tag: str) -> Name:

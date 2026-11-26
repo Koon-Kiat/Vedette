@@ -3,12 +3,12 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from vedette.enrich.lexical import lexical_features
 from vedette.enrich.model import EnrichedEvent
-from vedette.rules.allowlist import Allowlist, AllowlistEntry
+from vedette.rules.allowlist import Allowlist
 from vedette.rules.engine import RuleEngine
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Finding
+from vedette.shared.models import AllowlistEntry, Finding
+from vedette.shared.names import lexical_features
 from vedette.sources.base import DnsEvent, Reason
 
 T0 = datetime(2026, 3, 15, 12, 0, 0, tzinfo=UTC)

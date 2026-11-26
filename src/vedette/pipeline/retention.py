@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from vedette.retry import run_forever
 from vedette.storage.retention import purge_expired
 
 log = structlog.get_logger(__name__)
@@ -66,11 +67,11 @@ class RetentionWorker:
     async def run(self) -> None:
         """Run forever. Cancel the task to stop."""
         await self._sleep(self._first_delay)
-        while True:
-            try:
-                await self.purge_once()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:  # noqa: BLE001 - logged, and retried at the next interval
-                log.error("retention_purge_failed", error=type(exc).__name__, detail=str(exc)[:200])
-            await self._sleep(self._interval)
+
+        async def attempt() -> float:
+            await self.purge_once()
+            return self._interval
+
+        await run_forever(
+            attempt, sleep=self._sleep, failure="retention_purge_failed", retry_in=self._interval
+        )

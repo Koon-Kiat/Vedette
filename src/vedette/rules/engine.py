@@ -17,11 +17,12 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
-from vedette.enrich.lexical import lexical_features
 from vedette.enrich.model import EnrichedEvent
 from vedette.rules import prefilter
 from vedette.rules.allowlist import Allowlist
-from vedette.rules.model import Finding, RuleSpec, bucket
+from vedette.rules.model import RuleSpec, bucket
+from vedette.shared.models import Finding
+from vedette.shared.names import lexical_features
 from vedette.sources.base import DnsEvent
 
 _BLOCKED = "blocked"

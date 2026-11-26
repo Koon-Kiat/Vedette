@@ -10,7 +10,7 @@ import pytest
 from tests.digest_fixture import PROFILES, _event
 from tests.integration.web_helpers import NOW, logged_in
 from tests.web_fixture import build_web_fixture
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 from vedette.storage.health import HealthCheck, HealthStore
 from vedette.storage.live import LiveQueries
 from vedette.storage.store import Store

@@ -21,7 +21,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 
 #: Matched anywhere inside a label.
 ANYWHERE = frozenset(

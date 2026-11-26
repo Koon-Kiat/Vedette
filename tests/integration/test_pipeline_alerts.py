@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import socket
 from pathlib import Path
 from typing import Any
 
@@ -10,51 +9,29 @@ import httpx
 import pytest
 import respx
 
-from tests.integration.conftest import wait_until
-from tests.integration.fake_nextdns import API_KEY, FakeNextDns
-from tests.unit.test_reference_parsing import tranco_zip
-from vedette.config import load_settings
-from vedette.pipeline.runner import Pipeline
+from tests.integration.conftest import pipeline_env, running_pipeline, wait_until
+from tests.integration.fake_nextdns import FakeNextDns
 
 NTFY = "https://ntfy.example/"
 
 
-def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port: int = sock.getsockname()[1]
-        return port
-
-
 @pytest.fixture
 def settings_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, router: respx.MockRouter) -> int:
-    port = free_port()
-    for name, value in {
-        "NEXTDNS_API_KEY": API_KEY,
-        "VEDETTE_STORAGE__DATABASE_URL": f"sqlite+aiosqlite:///{tmp_path / 'p.db'}",
-        "VEDETTE_PROFILES": '[{"id": "abc123", "label": "router"}]',
-        "VEDETTE_INGEST__PAGE_SIZE": "10",
-        "VEDETTE_INGEST__BACKFILL_DAYS": "36500",
-        "VEDETTE_ENRICH__POPULARITY__URL": "https://lists.test/top.zip",
-        "VEDETTE_ENRICH__RDAP__ENABLED": "false",
-        "VEDETTE_ENRICH__THREAT_INTEL__FEEDS": '[{"name": "phish", "url": "https://feeds.test/p.txt"}]',
-        "VEDETTE_RULES__LEARNING_DAYS": "0",
-        "VEDETTE_LLM__BASE_URL": "http://ollama.test",
-        "VEDETTE_NOTIFY__CHANNEL": "ntfy",
-        "VEDETTE_NOTIFY__NTFY__URL": "https://ntfy.example",
-        "NTFY_TOPIC": "pipeline-test",
-        "VEDETTE_NOTIFY__QUIET_HOURS": "00:00-00:00",
-        "VEDETTE_NOTIFY__ANALYSIS_WAIT_SECONDS": "0",
-        # The fake server's events are from 2026-03-15, far in the past.
-        "VEDETTE_NOTIFY__ALERT_MAX_AGE_MINUTES": "10000000",
-        "VEDETTE_HEALTH__HEALTHZ_PORT": str(port),
-    }.items():
-        monkeypatch.setenv(name, value)
-    router.get("https://lists.test/top.zip").mock(
-        return_value=httpx.Response(200, content=tranco_zip("1,site1.example\r\n"))
-    )
-    router.get("https://feeds.test/p.txt").mock(
-        return_value=httpx.Response(200, text="site3.example\n")
+    port = pipeline_env(
+        monkeypatch,
+        router,
+        f"sqlite+aiosqlite:///{tmp_path / 'p.db'}",
+        findings=True,
+        extra={
+            "VEDETTE_LLM__BASE_URL": "http://ollama.test",
+            "VEDETTE_NOTIFY__CHANNEL": "ntfy",
+            "VEDETTE_NOTIFY__NTFY__URL": "https://ntfy.example",
+            "NTFY_TOPIC": "pipeline-test",
+            "VEDETTE_NOTIFY__QUIET_HOURS": "00:00-00:00",
+            "VEDETTE_NOTIFY__ANALYSIS_WAIT_SECONDS": "0",
+            # The fake server's events are from 2026-03-15, far in the past.
+            "VEDETTE_NOTIFY__ALERT_MAX_AGE_MINUTES": "10000000",
+        },
     )
     router.post("http://ollama.test/api/chat").mock(side_effect=httpx.ConnectError("no model"))
     return port
@@ -74,9 +51,7 @@ async def test_a_listed_domain_reaches_ntfy_as_a_critical_alert(
 ) -> None:
     server.add_entries(10)  # entry 3 is an allowed query under site3.example
     ntfy = router.post(NTFY).mock(return_value=httpx.Response(200, json={}))
-    stop = asyncio.Event()
-    task = asyncio.create_task(Pipeline(load_settings()).run(stop))
-    try:
+    async with running_pipeline():
 
         def threat_alerts() -> list[dict[str, Any]]:
             # The fake server's events are months old, so the health monitor may
@@ -98,9 +73,6 @@ async def test_a_listed_domain_reaches_ntfy_as_a_critical_alert(
                 return False
 
         await wait_until(healthy, timeout=10)
-    finally:
-        stop.set()
-        await asyncio.wait_for(task, timeout=10)
 
     (sent,) = threat_alerts()
     assert sent["topic"] == "pipeline-test"

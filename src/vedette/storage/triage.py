@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from vedette.rules.allowlist import AllowlistEntry
+from vedette.shared.models import AllowlistEntry
 from vedette.storage.models import allowlist, audit_log, findings
 from vedette.storage.store import StoredFinding, finding_from_row
 

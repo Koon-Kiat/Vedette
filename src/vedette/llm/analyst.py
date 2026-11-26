@@ -26,8 +26,9 @@ from vedette.llm.fallback import template_analysis
 from vedette.llm.guards import enforce_floor, sanitize_model_text, slug
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
 from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
-from vedette.llm.schema import RESPONSE_SCHEMA, Analysis, Verdict, parse_verdicts
+from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules.model import RuleSpec
+from vedette.shared.models import Analysis, Verdict
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.store import StoredFinding
 

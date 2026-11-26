@@ -18,15 +18,14 @@ from vedette.notify.channels import (
     DiscordChannel,
     EmailChannel,
     NtfyChannel,
-    OutgoingMessage,
     escape_discord,
 )
-from vedette.rules.model import Severity
+from vedette.shared.models import OutgoingMessage, Severity
 
 TOPIC = "vedette-topic-not-real"
-TOKEN = "tk_not_a_real_token"  # noqa: S105 - fake value for these tests
+TOKEN = "tk_not_a_real_token"
 WEBHOOK = "https://discord.com/api/webhooks/123456789/not-a-real-webhook-token"
-PASSWORD = "not-a-real-password"  # noqa: S105 - fake value for these tests
+PASSWORD = "not-a-real-password"
 
 
 def message(body: str = "Body line one.\nBody line two.", **kw: Any) -> OutgoingMessage:

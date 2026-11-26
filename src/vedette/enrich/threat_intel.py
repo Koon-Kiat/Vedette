@@ -10,14 +10,14 @@ refresh that fails or comes back empty keeps the previous entries.
 
 from collections.abc import Iterable, Iterator, Sequence
 from datetime import datetime, timedelta
-from typing import Literal
 from urllib.parse import urlsplit
 
 import httpx
 import structlog
-from pydantic import BaseModel, ConfigDict, Field
 
+from vedette.config import Feed
 from vedette.enrich.fetch import ReferenceFetchError, fetch_limited, is_domain
+from vedette.shared.names import candidates
 from vedette.storage.reference import ReferenceStore
 
 log = structlog.get_logger(__name__)
@@ -28,23 +28,6 @@ RETRY_AFTER_FAILURE = timedelta(hours=1)
 _CACHE_LIMIT = 200_000
 
 type Match = tuple[tuple[str, ...], str]
-
-
-class Feed(BaseModel):
-    """One threat-intelligence feed.
-
-    Attributes:
-        name: Short name recorded in findings.
-        url: Where to download it.
-        format: ``domains`` (one per line), ``hosts`` (address then name) or
-            ``urls`` (the host name is extracted).
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
-    url: str = Field(min_length=1)
-    format: Literal["domains", "hosts", "urls"] = "domains"
 
 
 def parse_feed(text: str, fmt: str) -> Iterator[str]:
@@ -66,17 +49,6 @@ def parse_feed(text: str, fmt: str) -> Iterator[str]:
         candidate = candidate.lower().rstrip(".")
         if is_domain(candidate):
             yield candidate
-
-
-def candidates(fqdn: str, root: str | None) -> list[str]:
-    """The name and each parent domain down to its root, most specific first."""
-    labels = fqdn.split(".")
-    if root and (fqdn == root or fqdn.endswith("." + root)):
-        shortest = root.count(".") + 1
-    else:
-        shortest = 2
-    shortest = min(shortest, len(labels))
-    return [".".join(labels[start:]) for start in range(len(labels) - shortest + 1)]
 
 
 class ThreatIntel:

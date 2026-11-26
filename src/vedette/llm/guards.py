@@ -2,8 +2,8 @@
 
 import re
 
-from vedette.notify.defang import clean_text, defang_text
-from vedette.rules.model import Severity
+from vedette.shared.defang import clean_text, defang_text
+from vedette.shared.models import Severity
 
 _TAG = re.compile(r"<[^>]*>")
 _MARKDOWN_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")

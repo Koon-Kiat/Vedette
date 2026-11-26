@@ -14,9 +14,8 @@ from vedette.llm import analyst as analyst_module
 from vedette.llm.analyst import Analyst
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
 from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
-from vedette.llm.schema import Analysis
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Analysis, Finding, Severity
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.store import Store, StoredFinding
 

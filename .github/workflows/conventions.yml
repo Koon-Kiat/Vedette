@@ -1,0 +1,55 @@
+name: Conventions
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conventions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pull-request:
+    name: pull request title, description and commits
+    runs-on: ubuntu-latest
+    env:
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      NUMBER: ${{ github.event.pull_request.number }}
+      TITLE: ${{ github.event.pull_request.title }}
+      BODY: ${{ github.event.pull_request.body }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # Dependabot's descriptions quote upstream release notes, so its title is
+      # checked without them.
+      - name: Title
+        if: env.AUTHOR == 'dependabot[bot]'
+        run: python3 tools/conventions.py pr --number "$NUMBER" --title "$TITLE"
+      - name: Title and description
+        if: env.AUTHOR != 'dependabot[bot]'
+        shell: bash
+        run: printf '%s' "$BODY" | python3 tools/conventions.py pr --number "$NUMBER" --title "$TITLE" --body-file -
+      - name: Commit messages
+        shell: bash
+        run: git log --format=%x1e%h%n%B "$BASE..$HEAD" | python3 tools/conventions.py commits -
+
+  lock-age:
+    name: releases added to uv.lock are 14 days old
+    runs-on: ubuntu-latest
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Compare with the base branch's lock file
+        shell: bash
+        run: |
+          git show "$BASE:uv.lock" > "$RUNNER_TEMP/base-uv.lock"
+          python3 tools/lock_age.py "$RUNNER_TEMP/base-uv.lock" uv.lock

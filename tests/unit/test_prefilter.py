@@ -10,7 +10,7 @@ from vedette.rules import prefilter
 from vedette.rules.allowlist import Allowlist
 from vedette.rules.engine import RuleEngine
 from vedette.rules.loader import load_rules
-from vedette.rules.model import Finding, Severity
+from vedette.shared.models import Finding, Severity
 
 
 @pytest.mark.parametrize(

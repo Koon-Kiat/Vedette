@@ -9,10 +9,11 @@ import asyncio
 import contextlib
 import signal
 import socket
-from collections.abc import Iterator, Sequence
+from collections.abc import Coroutine, Iterator, Sequence
 from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -307,17 +308,7 @@ class Pipeline:
                     ).run()
                 )
                 log.info("heartbeat_enabled", minutes=settings.health.heartbeat_minutes)
-            dashboard = _dashboard(settings, store, specs, tz)
-            async with asyncio.TaskGroup() as group:
-                tasks = [group.create_task(worker) for worker in workers]
-                if dashboard is not None:
-                    server, sock = dashboard
-                    group.create_task(server.serve(sockets=[sock]), name="dashboard")
-                await stop.wait()
-                if dashboard is not None:
-                    dashboard[0].should_exit = True
-                for task in tasks:
-                    task.cancel()
+            await _serve_until(stop, workers, _dashboard(settings, store, specs, tz))
         finally:
             if healthz is not None:
                 healthz.close()
@@ -331,6 +322,24 @@ class Pipeline:
             await web.aclose()
             await source.aclose()
             await store.close()
+
+
+async def _serve_until(
+    stop: asyncio.Event,
+    workers: Sequence[Coroutine[Any, Any, None]],
+    dashboard: tuple[uvicorn.Server, socket.socket] | None,
+) -> None:
+    """Run the workers and the dashboard until ``stop`` is set, then cancel them."""
+    async with asyncio.TaskGroup() as group:
+        tasks = [group.create_task(worker) for worker in workers]
+        if dashboard is not None:
+            server, sock = dashboard
+            group.create_task(server.serve(sockets=[sock]), name="dashboard")
+        await stop.wait()
+        if dashboard is not None:
+            dashboard[0].should_exit = True
+        for task in tasks:
+            task.cancel()
 
 
 class _DashboardServer(uvicorn.Server):

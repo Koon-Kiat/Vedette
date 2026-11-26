@@ -442,7 +442,12 @@ def _tunnel_findings(detection: list[dict[str, Any]]) -> list[str]:
         out.append(
             f"- The tunnel-like rule catches {caught} of {slow['items']} short slow tunnels: it "
             "needs more than 30 different long subdomains within 10 minutes, and these send 20 "
-            "in all." + (f" {other} were flagged by another rule." if other > 0 else "")
+            "in all."
+            + (
+                f" {other} {'was' if other == 1 else 'were'} flagged by another rule."
+                if other > 0
+                else ""
+            )
         )
     sustained = _by_name(detection, "Tunnels, a lookup a minute for 2 hours")
     if sustained and sustained["items"]:

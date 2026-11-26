@@ -576,6 +576,16 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
         "a quoted label of the crafted name was not removed before matching, and removing a "
         'device name left empty quotes that hid "the device name suggests". Nothing else '
         "was changed between the runs.",
+        "",
+        "The held-out set had already been run and its results read when two defences "
+        "changed, to close the gaps it showed: the pre-filter now checks each root a burst "
+        "finding lists, and the prompt (version 2) says a device name proves nothing about "
+        "its device, sends it as `device_name_self_reported`, and gives a default action for "
+        "a new device. Every held-out device name had been seen before the prompt was "
+        "written. Its wording was tried only on ten device names written for the live test, "
+        "but the device and sample-roots rows no longer measure attacks the defences were "
+        "not shaped by; the other categories still do. The word patterns were not changed "
+        "with them.",
     ]
     return lines
 

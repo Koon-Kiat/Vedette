@@ -272,7 +272,7 @@ async def settle[T](calls: Iterable[Awaitable[T]]) -> list[T]:
 
 
 class RecordingClient(OllamaClient):
-    """An Ollama client that keeps every raw answer and how long it took.
+    """An Ollama client that keeps every request, raw answer and how long it took.
 
     Clients that share ``limit`` never have more calls in flight together than
     it allows, so batches can be asked concurrently up to the number of
@@ -283,6 +283,7 @@ class RecordingClient(OllamaClient):
         """Same arguments as :class:`OllamaClient`, and the shared call limit."""
         super().__init__(*args, **kwargs)
         self.answers: list[str] = []
+        self.requests: list[str] = []
         self.durations_ms: list[float] = []
         self._limit = limit or asyncio.Semaphore(1)
 
@@ -293,6 +294,7 @@ class RecordingClient(OllamaClient):
             content = await super().chat_json(system, user, schema)
             self.durations_ms.append((time.monotonic() - started) * 1000)
         self.answers.append(content)
+        self.requests.append(user)
         captured = _CAPTURE.get()
         if captured is not None:
             captured.append(content)

@@ -1,0 +1,814 @@
+# Gold set for the analyst's explanations: one synthetic finding per item, the
+# records around it, and what a good explanation says.
+#
+# Written before the context pack, the per-rule notes and the worked examples
+# were, and not changed after scores were read. Every item is a finding the
+# rules could raise; "world" is seeded into a scratch database so the analyst
+# reads it the way it reads the owner's records:
+#
+#   device:  id (null for a profile without devices), self-reported name,
+#            days since first seen, usual queries an hour (seeded over the
+#            day before, away from the finding)
+#   nearby:  roots the device looked up within five minutes of the finding
+#   domain:  top-sites rank (null: unranked), registration age in days, feeds
+#            listing it, other devices that looked it up, days since the
+#            profile first saw it
+#   earlier: statuses of earlier findings by the same rule on the same target
+#   history: statuses of the rule's other findings on the profile this month
+#   others:  other findings on the device within the hour, as [rule, target]
+#   events:  how many lookups the finding merges (default 1)
+#   at_hour: the hour of day it happened, UTC (default 14)
+#
+# expect: regular expressions, matched case-insensitively. "cause" must match
+# the summary or likely cause, "action" the recommended action; any one of the
+# alternatives is enough. Domain names and the finding's target are taken out
+# of the answer first, so a cause has to be said in words, and patterns avoid
+# words the rule's own description uses ("check", "before", "server"). "forbidden" lists claims that would be wrong here, on
+# top of the general checks for invented facts.
+
+names:
+  # --- new-device -------------------------------------------------------------
+  - id: nd-phone
+    rule: new-device
+    kind: uncertain
+    scenario: A new Android phone joined and set itself up.
+    target: dev-phone-7
+    device: {id: dev-phone-7, name: Galaxy S24, days: 0, per_hour: 0}
+    evidence: {device_id: dev-phone-7, device_name: Galaxy S24, client_ip: 192.168.1.41, attribution: device}
+    nearby: [samsungcloud.com, samsungosp.com, googleapis.com, gstatic.com, play.googleapis.com]
+    expect:
+      cause: ['new (android )?(phone|device|smartphone)|phone (has )?(joined|connected)|joined the network|connected to (the|your) network']
+      action: ['recogni[sz]e|remove|unknown device|change (the )?(wi-?fi )?password']
+      forbidden: ['\b(is|was) (your|the owner.s|a known|an approved)\b', 'already (been )?(approved|known|seen)']
+
+  - id: nd-churn
+    rule: new-device
+    kind: benign
+    scenario: >-
+      A router profile reports client addresses, not devices; a familiar
+      device came back with a new private address, as many such findings did
+      this month and the owner marked them benign.
+    target: 192.168.1.73
+    device: null
+    evidence: {device_id: null, device_name: null, client_ip: 192.168.1.73, attribution: unavailable}
+    nearby: [icloud.com, apple.com, mzstatic.com]
+    history: {benign: 6, acknowledged: 1}
+    expect:
+      cause: ['address (change|churn|rotation)|new (ip|client|local) address|dhcp|private (wi-?fi )?address|random(ised|ized|ises|izes) (its )?(mac|address)|(rejoined|reconnected)|(earlier|previous|similar) (findings|alerts)|marked (them )?benign']
+      action: ['recogni[sz]e|router|dhcp|reserv|known devices|mark (it )?(as )?benign|nothing|no action']
+
+  - id: nd-plug
+    rule: new-device
+    kind: benign
+    scenario: A smart plug on a Tuya cloud was added.
+    target: dev-esp-3a7f
+    device: {id: dev-esp-3a7f, name: ESP_3A7F21, days: 0, per_hour: 0}
+    evidence: {device_id: dev-esp-3a7f, device_name: ESP_3A7F21, client_ip: 192.168.1.88, attribution: device}
+    nearby: [tuyaeu.com, a1.tuyaeu.com, pool.ntp.org]
+    expect:
+      cause: ['smart (plug|home|device|switch|bulb|socket)|iot|internet of things|tuya']
+      action: ['recogni[sz]e|remove|unknown|added|set ?up|install']
+
+  - id: nd-guest
+    rule: new-device
+    kind: uncertain
+    scenario: An evening visitor's phone streaming and on social media.
+    target: dev-iphone-g
+    device: {id: dev-iphone-g, name: iPhone, days: 0, per_hour: 0}
+    evidence: {device_id: dev-iphone-g, device_name: iPhone, client_ip: 192.168.1.112, attribution: device}
+    nearby: [instagram.com, cdninstagram.com, netflix.com, nflxvideo.net, apple.com]
+    expect:
+      cause: ['guest|visitor|new (phone|device|iphone)|someone.s (phone|device)|personal (phone|device)|joined|connected']
+      action: ['recogni[sz]e|remove|guest network|unknown']
+      forbidden: ['\b(is|was) (your|the owner.s)\b']
+
+  - id: nd-tv
+    rule: new-device
+    kind: benign
+    scenario: A new LG television was connected.
+    target: dev-lgtv
+    device: {id: dev-lgtv, name: LG webOS TV, days: 0, per_hour: 0}
+    evidence: {device_id: dev-lgtv, device_name: LG webOS TV, client_ip: 192.168.1.60, attribution: device}
+    nearby: [lgtvsdp.com, lgappstv.com, lge.com, netflix.com]
+    expect:
+      cause: ['\btv\b|television|smart tv|webos|\blg\b']
+      action: ['recogni[sz]e|remove|unknown|set ?up|added']
+
+  - id: nd-night
+    rule: new-device
+    kind: suspicious
+    scenario: >-
+      A nameless device appeared at night, checked its public address and
+      reached unranked domains.
+    target: dev-unknown-03
+    device: {id: dev-unknown-03, name: null, days: 0, per_hour: 0}
+    evidence: {device_id: dev-unknown-03, device_name: null, client_ip: 192.168.1.203, attribution: device}
+    nearby: [api.ipify.org, ifconfig.me, kq3vz-relay.info]
+    at_hour: 3
+    expect:
+      cause: ['unrecogni[sz]ed|unauthori[sz]ed|intruder|public (ip|address)|ip (address )?(lookup|check)|(checked|checks|looked up|finding|find) (its |the )?(external|public)|at night|suspicious']
+      action: ['remove|block|disconnect|change (the )?(wi-?fi )?password|recogni[sz]e|for (malware|adware|unauthori[sz]ed software)']
+
+  # --- young-domain -----------------------------------------------------------
+  - id: yd-phish
+    rule: young-domain
+    kind: suspicious
+    scenario: A fake sign-in page opened from a webmail link.
+    target: secure-account-verify.com
+    device: {id: dev-laptop-a, name: Anna laptop, days: 200, per_hour: 60}
+    evidence: {fqdn: login.secure-account-verify.com, root: secure-account-verify.com, status: default, domain_age_days: 3, popularity_rank: null}
+    nearby: [outlook.live.com, office.com, microsoftonline.com]
+    domain: {rank: null, age_days: 3, devices: 0, since_days: 0}
+    expect:
+      cause: ['phish|fake (log ?in|sign[- ]?in|page)|credential|link in (an |the )?(e-?mail|message)|e-?mail link|steal']
+      action: ['(do not|don.t|never) (enter|type|use|log)|change (the |your )?password|block|report|denylist|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: yd-shop
+    rule: young-domain
+    kind: uncertain
+    scenario: A new online candle shop with a card checkout.
+    target: harbour-candles.shop
+    device: {id: dev-phone-b, name: Ben phone, days: 150, per_hour: 40}
+    evidence: {fqdn: www.harbour-candles.shop, root: harbour-candles.shop, status: default, domain_age_days: 12, popularity_rank: null}
+    nearby: [stripe.com, js.stripe.com, shopifycdn.com, instagram.com]
+    domain: {rank: null, age_days: 12, devices: 0, since_days: 0}
+    expect:
+      cause: ['new (online )?(shop|store|business|site|website)|recently (launched|registered|created|set up)|online (shop|store)|shopping|checkout']
+      action: ['verify|before (buying|paying|entering|ordering)|reviews|legitima|block|research']
+
+  - id: yd-saas
+    rule: young-domain
+    kind: uncertain
+    scenario: A newly launched invoicing tool used during working hours.
+    target: tidyly-invoicing.com
+    device: {id: dev-work-c, name: Work PC, days: 300, per_hour: 90}
+    evidence: {fqdn: app.tidyly-invoicing.com, root: tidyly-invoicing.com, status: default, domain_age_days: 25, popularity_rank: null}
+    nearby: [slack.com, zoom.us, atlassian.net, google.com]
+    domain: {rank: null, age_days: 25, devices: 1, since_days: 2}
+    at_hour: 11
+    expect:
+      cause: ['new (web )?(service|tool|app|application|software|saas|site)|work|business|invoic|recently (launched|registered|created)']
+      action: ['verify|ask|confirm|\bexpected\b|legitima|whether (it|this) (is )?(\bexpected\b|used|known)']
+
+  - id: yd-download
+    rule: young-domain
+    kind: suspicious
+    scenario: A fake driver download site.
+    target: fresh-driverhub.net
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {fqdn: dl.fresh-driverhub.net, root: fresh-driverhub.net, status: default, domain_age_days: 6, popularity_rank: null}
+    nearby: [bing.com, fresh-driverhub.net]
+    domain: {rank: null, age_days: 6, devices: 0, since_days: 0}
+    expect:
+      cause: ['download|fake (software|driver|update|installer)|malware|malicious (file|software)|driver']
+      action: ['scan|(do not|don.t) (run|open|install)|delete|anti-?virus|malware|remove|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: yd-ads
+    rule: young-domain
+    kind: benign
+    scenario: A new ad-tracking domain loaded by a news page among other trackers.
+    target: bright-metric-ads.com
+    device: {id: dev-tab-e, name: Kitchen tablet, days: 250, per_hour: 30}
+    evidence: {fqdn: track.bright-metric-ads.com, root: bright-metric-ads.com, status: default, domain_age_days: 15, popularity_rank: null}
+    nearby: [bbc.co.uk, doubleclick.net, googlesyndication.com, taboola.com, outbrain.com]
+    domain: {rank: null, age_days: 15, devices: 2, since_days: 5}
+    expect:
+      cause: ['advert|\bads?\b|ad (network|server)|track(er|ing)|analytics|loaded by (a |the )?(web ?)?(page|site)|news (site|page)']
+      action: ['block|ad ?block|denylist|nothing|monitor|no action']
+
+  - id: yd-beacon
+    rule: young-domain
+    kind: suspicious
+    scenario: A storage box calling a two-day-old domain again and again.
+    target: kloudsyncer.net
+    device: {id: dev-nas-f, name: NAS, days: 500, per_hour: 20}
+    evidence: {fqdn: api.kloudsyncer.net, root: kloudsyncer.net, status: default, domain_age_days: 2, popularity_rank: null}
+    events: 48
+    nearby: []
+    domain: {rank: null, age_days: 2, devices: 0, since_days: 2}
+    expect:
+      cause: ['malware|command|\bc2\b|c&c|beacon|compromis|infect|regular(ly)?|repeated(ly)?|automat']
+      action: ['scan|isolate|disconnect|firmware|update|reset|block|for (malware|adware|unauthori[sz]ed software)']
+
+  # --- threat-intel-allowed ---------------------------------------------------
+  - id: ti-phish
+    rule: threat-intel-allowed
+    kind: suspicious
+    scenario: A listed phishing page reached from a webmail message.
+    target: pay-verify-account.com
+    device: {id: dev-laptop-a, name: Anna laptop, days: 200, per_hour: 60}
+    evidence: {fqdn: secure.pay-verify-account.com, root: pay-verify-account.com, status: default, threat_feeds: [phishing_army], threat_match: pay-verify-account.com, popularity_rank: null}
+    nearby: [mail.google.com, googleusercontent.com]
+    domain: {rank: null, age_days: null, feeds: [phishing_army], devices: 0, since_days: 0}
+    expect:
+      cause: ['phish|fake (log ?in|sign[- ]?in|page|site)|credential|e-?mail']
+      action: ['password|block|denylist|scan|(do not|don.t) (enter|type)|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ti-dropper
+    rule: threat-intel-allowed
+    kind: suspicious
+    scenario: A listed malware download host.
+    target: updatepro.top
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {fqdn: files.updatepro.top, root: updatepro.top, status: default, threat_feeds: [cert_pl], threat_match: updatepro.top, popularity_rank: null}
+    nearby: [files.updatepro.top]
+    domain: {rank: null, age_days: null, feeds: [cert_pl], devices: 0, since_days: 0}
+    expect:
+      cause: ['malware|malicious (download|file|software|site|domain)|download|infect']
+      action: ['scan|delete|isolate|block|denylist|disconnect|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ti-malvertising
+    rule: threat-intel-allowed
+    kind: suspicious
+    scenario: A listed prize scam opened by an advert redirect.
+    target: win-prize-now.click
+    device: {id: dev-phone-b, name: Ben phone, days: 150, per_hour: 40}
+    evidence: {fqdn: win-prize-now.click, root: win-prize-now.click, status: default, threat_feeds: [phishing_army], threat_match: win-prize-now.click, popularity_rank: null}
+    nearby: [adnxs.com, doubleclick.net, popads.net]
+    domain: {rank: null, age_days: null, feeds: [phishing_army], devices: 0, since_days: 0}
+    expect:
+      cause: ['advert|\bads?\b|redirect|malvertis|pop-?up|scam|prize|phish']
+      action: ['block|ad ?block|close|scan|(do not|don.t) (enter|click)|denylist|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ti-camera
+    rule: threat-intel-allowed
+    kind: suspicious
+    scenario: A camera reaching a listed mining relay.
+    target: xmr-pool-relay.net
+    device: {id: dev-cam-g, name: Garden camera, days: 600, per_hour: 15}
+    evidence: {fqdn: xmr-pool-relay.net, root: xmr-pool-relay.net, status: default, threat_feeds: [cert_pl], threat_match: xmr-pool-relay.net, popularity_rank: null}
+    events: 20
+    nearby: []
+    domain: {rank: null, age_days: null, feeds: [cert_pl], devices: 0, since_days: 1}
+    expect:
+      cause: ['min(ing|er)|crypto|monero|xmr|botnet|compromis|malware|infect']
+      action: ['firmware|reset|isolate|disconnect|update|password|block|factory|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ti-repeat
+    rule: threat-intel-allowed
+    kind: suspicious
+    scenario: A laptop contacting a listed domain all day long.
+    target: sync-update-check.info
+    device: {id: dev-laptop-h, name: Study laptop, days: 300, per_hour: 70}
+    evidence: {fqdn: sync-update-check.info, root: sync-update-check.info, status: default, threat_feeds: [phishing_army, cert_pl], threat_match: sync-update-check.info, popularity_rank: null}
+    events: 30
+    nearby: []
+    domain: {rank: null, age_days: null, feeds: [phishing_army, cert_pl], devices: 0, since_days: 1}
+    expect:
+      cause: ['malware|infect|compromis|repeated(ly)?|persistent|automat|regular(ly)?|background']
+      action: ['scan|isolate|disconnect|remove|anti-?virus|reinstall|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ti-typo
+    rule: threat-intel-allowed
+    kind: suspicious
+    scenario: A single visit to a listed misspelling of a search engine.
+    target: gooogle-search.com
+    device: {id: dev-tab-e, name: Kitchen tablet, days: 250, per_hour: 30}
+    evidence: {fqdn: www.gooogle-search.com, root: gooogle-search.com, status: default, threat_feeds: [phishing_army], threat_match: gooogle-search.com, popularity_rank: null}
+    nearby: [google.com]
+    domain: {rank: null, age_days: null, feeds: [phishing_army], devices: 0, since_days: 0}
+    expect:
+      cause: ['typo|mistyp|misspell|look-?alike|imitat|impersonat|fake (search|google|site)|phish']
+      action: ['block|denylist|bookmark|scan|check (the )?(device|browser)|(do not|don.t) (enter|type)|for (malware|adware|unauthori[sz]ed software)']
+
+  # --- dga-like ---------------------------------------------------------------
+  - id: dl-malware
+    rule: dga-like
+    kind: suspicious
+    scenario: A desktop reaching a random domain after checking its public address.
+    target: kq7vb2mtrpzlw.com
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {fqdn: kq7vb2mtrpzlw.com, root: kq7vb2mtrpzlw.com, status: default}
+    nearby: [api.ipify.org, kq7vb2mtrpzlw.com]
+    domain: {rank: null, age_days: null, devices: 0, since_days: 0}
+    expect:
+      cause: ['generat|\bdga\b|malware|command|\bc2\b|botnet|infect|compromis']
+      action: ['scan|isolate|anti-?virus|malware|disconnect|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: dl-adtech
+    rule: dga-like
+    kind: benign
+    scenario: A random-named ad server loaded by a news page among ad networks.
+    target: qx7vk2pzm9lt.net
+    device: {id: dev-tab-e, name: Kitchen tablet, days: 250, per_hour: 30}
+    evidence: {fqdn: qx7vk2pzm9lt.net, root: qx7vk2pzm9lt.net, status: default}
+    nearby: [theguardian.com, doubleclick.net, adnxs.com, taboola.com, criteo.com]
+    domain: {rank: null, age_days: null, devices: 3, since_days: 40}
+    expect:
+      cause: ['advert|\bads?\b|ad (network|server|exchange)|track(er|ing)|web ?(page|site)|news (site|page)|redirect']
+      action: ['block|ad ?block|nothing|monitor|no action|denylist']
+
+  - id: dl-vacuum
+    rule: dga-like
+    kind: benign
+    scenario: >-
+      A robot vacuum's cloud endpoint with a random name, used every day for
+      months and acknowledged twice before.
+    target: a3k9xq2v7.com
+    device: {id: dev-vac-i, name: Robot vacuum, days: 220, per_hour: 6}
+    evidence: {fqdn: mqtt.a3k9xq2v7.com, root: a3k9xq2v7.com, status: default}
+    nearby: []
+    domain: {rank: null, age_days: null, devices: 1, since_days: 200}
+    earlier: {acknowledged: 2}
+    expect:
+      cause: ['vendor|manufacturer|cloud|regular(ly)?|every day|daily|for months|long (time|period)|seen (it |this )?before|acknowledged|recurr|earlier (findings|alerts)|previous(ly)? (findings|alerts|seen|acknowledged|flagged)']
+      action: ['vendor|manufacturer|firmware|allowlist|mark (it )?(as )?benign|nothing|\bexpected\b|no action']
+
+  - id: dl-goz
+    rule: dga-like
+    kind: suspicious
+    scenario: A long generated name next to a burst of new unknown domains.
+    target: 1t9mwr11wwnkx7138mc1timys7l.com
+    device: {id: dev-laptop-h, name: Study laptop, days: 300, per_hour: 70}
+    evidence: {fqdn: 1t9mwr11wwnkx7138mc1timys7l.com, root: 1t9mwr11wwnkx7138mc1timys7l.com, status: default}
+    nearby: [864tmsznhml81bqcxsgxgr7r.net, 3kwwwzfaau9f0f1t.net]
+    others: [[dga-burst, dev-laptop-h]]
+    domain: {rank: null, age_days: null, devices: 0, since_days: 0}
+    expect:
+      cause: ['malware|generat|\bdga\b|botnet|infect|command|burst']
+      action: ['scan|isolate|disconnect|anti-?virus|malware|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: dl-miner
+    rule: dga-like
+    kind: suspicious
+    scenario: A random name next to blocked mining pools.
+    target: a9f2k3xq1.top
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {fqdn: a9f2k3xq1.top, root: a9f2k3xq1.top, status: default}
+    nearby: [pool.minexmr.com, xmrpool.eu, a9f2k3xq1.top]
+    others: [[blocked-burst, dev-desk-d]]
+    domain: {rank: null, age_days: null, devices: 0, since_days: 0}
+    expect:
+      cause: ['min(ing|er)|crypto|monero|xmr|malware|infect']
+      action: ['scan|remove|anti-?virus|task manager|process|uninstall|malware|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: dl-mailtrack
+    rule: dga-like
+    kind: benign
+    scenario: A random-named link-tracking domain right after opening webmail.
+    target: t7xq2m9vzk.com
+    device: {id: dev-laptop-a, name: Anna laptop, days: 200, per_hour: 60}
+    evidence: {fqdn: click.t7xq2m9vzk.com, root: t7xq2m9vzk.com, status: default}
+    nearby: [mail.google.com, googleusercontent.com, mailchimp.com]
+    domain: {rank: null, age_days: null, devices: 1, since_days: 30}
+    expect:
+      cause: ['e-?mail|newsletter|track(ing|ed) (link|pixel)|link in|marketing|click track']
+      action: ['block|nothing|monitor|no action|scan if|unsubscribe|\bexpected\b']
+
+  # --- tunnel-like ------------------------------------------------------------
+  - id: tl-sophos
+    rule: tunnel-like
+    kind: benign
+    scenario: Sophos endpoint protection looking up file hashes as subdomains.
+    target: sophosxl.net
+    device: {id: dev-work-c, name: Work PC, days: 300, per_hour: 90}
+    evidence: {root: sophosxl.net, unique_subdomains: 46, window_minutes: 10, sample_fqdn: 5b2f9a0c41d7e83a6c1f0b9d27e4a8c3.2.sxl.sophosxl.net}
+    nearby: [sophos.com, sophosupd.com, central.sophos.com]
+    domain: {rank: null, age_days: 7300, devices: 3, since_days: 400}
+    expect:
+      cause: ['sophos|anti-?virus|security (software|product|suite|tool)|endpoint (protection|security)|reputation|file (hash|scan|check)']
+      action: ['sophos|anti-?virus|security (software|product)|which (program|app|software|process)|nothing|\bexpected\b|allowlist']
+
+  - id: tl-exfil
+    rule: tunnel-like
+    kind: suspicious
+    scenario: Data leaving an office PC through a five-day-old domain.
+    target: kq3vz-relay.info
+    device: {id: dev-office-j, name: Office PC, days: 500, per_hour: 80}
+    evidence: {root: kq3vz-relay.info, unique_subdomains: 44, window_minutes: 5, sample_fqdn: 4f9a1c0e7b2d8f6a3c5e9b1d7f2a4c6e8b0d3f5a7c9e1b2d.4f6a8c0e2b4d.kq3vz-relay.info}
+    nearby: []
+    domain: {rank: null, age_days: 5, devices: 0, since_days: 0}
+    expect:
+      cause: ['tunnel|exfiltrat|smuggl|leak|steal|malware|data (out|leaving|sent)']
+      action: ['isolate|disconnect|scan|block|denylist|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: tl-dnsbl
+    rule: tunnel-like
+    kind: benign
+    scenario: A home mail server checking senders against a spam blocklist.
+    target: spamhaus.org
+    device: {id: dev-mail-k, name: Home mail server, days: 900, per_hour: 120}
+    evidence: {root: spamhaus.org, unique_subdomains: 38, window_minutes: 10, sample_fqdn: 7.2.0.192.zen.spamhaus.org}
+    nearby: [gmail-smtp-in.l.google.com, outlook.com, protection.outlook.com]
+    domain: {rank: 25000, age_days: 9000, devices: 1, since_days: 600}
+    expect:
+      cause: ['block ?list|black ?list|dnsbl|\brbl\b|spam (filter|check|block)|mail server|reputation check|sender']
+      action: ['\bexpected\b|mail server|spam filter|allowlist|mark (it )?(as )?benign|nothing|no action|raise the threshold']
+
+  - id: tl-after-download
+    rule: tunnel-like
+    kind: suspicious
+    scenario: Tunnelling right after a young download site was reached.
+    target: cdn-syncpoint.net
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {root: cdn-syncpoint.net, unique_subdomains: 52, window_minutes: 10, sample_fqdn: 0a9f3c5e7b1d2f4a6c8e0b2d4f6a8c0e.31.cdn-syncpoint.net}
+    nearby: [fresh-driverhub.net]
+    others: [[young-domain, fresh-driverhub.net]]
+    domain: {rank: null, age_days: 9, devices: 0, since_days: 0}
+    expect:
+      cause: ['malware|download|infect|tunnel|exfiltrat|compromis']
+      action: ['isolate|disconnect|scan|reinstall|block|anti-?virus|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: tl-eset
+    rule: tunnel-like
+    kind: benign
+    scenario: ESET LiveGrid reputation lookups.
+    target: e5.sk
+    device: {id: dev-laptop-h, name: Study laptop, days: 300, per_hour: 70}
+    evidence: {root: e5.sk, unique_subdomains: 41, window_minutes: 10, sample_fqdn: a3f8c2d91b7e4f60.3.lu.e5.sk}
+    nearby: [eset.com, update.eset.com, edf.eset.com]
+    domain: {rank: 40000, age_days: 6000, devices: 2, since_days: 300}
+    expect:
+      cause: ['eset|anti-?virus|security (software|product|suite)|reputation|livegrid|file (hash|scan|check)']
+      action: ['eset|anti-?virus|security (software|product)|which (program|app|software)|nothing|\bexpected\b|allowlist']
+
+  - id: tl-acked
+    rule: tunnel-like
+    kind: benign
+    scenario: A recurring pattern the owner acknowledged three times before.
+    target: homelab-metrics.net
+    device: {id: dev-srv-l, name: Home server, days: 700, per_hour: 100}
+    evidence: {root: homelab-metrics.net, unique_subdomains: 35, window_minutes: 10, sample_fqdn: host-03.cpu-load-17.homelab-metrics.net}
+    nearby: [github.com, grafana.com]
+    domain: {rank: null, age_days: 1200, devices: 1, since_days: 150}
+    earlier: {acknowledged: 3}
+    expect:
+      cause: ['seen (it |this )?before|acknowledged|recurr|earlier (findings|alerts)|previous(ly)? (findings|alerts|seen|acknowledged|flagged)|monitoring|metrics']
+      action: ['mark (it )?(as )?benign|allowlist|identify|which (program|service|process)|\bexpected\b|nothing|no action']
+
+  # --- tunnel-slow ------------------------------------------------------------
+  - id: ts-sophos
+    rule: tunnel-slow
+    kind: benign
+    scenario: Sophos reputation lookups spread over hours.
+    target: sophosxl.net
+    device: {id: dev-laptop-a, name: Anna laptop, days: 200, per_hour: 60}
+    evidence: {root: sophosxl.net, unique_subdomains: 74, window_minutes: 360, sample_fqdn: 0e7b2d4f6a3c5e9b1d7f2a4c6e8b0d3f.4.sxl.sophosxl.net}
+    nearby: [sophos.com, sophosupd.com]
+    domain: {rank: null, age_days: 7300, devices: 3, since_days: 400}
+    expect:
+      cause: ['sophos|anti-?virus|security (software|product|suite|tool)|endpoint (protection|security)|reputation|file (hash|scan|check)']
+      action: ['sophos|anti-?virus|security (software|product)|which (program|app|software|process)|nothing|\bexpected\b|allowlist']
+
+  - id: ts-exfil
+    rule: tunnel-slow
+    kind: suspicious
+    scenario: A slow trickle of encoded data to a week-old domain.
+    target: qz-sync-relay.net
+    device: {id: dev-office-j, name: Office PC, days: 500, per_hour: 80}
+    evidence: {root: qz-sync-relay.net, unique_subdomains: 66, window_minutes: 360, sample_fqdn: 6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d.17.qz-sync-relay.net}
+    nearby: []
+    domain: {rank: null, age_days: 7, devices: 0, since_days: 0}
+    expect:
+      cause: ['tunnel|exfiltrat|smuggl|leak|steal|malware|slow|data (out|leaving|sent)']
+      action: ['isolate|disconnect|scan|block|denylist|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ts-dnsbl
+    rule: tunnel-slow
+    kind: benign
+    scenario: A mail server's blocklist lookups over a quiet afternoon.
+    target: spamhaus.org
+    device: {id: dev-mail-k, name: Home mail server, days: 900, per_hour: 120}
+    evidence: {root: spamhaus.org, unique_subdomains: 81, window_minutes: 360, sample_fqdn: 25.113.51.198.zen.spamhaus.org}
+    nearby: [gmail-smtp-in.l.google.com, mx.yahoo.com]
+    domain: {rank: 25000, age_days: 9000, devices: 1, since_days: 600}
+    expect:
+      cause: ['block ?list|black ?list|dnsbl|\brbl\b|spam (filter|check|block)|mail server|reputation check|sender']
+      action: ['\bexpected\b|mail server|spam filter|allowlist|mark (it )?(as )?benign|nothing|no action|raise the threshold']
+
+  - id: ts-tv
+    rule: tunnel-slow
+    kind: benign
+    scenario: A television sending viewing telemetry with IDs in its names.
+    target: tvinsights-acr.net
+    device: {id: dev-tv-m, name: Samsung TV, days: 400, per_hour: 25}
+    evidence: {root: tvinsights-acr.net, unique_subdomains: 62, window_minutes: 360, sample_fqdn: d41f9c2e7a0b3c5d.frame-1729.tvinsights-acr.net}
+    nearby: [samsungcloudsolution.com, samsungotn.net, netflix.com]
+    domain: {rank: null, age_days: 2500, devices: 1, since_days: 380}
+    expect:
+      cause: ['\btv\b|television|telemetry|viewing|analytics|content recognition|\bacr\b|track']
+      action: ['privacy|turn off|disable|settings|block|opt out|nothing|\bexpected\b']
+
+  - id: ts-camera
+    rule: tunnel-slow
+    kind: suspicious
+    scenario: A camera leaking data slowly after reaching a listed domain.
+    target: cam-update-svc.top
+    device: {id: dev-cam-g, name: Garden camera, days: 600, per_hour: 15}
+    evidence: {root: cam-update-svc.top, unique_subdomains: 70, window_minutes: 360, sample_fqdn: 9b1d7f2a4c6e8b0d3f5a7c9e1b2d4f6a.08.cam-update-svc.top}
+    nearby: [xmr-pool-relay.net]
+    others: [[threat-intel-allowed, xmr-pool-relay.net]]
+    domain: {rank: null, age_days: 11, devices: 0, since_days: 0}
+    expect:
+      cause: ['compromis|malware|botnet|infect|camera|tunnel|exfiltrat']
+      action: ['firmware|reset|disconnect|isolate|password|factory|block|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: ts-acked
+    rule: tunnel-slow
+    kind: benign
+    scenario: A home server's monitoring pattern, acknowledged twice before.
+    target: homelab-metrics.net
+    device: {id: dev-srv-l, name: Home server, days: 700, per_hour: 100}
+    evidence: {root: homelab-metrics.net, unique_subdomains: 64, window_minutes: 360, sample_fqdn: host-01.disk-io-88.homelab-metrics.net}
+    nearby: [grafana.com]
+    domain: {rank: null, age_days: 1200, devices: 1, since_days: 150}
+    earlier: {acknowledged: 2}
+    expect:
+      cause: ['seen (it |this )?before|acknowledged|recurr|earlier (findings|alerts)|previous(ly)? (findings|alerts|seen|acknowledged|flagged)|monitoring|metrics']
+      action: ['mark (it )?(as )?benign|allowlist|identify|which (program|service|process)|\bexpected\b|nothing|no action']
+
+  # --- dga-burst --------------------------------------------------------------
+  - id: db-malware
+    rule: dga-burst
+    kind: suspicious
+    scenario: A burst of random generated domains.
+    target: dev-laptop-h
+    device: {id: dev-laptop-h, name: Study laptop, days: 300, per_hour: 70}
+    evidence: {new_roots_in_window: 31, window_minutes: 10, sample_roots: [xkq7vbn2mtrp.com, bq7zt1x9k2m.net, lwposgloptkw.info, jgfmtdaimipc.top, nccojqvabqvk.xyz]}
+    nearby: [xkq7vbn2mtrp.com, bq7zt1x9k2m.net, lwposgloptkw.info]
+    expect:
+      cause: ['malware|generat|\bdga\b|command|\bc2\b|botnet|infect']
+      action: ['scan|isolate|disconnect|anti-?virus|malware|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: db-browsing
+    rule: dga-burst
+    kind: benign
+    scenario: Reading a heavy news page full of ad and tracking domains.
+    target: dev-laptop-a
+    device: {id: dev-laptop-a, name: Anna laptop, days: 200, per_hour: 60}
+    evidence: {new_roots_in_window: 24, window_minutes: 10, sample_roots: [bestrecipes-daily.com, cdn-adlink.net, quickpollwidget.com, sharethis-cdn.com, metrics-hub.io]}
+    nearby: [dailymail.co.uk, doubleclick.net, taboola.com, outbrain.com, criteo.com]
+    expect:
+      cause: ['brows|web ?(page|site)|advert|\bads?\b|track|news|many (sites|pages)|tabs']
+      action: ['nothing|ad ?block|block ads|browser extension|no action|\bexpected\b']
+
+  - id: db-setup
+    rule: dga-burst
+    kind: benign
+    scenario: A laptop set up today, installing and syncing apps.
+    target: dev-new-n
+    device: {id: dev-new-n, name: New laptop, days: 0, per_hour: 0}
+    evidence: {new_roots_in_window: 27, window_minutes: 10, sample_roots: [onedrive-sync-cdn.net, office-apps-cdn.com, driverupdate-cdn.net, appstore-mirror.net, fontcache-cdn.com]}
+    nearby: [microsoft.com, windowsupdate.com, office.com]
+    expect:
+      cause: ['new (device|laptop|computer)|set(ting)? (it )?up|first (time|day)|install|sync|update']
+      action: ['recogni[sz]e|\bexpected\b|nothing|no action']
+
+  - id: db-crawler
+    rule: dga-burst
+    kind: benign
+    scenario: A script on a home server checking links on many sites.
+    target: dev-srv-l
+    device: {id: dev-srv-l, name: Home server, days: 700, per_hour: 100}
+    evidence: {new_roots_in_window: 40, window_minutes: 10, sample_roots: [oldblog-archive.net, linkcheck-demo.org, mysite-mirror.com, recipes-index.net, wiki-mirror.info]}
+    nearby: [github.com, pypi.org, files.pythonhosted.org]
+    expect:
+      cause: ['script|crawl|scrap|link ?check|automat|\bbot\b|scheduled']
+      action: ['check (which |the )?(program|script|process|service)|\bexpected\b|nothing|identify']
+
+  - id: db-words
+    rule: dga-burst
+    kind: suspicious
+    scenario: A burst of new domains made of joined dictionary words.
+    target: dev-kid-o
+    device: {id: dev-kid-o, name: Kids laptop, days: 180, per_hour: 40}
+    evidence: {new_roots_in_window: 30, window_minutes: 10, sample_roots: [lightriverstone.com, goldencastlewinter.net, silvergardenmarket.info, northoceansummer.com, brightforestpaper.net]}
+    nearby: [lightriverstone.com, goldencastlewinter.net]
+    expect:
+      cause: ['malware|generat|\bdga\b|word|dictionary|infect|command']
+      action: ['scan|isolate|anti-?virus|disconnect|malware|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: db-acked
+    rule: dga-burst
+    kind: benign
+    scenario: The same device's bursts were acknowledged four times before.
+    target: dev-work-c
+    device: {id: dev-work-c, name: Work PC, days: 300, per_hour: 90}
+    evidence: {new_roots_in_window: 22, window_minutes: 10, sample_roots: [vendor-portal-eu.com, supplierhub-docs.net, quote-viewer.io, partner-files.net, contracts-sign.com]}
+    nearby: [office.com, sharepoint.com]
+    earlier: {acknowledged: 4}
+    expect:
+      cause: ['seen (it |this )?before|acknowledged|recurr|earlier (findings|alerts)|previous(ly)? (findings|alerts|seen|acknowledged|flagged)|regular|work']
+      action: ['identify|which (program|app)|mark (it )?(as )?benign|\bexpected\b|nothing|no action']
+
+  # --- volume-spike -----------------------------------------------------------
+  - id: vs-update
+    rule: volume-spike
+    kind: benign
+    scenario: A macOS update downloading.
+    target: dev-mac-p
+    device: {id: dev-mac-p, name: MacBook, days: 400, per_hour: 60}
+    evidence: {queries_this_hour: 1180, baseline_per_hour: 58.4, factor: 5.0}
+    nearby: [swcdn.apple.com, updates.cdn-apple.com, mesu.apple.com, apple.com]
+    expect:
+      cause: ['update|upgrade|download|software update|macos']
+      action: ['nothing|\bexpected\b|no action|wait|let (it|the update) (finish|complete)']
+
+  - id: vs-backup
+    rule: volume-spike
+    kind: benign
+    scenario: A storage box running its nightly cloud backup.
+    target: dev-nas-f
+    device: {id: dev-nas-f, name: NAS, days: 500, per_hour: 20}
+    evidence: {queries_this_hour: 940, baseline_per_hour: 21.0, factor: 5.0}
+    nearby: [backblazeb2.com, synology.com]
+    at_hour: 2
+    expect:
+      cause: ['backup|sync|upload|cloud storage|scheduled']
+      action: ['nothing|\bexpected\b|no action|backup|schedul']
+
+  - id: vs-game
+    rule: volume-spike
+    kind: benign
+    scenario: A console downloading a large game.
+    target: dev-console-q
+    device: {id: dev-console-q, name: Xbox, days: 350, per_hour: 30}
+    evidence: {queries_this_hour: 620, baseline_per_hour: 32.5, factor: 5.0}
+    nearby: [xboxlive.com, assets1.xboxlive.com, steamcontent.com]
+    expect:
+      cause: ['game|download|update|console|xbox']
+      action: ['nothing|\bexpected\b|no action|wait|let (it|the download) (finish|complete)']
+
+  - id: vs-spambot
+    rule: volume-spike
+    kind: suspicious
+    scenario: An old PC suddenly looking up hundreds of mail servers.
+    target: dev-old-r
+    device: {id: dev-old-r, name: Old PC, days: 1000, per_hour: 30}
+    evidence: {queries_this_hour: 3100, baseline_per_hour: 28.7, factor: 5.0}
+    nearby: [mx1.mailprovider-a.com, smtp.mailprovider-b.net, mx.mailhost-c.org, kq3vz-relay.info]
+    expect:
+      cause: ['malware|spam|botnet|compromis|infect|mail servers?']
+      action: ['scan|isolate|disconnect|anti-?virus|reinstall|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: vs-app
+    rule: volume-spike
+    kind: benign
+    scenario: A phone app full of advertising and analytics SDKs.
+    target: dev-phone-b
+    device: {id: dev-phone-b, name: Ben phone, days: 150, per_hour: 40}
+    evidence: {queries_this_hour: 450, baseline_per_hour: 39.2, factor: 5.0}
+    nearby: [app-measurement.com, applovin.com, unityads.unity3d.com, adcolony.com]
+    expect:
+      cause: ['advert|\bads?\b|analytics|track|\bsdks?\b|game']
+      action: ['which app|uninstall|block|ad ?block|nothing|remove (the )?app']
+
+  - id: vs-benign-before
+    rule: volume-spike
+    kind: benign
+    scenario: The same device's spikes were marked benign three times.
+    target: dev-srv-l
+    device: {id: dev-srv-l, name: Home server, days: 700, per_hour: 100}
+    evidence: {queries_this_hour: 2100, baseline_per_hour: 104.0, factor: 5.0}
+    nearby: [github.com, docker.io, ghcr.io]
+    earlier: {benign: 3}
+    expect:
+      cause: ['benign before|marked (it |them )?(as )?benign|seen (it |this )?before|acknowledged|recurr|earlier (findings|alerts)|previous(ly)? (findings|alerts|seen|acknowledged|flagged)|regular|update|container|docker']
+      action: ['nothing|\bexpected\b|no action|threshold|mark (it )?(as )?benign']
+
+  # --- blocked-burst ----------------------------------------------------------
+  - id: bb-adware
+    rule: blocked-burst
+    kind: suspicious
+    scenario: A browser extension pushing pop-up ads.
+    target: dev-laptop-h
+    device: {id: dev-laptop-h, name: Study laptop, days: 300, per_hour: 70}
+    evidence: {blocked_in_window: 84, window_minutes: 10, sample_fqdn: ads.popcash.net}
+    nearby: [popcash.net, propellerads.com, adsterra.com]
+    expect:
+      cause: ['adware|advert|\bads?\b|pop-?up|extension|ad (network|server)']
+      action: ['extension|adware|scan|remove|uninstall|check (the )?browser|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: bb-tv
+    rule: blocked-burst
+    kind: benign
+    scenario: A television retrying blocked telemetry.
+    target: dev-tv-m
+    device: {id: dev-tv-m, name: Samsung TV, days: 400, per_hour: 25}
+    evidence: {blocked_in_window: 210, window_minutes: 10, sample_fqdn: log-config.samsungacr.com}
+    nearby: [samsungacr.com, samsungads.com, samsungcloudsolution.com]
+    expect:
+      cause: ['telemetry|track|\btv\b|television|analytics|retr(y|ies)|advert']
+      action: ['nothing|privacy|settings|\bexpected\b|no action|turn off|disable']
+
+  - id: bb-c2
+    rule: blocked-burst
+    kind: suspicious
+    scenario: Malware retrying blocked command servers.
+    target: dev-desk-d
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {blocked_in_window: 66, window_minutes: 10, sample_fqdn: kq3vz7xbt2.top}
+    nearby: [kq3vz7xbt2.top, mx9ptl4wq8.xyz, zq2r7vb1nm.info]
+    expect:
+      cause: ['malware|infect|command|\bc2\b|botnet|compromis|generat']
+      action: ['scan|isolate|disconnect|anti-?virus|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: bb-app
+    rule: blocked-burst
+    kind: benign
+    scenario: A phone app retrying a blocked analytics host.
+    target: dev-phone-b
+    device: {id: dev-phone-b, name: Ben phone, days: 150, per_hour: 40}
+    evidence: {blocked_in_window: 61, window_minutes: 10, sample_fqdn: app-measurement.com}
+    nearby: [app-measurement.com, firebaseinstallations.googleapis.com]
+    expect:
+      cause: ['\bapp\b|retr(y|ies)|analytics|track|measurement|firebase']
+      action: ['nothing|which app|\bexpected\b|no action|allow']
+
+  - id: bb-parental
+    rule: blocked-burst
+    kind: benign
+    scenario: A child's tablet hitting blocked game and social sites.
+    target: dev-kid-s
+    device: {id: dev-kid-s, name: Kids tablet, days: 300, per_hour: 35}
+    evidence: {blocked_in_window: 57, window_minutes: 10, sample_fqdn: roblox.com}
+    nearby: [roblox.com, tiktok.com, rbxcdn.com]
+    expect:
+      cause: ['parental|blocked (sites?|categor|games?)|game|social|child|roblox|tiktok']
+      action: ['talk|parental|\bexpected\b|nothing|settings']
+
+  - id: bb-acked
+    rule: blocked-burst
+    kind: benign
+    scenario: The same burst was acknowledged five times before.
+    target: dev-tv-m
+    device: {id: dev-tv-m, name: Samsung TV, days: 400, per_hour: 25}
+    evidence: {blocked_in_window: 190, window_minutes: 10, sample_fqdn: samsungads.com}
+    nearby: [samsungads.com, samsungacr.com]
+    earlier: {acknowledged: 5}
+    expect:
+      cause: ['seen (it |this )?before|acknowledged|recurr|earlier (findings|alerts)|previous(ly)? (findings|alerts|seen|acknowledged|flagged)|telemetry|television|\btv\b|advert']
+      action: ['nothing|\bexpected\b|no action|mark (it )?(as )?benign|settings|threshold']
+
+  # --- new-destination-category -----------------------------------------------
+  - id: nc-gambling
+    rule: new-destination-category
+    kind: uncertain
+    scenario: A child's tablet visiting a betting site for the first time.
+    target: gambling
+    device: {id: dev-kid-s, name: Kids tablet, days: 300, per_hour: 35}
+    evidence: {category: gambling, category_name: Gambling, fqdn: www.bet365.com}
+    nearby: [bet365.com, youtube.com]
+    expect:
+      cause: ['gambl|betting|casino|bet365']
+      action: ['talk|parental|block|check (with|who)|who (used|was using)']
+
+  - id: nc-nrd
+    rule: new-destination-category
+    kind: uncertain
+    scenario: NextDNS blocked a newly registered domain for the first time on this device.
+    target: nrd
+    device: {id: dev-laptop-a, name: Anna laptop, days: 200, per_hour: 60}
+    evidence: {category: nrd, category_name: Newly Registered Domains, fqdn: welcome-offers-hub.com}
+    nearby: [welcome-offers-hub.com, outlook.live.com]
+    expect:
+      cause: ['newly registered|new(ly)? (created )?domain|recently registered']
+      action: ['which (site|link)|\bexpected\b|nothing|scan|block|verify']
+
+  - id: nc-ads
+    rule: new-destination-category
+    kind: benign
+    scenario: An ad and tracker blocklist matched on this device for the first time.
+    target: blocklist:oisd
+    device: {id: dev-phone-b, name: Ben phone, days: 150, per_hour: 40}
+    evidence: {category: blocklist:oisd, category_name: OISD, fqdn: ads.mopub.com}
+    nearby: [mopub.com, applovin.com]
+    expect:
+      cause: ['advert|\bads?\b|track|oisd']
+      action: ['nothing|\bexpected\b|no action']
+
+  - id: nc-threat
+    rule: new-destination-category
+    kind: suspicious
+    scenario: The threat-intelligence blocklist stopped a lookup for the first time.
+    target: threat-intelligence-feeds
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {category: threat-intelligence-feeds, category_name: Threat Intelligence Feeds, fqdn: secure-docs-share.top}
+    nearby: [secure-docs-share.top, outlook.live.com]
+    expect:
+      cause: ['threat|malicious|malware|phish']
+      action: ['scan|password|isolate|anti-?virus|which (site|link)|for (malware|adware|unauthori[sz]ed software)']
+
+  - id: nc-new-device
+    rule: new-destination-category
+    kind: benign
+    scenario: A device set up today meeting the tracker blocklist for the first time.
+    target: native-tracking
+    device: {id: dev-new-n, name: New laptop, days: 0, per_hour: 0}
+    evidence: {category: native-tracking, category_name: Native Tracking, fqdn: telemetry.microsoft.com}
+    nearby: [microsoft.com, windowsupdate.com]
+    expect:
+      cause: ['new (device|laptop|computer)|set(ting)? (it )?up|first (time|day)|telemetry|track']
+      action: ['\bexpected\b|recogni[sz]e|nothing|no action']
+
+  - id: nc-adult
+    rule: new-destination-category
+    kind: uncertain
+    scenario: An adult site blocked on a shared family computer.
+    target: porn
+    device: {id: dev-desk-d, name: Family desktop, days: 400, per_hour: 50}
+    evidence: {category: porn, category_name: Porn, fqdn: www.adultvideos-hub.com}
+    nearby: [adultvideos-hub.com]
+    expect:
+      cause: ['adult|porn|explicit']
+      action: ['talk|parental|block|who (used|was using)|check (with|who)']

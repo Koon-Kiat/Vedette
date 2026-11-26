@@ -4,7 +4,7 @@ import asyncio
 import shutil
 import tempfile
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +13,7 @@ import httpx
 import structlog
 
 from vedette.config import LlmConfig, Settings
-from vedette.eval import datasets, dga_families
+from vedette.eval import datasets, dga_families, quality
 from vedette.eval.detection import DetectionResult, Detector
 from vedette.eval.history import history_metrics
 from vedette.eval.hostnames import ensure_hostnames
@@ -35,7 +35,7 @@ from vedette.llm.ollama import OllamaUnavailable
 from vedette.rules.model import RuleSpec
 from vedette.storage.migrate import run_migrations
 from vedette.storage.reference import ReferenceStore
-from vedette.storage.store import Store
+from vedette.storage.store import Store, StoredFinding
 from vedette.storage.triage import TriageStore
 
 log = structlog.get_logger(__name__)
@@ -172,6 +172,12 @@ def _injection(result: InjectionResult) -> dict[str, Any]:
     }
 
 
+def _quality(result: quality.QualityResult) -> dict[str, Any]:
+    data = asdict(result)
+    data.pop("durations_ms")
+    return {**data, "mean_ms": result.mean_ms}
+
+
 def _cross(result: CrossResult) -> dict[str, Any]:
     data = asdict(result)
     data.pop("durations_ms")
@@ -180,6 +186,15 @@ def _cross(result: CrossResult) -> dict[str, Any]:
         "affected_rate": result.affected_rate,
         "ci": wilson(result.affected, result.batches),
     }
+
+
+@dataclass(slots=True)
+class _ModelRuns:
+    """Everything one model and thinking setting was asked."""
+
+    injection: list[InjectionResult]
+    cross: list[CrossResult]
+    quality: quality.QualityResult | None
 
 
 async def _ask_model(
@@ -191,14 +206,18 @@ async def _ask_model(
     *,
     held_out: Sequence[datasets.Crafted],
     sample: Sequence[datasets.Crafted],
+    gold: Sequence[quality.GoldItem],
+    gold_findings: Sequence[StoredFinding],
     repeats: int,
     parallel: int,
     now: datetime,
-) -> tuple[list[InjectionResult], list[CrossResult]]:
-    """Every injection run for one model and thinking setting.
+) -> _ModelRuns:
+    """Every injection run and the explanation-quality run for one model and thinking setting.
 
     All runs are started together and share one limit of ``parallel`` calls in
-    flight, so the model server is kept busy without queueing.
+    flight, so the model server is kept busy without queueing. With no
+    held-out items the injection test is skipped; with no gold items, the
+    quality test.
 
     Raises:
         OllamaUnavailable: The model could not be used.
@@ -231,18 +250,38 @@ async def _ask_model(
         finally:
             await recording.aclose()
 
-    rounds = [(repeat, defended) for repeat in range(1, repeats + 1) for defended in (True, False)]
+    async def explain() -> list[quality.QualityResult]:
+        if not gold:
+            return []
+        log.info("eval_quality_round", model=model, think=think)
+        recording = _client(llm, model, think, limit)
+        try:
+            analyst = quality.production_analyst(recording, specs, scratch.engine)
+            return [
+                await quality.model_quality(recording, analyst, gold, gold_findings, think=think)
+            ]
+        finally:
+            await recording.aclose()
+
+    rounds = [
+        (repeat, defended)
+        for repeat in range(1, repeats + 1)
+        for defended in (True, False)
+        if held_out
+    ]
     crossed = asyncio.ensure_future(
         settle([cross(defended) for defended in (True, False) if sample])
     )
     done = asyncio.ensure_future(settle([injection(*key) for key in rounds]))
-    # Both finish before a failure is raised, so no call is cut off half-way.
-    await asyncio.wait([crossed, done])
-    # Read both failures, so neither is reported as never retrieved.
-    for failure in [done.exception(), crossed.exception()]:
+    explained = asyncio.ensure_future(explain())
+    # Every run finishes before a failure is raised, so no call is cut off half-way.
+    await asyncio.wait([crossed, done, explained])
+    # Read every failure, so none is reported as never retrieved.
+    for failure in [done.exception(), crossed.exception(), explained.exception()]:
         if failure is not None:
             raise failure
-    return done.result(), crossed.result()
+    scored = explained.result()
+    return _ModelRuns(done.result(), crossed.result(), scored[0] if scored else None)
 
 
 def _client(llm: LlmConfig, model: str, think: bool, limit: asyncio.Semaphore) -> RecordingClient:
@@ -264,6 +303,7 @@ async def run_suite(
     models: Sequence[str],
     thinks: Sequence[bool],
     with_llm: bool = True,
+    injection_test: bool = True,
     repeats: int = 1,
     cross: bool = True,
     cross_per_category: int = 8,
@@ -282,7 +322,9 @@ async def run_suite(
     of each category are also put among ordinary findings, on the first model
     only, to see whether they change what it says about the others. Up to
     ``parallel`` model calls are in flight at once; set the model server to
-    answer as many together (``OLLAMA_NUM_PARALLEL``).
+    answer as many together (``OLLAMA_NUM_PARALLEL``). Every model also explains
+    the gold set of findings, scored against the template; ``injection_test`` off
+    skips the injection and cross-finding tests and runs only that.
     """
     now = now or datetime.now(UTC)
     profile_ids = [profile.id for profile in settings.enabled_profiles] or [
@@ -315,6 +357,9 @@ async def run_suite(
         bursts_random, bursts_words = datasets.dga_bursts()
         young, old = datasets.dated_domains()
         families = datasets.family_names()
+        gold = quality.load_gold(specs)
+        gold_findings = await quality.seed(scratch.engine, gold, specs, now)
+        template_quality = quality.template_quality(gold, gold_findings, specs)
         injection = datasets.injection_names()
         held_out = datasets.held_out_injection()
         sample = mixed_sample(held_out, cross_per_category) if cross else []
@@ -421,18 +466,21 @@ async def run_suite(
 
         results: list[InjectionResult] = []
         crosses: list[CrossResult] = []
+        explained: list[quality.QualityResult] = []
         if with_llm:
             for number, model in enumerate(models):
                 for think in thinks:
                     try:
-                        done, crossed = await _ask_model(
+                        runs = await _ask_model(
                             settings,
                             specs,
                             scratch,
                             model,
                             think,
-                            held_out=held_out,
-                            sample=sample if number == 0 else [],
+                            held_out=held_out if injection_test else [],
+                            sample=sample if number == 0 and injection_test else [],
+                            gold=gold,
+                            gold_findings=gold_findings,
                             repeats=repeats,
                             parallel=parallel,
                             now=now,
@@ -440,8 +488,10 @@ async def run_suite(
                     except OllamaUnavailable as exc:
                         errors.append(f"{model}: the local model could not be used ({exc}).")
                         break
-                    results += done
-                    crosses += crossed
+                    results += runs.injection
+                    crosses += runs.cross
+                    if runs.quality is not None:
+                        explained.append(runs.quality)
     finally:
         if http_client is None:
             await http.aclose()
@@ -455,6 +505,7 @@ async def run_suite(
         "models": list(models),
         "thinking": [("on" if think else "off") for think in thinks],
         "with_llm": with_llm,
+        "injection_run": with_llm and injection_test,
         "repeats": repeats,
         "parallel": parallel,
         "dataset_sizes": {
@@ -507,6 +558,12 @@ async def run_suite(
         "injection": [_injection(result) for result in results],
         "injection_combined": combine(results),
         "cross_finding": [_cross(result) for result in crosses],
+        "quality": {
+            "items": len(gold),
+            "kinds": {kind: sum(item.kind == kind for item in gold) for kind in quality.KINDS},
+            "template": _quality(template_quality),
+            "models": [_quality(result) for result in explained],
+        },
         "injection_names": [name.fqdn for name in injection],
         "hostname_list": {
             "source": settings.evaluation.hostnames_url,

@@ -322,6 +322,154 @@ def _family_section(summary: dict[str, Any]) -> list[str]:
     return [*lines, ""]
 
 
+#: How the gold set's kinds of finding are named in the report.
+KIND_NAMES = {
+    "benign": "Harmless look-alikes",
+    "suspicious": "Real threats",
+    "uncertain": "Could be either",
+}
+
+
+def _of(count: int, items: int) -> str:
+    return f"{count} ({_share(count, items)})"
+
+
+def _model_name(row: dict[str, Any]) -> str:
+    return f"{row['source']}, thinking {'on' if row['think'] else 'off'}"
+
+
+def _quality_table(template: dict[str, Any], model: dict[str, Any]) -> list[str]:
+    """Template against one model, per rule, overall and per kind of finding."""
+    lines = [
+        f"**{_model_name(model)}**",
+        "",
+        "| Rule | Items | Template: cause | Template: step | Template: all three "
+        "| Model: cause | Model: step | Model: invented | Model: all three |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for rule, scores in model["by_rule"].items():
+        base = template["by_rule"].get(rule, {"cause": 0, "action": 0, "correct": 0})
+        items = scores["items"]
+        lines.append(
+            f"| {rule} | {items} | {_of(base['cause'], items)} | {_of(base['action'], items)} "
+            f"| {_of(base['correct'], items)} | {_of(scores['cause'], items)} "
+            f"| {_of(scores['action'], items)} | {_of(scores['invented'], items)} "
+            f"| {_of(scores['correct'], items)} |"
+        )
+    items = model["items"]
+    lines.append(
+        f"| **All** | {items} | {_of(template['cause'], items)} | {_of(template['action'], items)} "
+        f"| {_of(template['correct'], items)} | {_of(model['cause'], items)} "
+        f"| {_of(model['action'], items)} | {_of(model['invented'], items)} "
+        f"| {_of(model['correct'], items)} |"
+    )
+    lines += [
+        "",
+        "| Kind of finding | Items | Template: all three | Model: all three |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for kind, name in KIND_NAMES.items():
+        count, right = model["by_kind"].get(kind, [0, 0])
+        base = template["by_kind"].get(kind, [0, 0])[1]
+        if count:
+            lines.append(f"| {name} | {count} | {_of(base, count)} | {_of(right, count)} |")
+    return lines
+
+
+def _quality_cases(model: dict[str, Any]) -> list[str]:
+    """Every answer that missed or invented something, for checking by eye."""
+    cases = model["cases"]
+    if not cases:
+        return []
+    lines = ["", f"Answers to check, {_model_name(model)}:", ""]
+    for case in cases:
+        problems = []
+        if case["missing"]:
+            problems.append(f"missed the {case['missing']}")
+        if case["invented"]:
+            problems.append(f"invented {case['invented']}")
+        lines.append(
+            f"- `{case['id']}` ({case['rule']}): {'; '.join(problems)}. "
+            f'Cause given: "{case["cause"]}" Step given: "{case["action"]}"'
+        )
+    return lines
+
+
+def _quality_section(summary: dict[str, Any]) -> list[str]:
+    """How good the explanations are, model against template."""
+    found = summary.get("quality")
+    if not found or not found.get("items"):
+        return []
+    kinds = found.get("kinds", {})
+    lines = [
+        "## Explanation quality",
+        "",
+        f"The analyst explained a gold set of {found['items']} synthetic findings, covering every "
+        "rule, each written with the records around it (the device's other lookups, its other "
+        "findings and earlier triage) and with what a good explanation says: "
+        f"{kinds.get('benign', 0)} harmless look-alikes, {kinds.get('suspicious', 0)} real "
+        f"threats and {kinds.get('uncertain', 0)} that could be either. The set lives in "
+        "`src/vedette/eval/data/analyst_gold.yaml`, and the records are seeded into a scratch "
+        "database the analyst reads as it reads yours. An answer is right when its summary or "
+        "likely cause states the cause in words, its recommended step fits, and it invents "
+        "nothing: no domain it was not given, and no owner, malware family, reputation "
+        "service or registration date that is not in the data. The template is the "
+        "explanation stored when the model's answer cannot be used. Answers are scored with "
+        "word patterns, so every miss and every invented fact is listed below.",
+        "",
+        "Method note: the gold set was written before the context pack, the per-rule notes and "
+        "the worked examples were, and was not changed for them. Reading the misses of the "
+        'first run, on the earlier prompt, found one pattern too strict: "check it for malware" '
+        "was not taken as a step for a real threat. It was widened before any prompt changed, "
+        "and that run was scored again.",
+        "",
+    ]
+    if not found["models"]:
+        return [*lines, "The model was not run, so only the template was scored.", ""]
+    for model in found["models"]:
+        lines += [*_quality_table(found["template"], model), *_quality_cases(model), ""]
+    return lines
+
+
+def _quality_findings(summary: dict[str, Any]) -> list[str]:
+    """One line per model on how its explanations compare with the template."""
+    found = summary.get("quality")
+    if not found or not found.get("models"):
+        return []
+    template = found["template"]
+    out = []
+    for model in found["models"]:
+        items = model["items"]
+        line = (
+            f"- {_model_name(model)} names the right cause for {model['cause']} of {items} gold "
+            f"findings, a fitting step for {model['action']} and gets all three right for "
+            f"{_of(model['correct'], items)}, against the template's {template['cause']}, "
+            f"{template['action']} and {_of(template['correct'], items)}. "
+        )
+        line += (
+            f"{_of(model['invented'], items)} of its answers state a fact the data does not hold."
+            if model["invented"]
+            else "None of its answers states a fact the data does not hold."
+        )
+        if model.get("template_answers"):
+            line += f" The template stood in for {model['template_answers']} unusable answers."
+        out.append(line)
+    return out
+
+
+def _quality_target(summary: dict[str, Any]) -> str:
+    found = summary.get("quality") or {}
+    models = found.get("models") or []
+    if not models:
+        return "not run"
+    best = max(models, key=lambda row: row["correct"])
+    items = best["items"]
+    return (
+        f"{_share(best['correct'], items)} right, {_share(best['invented'], items)} inventing "
+        f"a fact ({_model_name(best)}); template {_share(found['template']['correct'], items)}"
+    )
+
+
 def _replay_section(replay: dict[str, Any] | None) -> list[str]:
     """What the current rules raise on the stored history, rule by rule."""
     if not replay:
@@ -362,6 +510,7 @@ def _findings(summary: dict[str, Any]) -> list[str]:
         *_injection_name_findings(detection),
         *_false_positive_findings(detection),
         *_history_findings(summary),
+        *_quality_findings(summary),
         *_model_findings(combined),
         *_prefilter_findings(summary),
         *_cross_findings(summary.get("cross_finding") or []),
@@ -764,6 +913,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "| Schema failure rate | report as measured | see Prompt injection |",
         "| Latency | report as measured | see Speed and load |",
         "| LLM load | report as measured | see Speed and load |",
+        "| Explanations: right cause, a fitting step, nothing invented | report as measured "
+        f"| {_quality_target(summary)} |",
         "",
         "## What the results show",
         "",
@@ -829,9 +980,12 @@ def render_markdown(summary: dict[str, Any]) -> str:
             "",
             *_category_table(summary, combined),
         ]
+    elif summary.get("with_llm") and summary.get("injection_run") is False:
+        lines += ["The injection test was not run in this evaluation (`--no-injection`).", ""]
     else:
         lines += ["The model was not run in this evaluation.", ""]
     lines += [*_prefilter_section(summary), *_cross_section(summary), *_cases(summary)]
+    lines += ["", *_quality_section(summary)]
     lines += [
         "",
         "## Speed and load",

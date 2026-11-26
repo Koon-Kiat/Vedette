@@ -579,6 +579,7 @@ async def _evaluate(
     with_llm: bool,
     offline: bool,
     *,
+    injection: bool = True,
     repeats: int = 1,
     cross: bool = True,
     cross_per_category: int = 8,
@@ -591,6 +592,7 @@ async def _evaluate(
         models=models,
         thinks=thinks,
         with_llm=with_llm,
+        injection_test=injection,
         repeats=repeats,
         cross=cross,
         cross_per_category=cross_per_category,
@@ -622,7 +624,18 @@ def evaluate(
         typer.Option(help="Thinking for the injection test: off, on or both."),
     ] = "both",
     llm: Annotated[
-        bool, typer.Option("--llm/--no-llm", help="Run the prompt-injection test on the model.")
+        bool,
+        typer.Option(
+            "--llm/--no-llm",
+            help="Ask the model at all: the injection test and the explanation-quality test.",
+        ),
+    ] = True,
+    injection: Annotated[
+        bool,
+        typer.Option(
+            "--injection/--no-injection",
+            help="Run the injection and cross-finding tests; off runs only explanation quality.",
+        ),
     ] = True,
     repeats: Annotated[
         int,
@@ -687,6 +700,7 @@ def evaluate(
             modes[think],
             llm,
             offline,
+            injection=injection,
             repeats=repeats,
             cross=cross,
             cross_per_category=cross_per_category,

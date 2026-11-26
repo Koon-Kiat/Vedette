@@ -46,6 +46,24 @@
   </div>
 </section>
 
+{% set quality = s.get("quality") or {} %}
+{% if quality.get("items") %}
+<section class="block" aria-labelledby="quality-title">
+  <h2 id="quality-title">Explanation quality</h2>
+  <p class="note">{{ quality["items"]|num }} synthetic findings with the records around them. Right means the cause is named, the step fits, and nothing is invented.</p>
+  <div class="table-wrap">
+  <table id="t-quality">
+    <thead><tr><th>Explained by</th><th class="num">Cause</th><th class="num">Step</th><th class="num">Invented a fact</th><th class="num">Right</th></tr></thead>
+    <tbody>
+      {% for row in [quality.template] + quality.models %}
+      <tr><td>{% if row.source == "template" %}Template{% else %}{{ row.source|text }}, thinking {{ "on" if row.think else "off" }}{% endif %}</td><td class="num">{{ row.cause|num }}</td><td class="num">{{ row.action|num }}</td><td class="num">{{ row.invented|num }}</td><td class="num">{{ row.correct|num }} of {{ row["items"]|num }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 {% if s.get("dga_families") %}
 <section class="block" aria-labelledby="families-title">
   <h2 id="families-title">Real DGA families</h2>

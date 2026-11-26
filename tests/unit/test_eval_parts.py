@@ -381,3 +381,69 @@ def test_a_summary_without_real_families_has_no_family_section() -> None:
 
     assert "### Real DGA families" not in report
     assert "real malware families" not in report
+
+
+def quality_scores(cause: int, action: int, invented: int, correct: int) -> dict[str, Any]:
+    rule = {"items": 6, "cause": cause, "action": action, "invented": invented, "correct": correct}
+    return {
+        "items": 6,
+        "cause": cause,
+        "action": action,
+        "invented": invented,
+        "correct": correct,
+        "by_rule": {"tunnel-like": rule},
+        "by_kind": {"benign": [4, correct - 1], "suspicious": [2, 1]},
+        "template_answers": 0,
+        "mean_ms": 1000.0,
+        "cases": [
+            {
+                "id": "tl-sophos",
+                "rule": "tunnel-like",
+                "missing": "cause",
+                "invented": "name 'av.example' in: See av.example.",
+                "cause": "DNS tunnelling.",
+                "action": "Block it.",
+            }
+        ],
+    }
+
+
+def test_the_report_compares_the_model_s_explanations_with_the_template() -> None:
+    template = {**quality_scores(2, 3, 0, 2), "source": "template", "think": False, "cases": []}
+    model = {**quality_scores(5, 5, 1, 4), "source": "qwen3:8b", "think": False}
+    report = render_markdown(
+        summary(
+            quality={
+                "items": 6,
+                "kinds": {"benign": 4, "suspicious": 2, "uncertain": 0},
+                "template": template,
+                "models": [model],
+            }
+        )
+    )
+
+    assert "## Explanation quality" in report
+    assert "4 harmless look-alikes, 2 real threats and 0 that could be either" in report
+    assert (
+        "| tunnel-like | 6 | 2 (33%) | 3 (50%) | 2 (33%) | 5 (83%) | 5 (83%) | 1 (17%) | 4 (67%) |"
+    ) in report
+    assert "| Harmless look-alikes | 4 | 1 (25%) | 3 (75%) |" in report
+    assert (
+        "- qwen3:8b, thinking off names the right cause for 5 of 6 gold findings, a fitting "
+        "step for 5 and gets all three right for 4 (67%), against the template's 2, 3 and 2 "
+        "(33%). 1 (17%) of its answers state a fact the data does not hold."
+    ) in report
+    assert "| Explanations: right cause, a fitting step, nothing invented | report as " in report
+    assert "67% right, 17% inventing a fact (qwen3:8b, thinking off); template 33%" in report
+    assert (
+        "- `tl-sophos` (tunnel-like): missed the cause; invented name 'av.example' in: See "
+        'av.example.. Cause given: "DNS tunnelling." Step given: "Block it."'
+    ) in report
+
+
+def test_a_report_from_before_the_quality_test_has_no_such_section() -> None:
+    report = render_markdown(summary())
+
+    assert "## Explanation quality" not in report
+    assert "| Explanations: right cause, a fitting step, nothing invented | report as " in report
+    assert "| not run |" in report

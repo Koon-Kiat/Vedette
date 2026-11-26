@@ -8,30 +8,13 @@ import httpx
 import pytest
 from structlog.testing import capture_logs
 
-from tests.integration.conftest import SleepRecorder, wait_until
+from tests.integration.conftest import NOW, SleepRecorder, make_collector, wait_until
 from tests.integration.fake_nextdns import T0, FakeNextDns
 from vedette.health.state import HealthState
 from vedette.pipeline.collector import ProfileCollector
 from vedette.sources.base import SourceUnavailable, StreamIdle
 from vedette.sources.nextdns import NextDnsSource
 from vedette.storage.store import Store
-
-NOW = T0 + timedelta(hours=1)
-
-
-def collector(
-    source: NextDnsSource, store: Store, sleeps: SleepRecorder, state: HealthState
-) -> ProfileCollector:
-    return ProfileCollector(
-        "abc123",
-        source,
-        store,
-        backfill_days=7,
-        clock=lambda: NOW,
-        sleep=sleeps,
-        rng=lambda: 1.0,
-        health=state,
-    )
 
 
 async def run_while(worker: ProfileCollector, done: object) -> None:
@@ -55,7 +38,7 @@ async def test_an_open_stream_clears_an_earlier_failure(
     async def streaming() -> bool:
         return len(server.stream_requests) >= 1 and state.failing_since("abc123") is None
 
-    await run_while(collector(source, store, sleeps, state), streaming)
+    await run_while(make_collector(source, store, sleeps, health=state), streaming)
 
 
 async def test_failures_are_reported_with_their_reason(
@@ -68,7 +51,7 @@ async def test_failures_are_reported_with_their_reason(
     async def failing() -> bool:
         return len(server.stream_requests) >= 2
 
-    await run_while(collector(source, store, sleeps, state), failing)
+    await run_while(make_collector(source, store, sleeps, health=state), failing)
 
     failing_since = state.failing_since("abc123")
     assert failing_since is not None
@@ -87,7 +70,7 @@ async def test_a_quiet_stream_timing_out_is_not_an_error(
         async def reconnected() -> bool:
             return len(server.stream_requests) >= 3
 
-        await run_while(collector(source, store, sleeps, state), reconnected)
+        await run_while(make_collector(source, store, sleeps, health=state), reconnected)
 
     events = [entry["event"] for entry in logs]
     assert "collector_stream_idle" in events
@@ -140,7 +123,7 @@ async def test_finishing_the_backfill_reports_the_profile_caught_up(
     async def caught_up() -> bool:
         return state.is_caught_up("abc123")
 
-    await run_while(collector(source, store, sleeps, state), caught_up)
+    await run_while(make_collector(source, store, sleeps, health=state), caught_up)
 
 
 async def test_a_stream_is_caught_up_once_it_delivers_a_recent_event(

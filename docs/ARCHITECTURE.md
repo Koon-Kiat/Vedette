@@ -421,753 +421,307 @@ test checks each file's SHA-256, as for htmx.
 ## Decisions
 
 "The spec" below is the original project brief, which is not part of this
-repository. Each decision that departs from it says so.
+repository; a decision that departs from it says so. Where a test or a CI step
+holds a decision, the decision names it, and that check is the source of truth.
+Numbers never change, so a replaced decision keeps a one-line pointer. What was
+tried and measured along the way is in git history and `docs/EVALUATION.md`.
 
-1. **Repository root is this folder.** The spec's project tree maps onto
-   the repository root.
-2. **Only dependencies in use are declared.** Each part of the spec's stack is
-   added when the code that needs it lands, so the audited dependency set stays
-   as small as possible.
-3. **`hatchling` builds the package.** A build backend is required to install
-   the `vedette` console script; hatchling is small and widely used.
+1. **The repository root is the spec's project root.**
+2. **Only dependencies in use are declared**, each added with the code that
+   needs it, so the audited set stays small.
+3. **`hatchling` builds the package**, to install the `vedette` command.
 4. **`tzdata` and `pyyaml` are direct dependencies.** `python:3.14-slim` has no
-   system time zone database, and the config loader parses YAML itself so it
-   can refuse secrets placed in the file. `tests/unit/test_repository.py`
-   holds this.
-5. **Dependencies are pinned with hashes in `uv.lock`.** Images install with
-   `uv sync --locked`, which verifies every hash. `pip-audit` runs against a
-   hashed export of the same lock file.
-6. **Secrets never come from `config.yaml`.** The loader rejects
-   `nextdns_api_key` in YAML outright. `NEXTDNS_API_KEY` is read from the
-   environment or from a Docker secret of the same name.
-7. **Environment overrides use `VEDETTE_` and `__`.** For example
-   `VEDETTE_LLM__MODEL`. Lists take JSON. Unknown keys in the YAML file are
-   errors so that typos surface at start-up.
-8. **The notification channel is undecided.** `notify.channel` is kept as free
-   text with the placeholder `NOTIFY_CHANNEL` and is not validated until the
-   notifier is built. (Decision 40 replaces this.)
-9. **Ollama has no route to the internet.** It sits on an `internal` Compose
-   network. Models are downloaded by the one-shot `ollama-pull` service, which
-   has internet access, shares the model volume, and exits. `OLLAMA_NO_CLOUD`
-   is set so the server does not try to reach ollama.com.
-10. **Ollama ran as root until the hardening work** (decision 64 replaces
-    this).
-11. **Secret scanning runs through Docker.** `.githooks/pre-commit` runs a
-    pinned gitleaks image on staged changes, so the "install nothing on the
-    host" rule holds. CI runs the same image over the full history.
-12. **The queue contract is at-least-once.** A message counts towards queue
-    depth until it is acknowledged. The in-memory queue is not durable;
-    durability across restarts comes from the collector's stored cursor and
-    idempotent event ids.
-13. **Base images are pinned by version tag**, not by digest
-    (`python:3.14-slim`, `ollama/ollama:0.40.16`, `ghcr.io/astral-sh/uv:0.13.7`,
-    `ghcr.io/gitleaks/gitleaks:v8.30.1`). Digest pinning is listed under future
-    work. (Decision 93 replaces this.)
-
-14. **The events table is the hand-off from the collector.** The collector
-    stores events; the enricher reads unprocessed ones from storage in
-    timestamp order. That keeps a 160,000-event backfill out of memory, puts
-    newest-first history back in order, and makes the hand-off durable. The
-    queue sits between the enricher and the rule engine.
-15. **Alembic manages the schema.** Migrations live in
-    `src/vedette/storage/migrations` and run at start-up over a synchronous
-    connection. A test checks they match the table definitions.
-16. **One transaction per stream event.** Simple and exactly matches "persist
-    the cursor with each committed batch". Batching is deferred until load
-    testing shows it is needed.
-17. **Timestamps are stored as naive UTC** in SQLite, which has no timezone
-    type, and are always timezone-aware in code.
-18. **Untrusted strings are truncated, not rejected.** An over-long device
-    name or reason must not make an event disappear. Entries missing a
-    timestamp, domain or status are skipped and counted in a warning.
-19. **The stream reconnects after 5 minutes of silence.** NextDNS documents no
-    heartbeat, so a quiet stream cannot be told apart from a dead connection.
-20. **`vedette run` backfills automatically**; the manual `vedette backfill`
-    came with the hardening work (decision 65).
-
-21. **External lookups are kept to what the spec's enrichment requires, and
-    each can be changed or turned off.** The spec asks both that "only the
-    NextDNS API is called" and for a top-sites list, threat feeds and RDAP.
-    The top-sites list and threat feeds are bulk downloads matched locally, so
-    they reveal nothing about individual queries. RDAP does reveal the root
-    being looked up to its registry, so it is limited to allowed, unranked,
-    recent roots (10 lookups for a week of router traffic) and has an
-    `enrich.rdap.enabled` switch.
-22. **Threat feeds are Phishing Army and CERT Polska by default.** Both
-    download without an account. The abuse.ch feeds (URLhaus, ThreatFox) now
-    answer HTTP 410 on their public URLs and need a free account key, so they
-    are not included. Check each feed's terms before adding or keeping it.
-23. **A root's parent domain counts for popularity.** NextDNS reports customer
-    hostnames on cloud and CDN platforms as roots of their own (three or more
-    labels). They are absent from the top-sites list and are not registered
-    domains. `platform_rank` records the best rank among a root's parents;
-    `young-domain` and `dga-like` need both ranks to be absent, and RDAP is
-    skipped. `threat-intel-allowed` deliberately ignores `platform_rank`,
-    because phishing hosted on a popular platform is exactly what it should
-    catch. Trade-off: a random-looking name on a popular platform is not
-    flagged by `dga-like`. (Decision 99 replaces the parent rank with the
-    Public Suffix List, keeping it only until the list is downloaded.)
-24. **A feed entry never taints its parent or siblings**, and a feed match on a
-    root ranked in the top 1,000 is distrusted, which limits the damage a
-    wrong or compromised feed can do. A failed or empty download keeps the
-    previous data.
-25. **Rule state is in memory, rebuilt from storage.** No separate state table
-    to keep consistent; a restart replays about a week of event fields.
-26. **An unexpected error in the rule worker stops the process.** Engine state
-    would no longer match storage, so the container restarts clean rather than
-    carrying on. The collector and enricher log and retry instead.
-27. **The allowlist started as configuration only.** "Mark benign" from the CLI
-    or dashboard now adds to it (decision 56).
-28. **The instruction-word pre-filter came with the hardening work**
-    (decision 61).
-
-29. **History can also come from a log export; the stream stays on the API.**
-    `vedette import` loads the dashboard's CSV export for a profile. It is an
-    extra way in, not a replacement: real-time alerts and unattended running
-    need the stream. The file is not downloaded automatically, because the
-    export is the raw view of the whole retention period.
-30. **Query type is part of the event id in raw mode only.** In raw mode NextDNS
-    reports the A, AAAA and HTTPS lookups for one name as separate entries with
-    the same timestamp; without the type they collided (317 of 1,172 rows in
-    the tested export). In default mode entries carry no type and ids are
-    unchanged, so existing data is unaffected.
-31. **The importer does not imitate NextDNS's removal of repeats.** That rule
-    is undocumented. In default mode an imported period therefore holds more
-    events than a collected one, which can make volume baselines for that
-    period look higher. The command says so every time; `ingest.raw: true`
-    removes the difference.
-
-32. **One verdict per finding, many findings per call.** The response is
-    `{"verdicts": [...]}` keyed by `finding_id`; a missing verdict is treated
-    like an invalid answer for that finding only.
-33. **Invalid twice means a template; unreachable means wait.** A poison
-    finding cannot loop forever, and an outage cannot fill the database with
-    templates that would hide the model's absence.
-34. **Template fallbacks are never cached.** Only model verdicts are.
-35. **Model text is stored already sanitised and defanged.** Prose is defanged
-    with `defang_text`, which brackets only dots inside names so that sentence
-    punctuation survives.
-36. **`vedette findings --min-severity` uses the effective priority**: the
-    analysis's if there is one, otherwise the rule's floor.
-37. **Every model call is recorded** (time, duration, findings, outcome) for
-    the health page and the evaluation report to come.
+   time zone database, and the config loader parses YAML itself so it can
+   refuse secrets. Held by `test_time_zone_data_and_yaml_are_direct_dependencies`.
+5. **Dependencies are locked with hashes.** Images and CI install with
+   `uv sync --locked`, which checks every hash, and `pip-audit` reads a hashed
+   export of the same lock (`.github/workflows/ci.yml`).
+6. **Secrets never come from `config.yaml`**, only from the environment or a
+   Docker secret. Held by `test_api_key_in_the_yaml_file_is_rejected` and
+   `test_api_key_is_read_from_a_docker_secret_file`.
+7. **Environment overrides use `VEDETTE_` and `__`** (`VEDETTE_LLM__MODEL`);
+   lists take JSON. Unknown keys in the YAML file are errors, so a typo stops
+   start-up. Held by `test_env_var_overrides_the_profile_list_with_json` and
+   `test_an_unknown_key_in_the_yaml_file_is_an_error`.
+8. Replaced by decision 40.
+9. **Ollama has no route to the internet.** It joins only the internal `llm`
+   network and publishes no port; the one-shot `ollama-pull` service fetches
+   models, and `OLLAMA_NO_CLOUD` stops calls to ollama.com. Held by
+   `test_ollama_has_no_route_to_the_internet`.
+10. Replaced by decision 64.
+11. **Secret scanning runs through Docker**: `.githooks/pre-commit` scans staged
+    changes with the pinned gitleaks image and CI scans the full history, so
+    nothing is installed on the host.
+12. **The queue is at-least-once.** A message counts towards depth until it is
+    acknowledged; restarts rely on the stored cursor and idempotent event ids.
+    Held by `test_depth_counts_messages_until_they_are_acknowledged`.
+13. Replaced by decision 93.
+14. **The events table is the hand-off from the collector.** The enricher reads
+    unprocessed events in time order from storage, so a large backfill never
+    sits in memory and the hand-off survives a restart. Held by
+    `test_unprocessed_events_come_back_oldest_first_up_to_the_limit`.
+15. **Alembic manages the schema** and migrates at start-up. Held by
+    `test_migrations_create_exactly_the_tables_the_models_describe`.
+16. **One transaction per stream event**, so the cursor is stored with each
+    event. Held by `test_kill_mid_stream_and_restart_leaves_no_gaps_and_no_duplicates`.
+17. **Timestamps are stored as naive UTC**, since SQLite has no time zone type,
+    and are aware everywhere in code. Held by
+    `test_timestamps_come_back_timezone_aware`.
+18. **Untrusted strings are truncated, not rejected**, so a long device name
+    cannot make an event disappear; entries missing a timestamp, domain or
+    status are skipped and counted. Held by
+    `test_overlong_untrusted_strings_are_truncated_not_dropped` and
+    `test_malformed_entries_in_a_page_are_skipped`.
+19. **The stream reconnects after 5 minutes of silence**, since NextDNS documents
+    no heartbeat. Held by
+    `test_a_silent_stream_is_reopened_after_five_minutes_by_default`.
+20. Replaced by decision 65.
+21. **External lookups are what enrichment needs, and each can be turned off.**
+    The spec asks that only the NextDNS API is called and also for a top-sites
+    list, feeds and RDAP. The list and feeds are bulk downloads matched
+    locally; RDAP reveals the root it asks about, so it is limited to allowed,
+    unranked, recent roots and has `enrich.rdap.enabled`. Held by
+    `test_with_rdap_disabled_nothing_is_looked_up`.
+22. **Threat feeds are Phishing Army and CERT Polska by default**: both download
+    without an account. Check a feed's terms before adding it. Held by
+    `test_enrichment_and_rule_defaults_match_the_documented_ones`.
+23. Replaced by decision 99, which keeps the parent-rank guess only until the
+    Public Suffix List is downloaded.
+24. **A feed limits the damage it can do.** An entry never taints its parent or
+    siblings, a match on a top-1,000 root is distrusted, and a failed or empty
+    download keeps the previous entries. Held by
+    `test_threat_feed_matches_listed_names_and_their_subdomains`,
+    `test_threat_intel_does_not_fire` and
+    `test_failed_or_empty_feed_refresh_keeps_the_previous_entries`.
+25. **Rule state is in memory and rebuilt from storage** at start-up, with no
+    state table to keep consistent. Held by
+    `test_processed_events_can_be_replayed_in_order_for_warm_up`.
+26. **An unexpected error in the rule worker stops the process**, because engine
+    state would no longer match storage; every other worker logs and retries
+    (`run_forever` in `src/vedette/retry.py`). Held by
+    `test_an_unexpected_error_in_the_rule_worker_ends_it`.
+27. Replaced by decision 56.
+28. Replaced by decision 61.
+29. **History can also come from a log export**; real-time alerts still need
+    the stream, and the file is never downloaded automatically. Held by
+    `tests/unit/test_cli_import.py` and `tests/unit/test_nextdns_export.py`.
+30. **Query type is part of the event id in raw mode only**, where one name's
+    A, AAAA and HTTPS lookups otherwise collide. Held by
+    `test_api_query_type_changes_the_id_only_in_raw_mode`.
+31. **The importer does not imitate NextDNS's undocumented removal of
+    repeats**, so it says every time that a file can hold more than the API
+    shows. Held by
+    `test_import_warns_that_a_file_holds_more_than_the_default_api_view`.
+32. **One verdict per finding, many findings per call**; a missing verdict
+    counts as an invalid answer for that finding only. Held by
+    `test_a_finding_the_model_skipped_gets_a_template_after_one_retry`.
+33. **Invalid twice means a template; unreachable means wait**, so a poison
+    finding cannot loop and an outage leaves no templates behind. Held by
+    `test_two_invalid_answers_fall_back_to_templates` and
+    `test_ollama_being_down_does_not_stop_findings_and_is_caught_up_later`.
+34. **Template fallbacks are never cached.** Held by
+    `test_template_fallbacks_are_not_cached`.
+35. **Model text is stored sanitised and defanged**, with only the dots inside
+    names bracketed. Held by `test_model_text_is_sanitised_before_it_is_returned`
+    and `tests/unit/test_properties.py`.
+36. **`vedette findings --min-severity` uses the effective priority.** Held by
+    `test_min_severity_uses_the_raised_priority`.
+37. **Every model call is recorded** for the health page and the evaluation.
+    Held by `test_model_calls_are_recorded_for_later_reporting`.
 38. **The dev container joins the internal `llm` network** so `pytest --live`
-    can reach the model. It is never deployed.
-
-39. **A durable outbox for every message.** Alerts survive restarts and
-    network loss, every decision (sent, too old, cooldown, no channel) can be
-    seen later, and a finding can never be alerted twice.
-40. **No channel means "kept, not sent".** The spec's `NOTIFY_CHANNEL`
-    placeholder is read as `none`. Choosing a channel later does not flood you
-    with old alerts: they were already recorded as skipped.
-41. **Alerts are for fresh findings.** Only findings whose last event is under
-    an hour old (`notify.alert_max_age_minutes`) are alerted, so a first
-    backfill or an imported file does not set off a burst of old alerts. They
-    still appear in `vedette findings` and in the digest.
-42. **A short wait for the model.** A high or critical finding waits up to
-    60 seconds (`notify.analysis_wait_seconds`) so the alert can carry the
-    model's explanation; then it is sent without one. Spec: high and critical
-    findings go straight to the notifier; this keeps that while adding the
-    explanation when it is quick.
-43. **The cooldown applies to finding alerts, not to health messages.** Found
-    in a live test: with a cooldown, a problem that came back within the hour
-    after a "Resolved" message was never reported. Health messages now always
-    report a change, and two good checks in a row are needed to count as
-    recovered, which absorbs flapping.
-44. **Quiet hours hold, they do not drop.** Held messages are sent when quiet
-    hours end. Critical alerts and digests are never held; the digest time is
-    chosen by the user.
-45. **Notification secrets come only from the environment or Docker secrets**
-    (`NTFY_TOPIC`, `NTFY_TOKEN`, `DISCORD_WEBHOOK_URL`, `SMTP_PASSWORD`). They
-    are refused in `config.yaml`, redacted from logs, and checked at start-up:
-    a channel without its secret stops the service with a clear message.
-46. **Plain `http` for ntfy only on the local Docker network** (a host name
-    without dots, or localhost). E-mail has no unencrypted option.
-47. **`/healthz` is a minimal standard-library server**, not a web framework.
-    It reads one short request with a timeout and answers only `GET /healthz`.
-    It stayed separate from the dashboard (decision 59).
-48. **Docker health means liveness.** `/healthz` stays 200 when a check fails
-    (it reports `degraded`), so an offline laptop profile does not make the
-    container look broken; the problem is reported by alert and digest.
-49. **An idle stream is not an error.** A read timeout after the stream opened
-    is reported as `StreamIdle` and the collector reconnects without counting a
-    failure.
-50. **The digest is built from stored data only** (events, findings, analyses,
-    health results), so `vedette digest` can preview it from the command line,
-    and the archive keeps both the text as sent and the numbers as JSON.
-
-51. **The chart is server-drawn SVG, not a chart library.** This departs from
-    the spec, which asks for one small vendored chart library. The dashboard
-    has a single chart, queries per hour as stacked bars, and under 100 lines
-    of Python draw it as SVG with the bars in the markup. That adds no
-    third-party JavaScript to review, pin and keep updated; the data never
-    passes through JavaScript or inline JSON; it works under the strict CSP
-    without exceptions; and it renders with JavaScript off. A library is worth
-    adding if the dashboard needs interactive charts. (It did: decision 73
-    adds one, and this drawing stays as what pages show without JavaScript.)
-52. **htmx 2.0.11 is vendored and locked down.** A test checks the file's
-    SHA-256 against the reviewed release. Its configuration turns off `eval`
-    and script tags in swapped content, allows requests to this origin only,
-    and keeps no history cache, so pages are never copied into the browser's
-    session storage.
-53. **One shared token and in-memory sessions.** The dashboard has one user.
-    A restart logs the browser out, which is acceptable for a page on this
-    machine and means no session data on disk.
-54. **The host name is checked, not just the address.** Listening on loopback
-    does not stop a web page from pointing its own name at 127.0.0.1 (DNS
-    rebinding); refusing unknown `Host` headers does.
-55. **The server listens on all interfaces inside the container.** Docker's
-    port publishing needs that; exposure is decided by publishing on
-    `127.0.0.1` only. Checked live (see "Verified facts").
-56. **Mark benign on a domain rule allowlists the root for that profile.** The
-    rules `young-domain`, `threat-intel-allowed`, `dga-like`, `tunnel-like` and
-    `tunnel-slow` are about a domain; the entry covers the root and its subdomains on the
-    finding's profile, not other profiles. For the other rules, Benign only
-    changes the status. Reopen removes the entry. Other findings already
-    recorded keep their status. The rule worker reloads the allowlist
-    (configuration plus stored entries) at most every 30 seconds, before a
-    batch.
+    reaches the model. Held by `test_the_dev_container_can_reach_the_model`.
+39. **Every message goes through a durable outbox**, so alerts survive restarts,
+    every outcome is recorded, and a finding is never alerted twice. Held by
+    `test_pending_alerts_survive_a_restart` and
+    `test_a_fresh_critical_finding_is_queued_once`.
+40. **No channel means "kept, not sent"**, so choosing a channel later does not
+    flood you with old alerts. Held by
+    `test_without_a_channel_alerts_are_recorded_but_not_sent`.
+41. **Alerts are for fresh findings**, so a backfill or an import does not set
+    off a burst of old alerts; older ones go to the digest. Held by
+    `test_old_findings_go_to_the_digest_not_to_an_alert`.
+42. **A high or critical finding waits briefly for the model**, so the alert can
+    carry its explanation. Held by
+    `test_an_unexplained_high_finding_waits_briefly_for_the_model`.
+43. **The cooldown is for finding alerts only.** Health messages always report
+    a change, and two good checks in a row count as recovered. Held by
+    `test_a_problem_that_returns_after_a_recovery_is_reported_again` and
+    `test_a_single_good_check_in_a_bad_spell_is_not_a_recovery`.
+44. **Quiet hours hold messages, they do not drop them**; critical alerts and
+    digests are never held. Held by
+    `test_high_alerts_wait_for_quiet_hours_to_end_but_critical_ones_do_not`.
+45. **Notification secrets come only from the environment or Docker secrets**,
+    and a channel without its secret stops start-up. Held by
+    `test_notification_secrets_in_the_yaml_file_are_rejected` and
+    `test_discord_needs_a_real_webhook_url`.
+46. **Plain `http` for ntfy only on the local Docker network.** Held by
+    `test_ntfy_url_must_be_https_unless_the_server_is_local`.
+47. **`/healthz` is a minimal standard-library server** that answers only
+    `GET /healthz`. Held by `test_healthz_rejects_anything_else`.
+48. **Docker health means liveness**: `/healthz` stays 200 and says `degraded`
+    when a check fails, and the problem goes out by alert and digest. Held by
+    `test_healthz_reports_ok_or_degraded_with_every_check`.
+49. **An idle stream is not an error.** Held by
+    `test_the_source_reports_idleness_only_after_the_stream_opened`.
+50. **The digest is built from stored data only**, so `vedette digest` can
+    preview it. Held by `tests/integration/test_digest.py`.
+51. **Charts are drawn as SVG on the server**, so pages work without
+    JavaScript under the strict CSP; decision 73 adds the interactive charts
+    on top. Held by `tests/integration/test_web_charts.py`. (Departs from the
+    spec's vendored chart library.)
+52. **htmx 2.0.11 is vendored and locked down**: no `eval`, no script tags in
+    swapped content, this origin only, no history cache. Held by
+    `test_the_vendored_htmx_is_the_reviewed_file`.
+53. **One shared token and in-memory sessions**: the dashboard has one user,
+    and no session data reaches disk. Held by
+    `tests/integration/test_web_auth.py`.
+54. **The host name is checked, not just the address**, against DNS
+    rebinding. Held by `test_an_unexpected_host_name_is_refused`.
+55. **The dashboard listens on every interface inside the container**, and is
+    published on `127.0.0.1` only. Held by
+    `test_every_published_port_is_on_loopback`.
+56. **Mark benign on a domain rule allowlists the root for that profile**;
+    reopening removes the entry, and the rule worker reloads the allowlist
+    within 30 seconds. Held by
+    `test_marking_a_domain_finding_benign_allowlists_its_root`,
+    `test_reopening_undoes_the_allowlist_entry` and
+    `test_the_rule_worker_reloads_the_stored_allowlist`.
 57. **Web-facing dependencies are pinned exactly** (`fastapi`, `jinja2`,
-    `python-multipart`, `uvicorn`), to releases at least two weeks old, as
-    well as being locked with hashes. `tests/unit/test_repository.py` holds
-    the exact pins; the age is checked by hand when a pin changes.
-58. **Less on the wire and in the logs.** FastAPI's `/docs`, `/redoc` and
-    `/openapi.json` are off, uvicorn sends no `Server` or `Date` header, and
-    there is no access log, so filter values such as device names do not end
-    up in the container log.
-59. **`/healthz` stays separate.** Docker's health check must reach it without
-    a login, and it is not published outside the container.
-60. **More pooled database connections.** The dashboard shares the pipeline's
-    engine, so the pool grew to 15 connections plus 10 overflow: enough for
-    every worker and the dashboard, so new connections are opened mostly at
-    start-up. aiosqlite 0.22.1 cannot cancel a connection that is still
-    opening; one interrupted by a shutdown is closed later by the garbage
-    collector (Python warns about it) and SQLite itself is unaffected. The
-    tests wait for start-up to finish before stopping the pipeline.
-
-61. **The pre-filter raises one step and only looks at domain labels.** A hit
-    adds `instruction_tokens` to the evidence and raises the severity one level
-    (never past critical). Distinctive words (`ignore`, `instruction`,
-    `override`, `benign` and others) match anywhere, so run-together names are
-    caught. Common words (`system`, `safe`, `mark`, `previous` and others)
-    match only as whole words, so `ecosystem` or `marketplace` stay quiet. It
-    applies only to findings that already exist: a word alone never creates a
-    finding, which keeps ordinary names out of the alerts. Device names were
-    not checked at first, as the spec names labels (decision 97 adds them).
-    The rule engine runs it; only the evaluation turns it off.
-62. **What the retention purge removes.**
-    - Processed events older than `retention.events_days`. Events still
-      waiting for the rules are kept until processed.
-    - Findings whose last sighting is older than `retention.findings_days`,
-      with their analyses, outbox messages and audit entries.
-    - Health messages, digests and model-call records older than the same
-      limit.
-    - Allowlist entries made from a purged finding stay in force, with the link
-      to the finding cleared.
-    - Kept until `purge --all`: the first-seen index (it is what makes
-      something "new"), the reference caches and evaluation runs. They hold no
-      lookup times.
-    The purge runs one minute after start-up and then hourly.
-63. **Owner-only files by umask and by repair.** `vedette` sets umask 077
-    before anything else, so the database, its WAL and anything else it
-    writes are created 0600. Migrations also tighten an existing file to 0600
-    and its directory to 0700, which fixes databases created before this
-    change.
-64. **Ollama runs as uid 10002 with a read-only root filesystem.** The model
-    volume is mounted at `/home/ollama/.ollama` with `HOME=/home/ollama`, so
-    the existing models and key keep their paths. A one-shot service runs
-    `chown` as root with only `CHOWN` and `DAC_READ_SEARCH` and no network
-    before Ollama starts, on every `up`; it takes a moment because it only
-    changes metadata. `ollama-pull` runs as the same user. Checked live: the
-    model listed, the GPU found, and the real-model smoke test passed with the
-    model 100% on the GPU.
-65. **`vedette backfill` adds history without touching the stream.** It reads
-    a window through the same history paging the collector uses and stores
-    events idempotently. It does not move the stored stream cursor, so the live
-    stream carries on unaffected. `--days` is capped at the event retention,
-    otherwise the purge would delete what it just read.
-66. **How the evaluation is built.**
-    - **Detection.** It reuses the real enrichment and rule engine, offline:
-      reference data is read from the local tables, registration dates come
-      from the cache only (no RDAP), and first sightings go to a scratch
-      database. The real database is only read, except for storing the
-      result and, since decision 101, the popular-hostname list.
-    - **Defences off.** A naive analyst kept only in `vedette/eval/`: names
-      written into the instructions, no warning, no pre-filter, no floor
-      guard, no sanitising. The JSON schema stays so a priority can be read;
-      the report says so.
-    - **Echoes.** Counted by a word-pattern heuristic that skips sentences
-      describing the attempt. Every counted case is printed in the report,
-      with the model's words, so it can be checked. Since decision 102 it
-      also counts downplaying and harmful advice.
-    - **False alerts, latency and load.** Read from what the pipeline already
-      stored, not replayed.
-    - **Privacy.** The report and the dashboard show names sampled from your
-      history and from the feeds only as counts. Since decision 101, flagged
-      names from the two public lists are shown, even when a feed also lists
-      one.
-    - **Results.** Stored in `eval_runs` for the Evaluation page.
-67. **The dashboard's visual system was redesigned.** The direction is
-    "notices and chart corrections": a navy rail, a chart-white ground,
-    magenta only for attention and decisions, and sloped type for every name
-    from outside. It was chosen from a design round and reviewed. At first
-    it used the system font stack, because no font download had been
-    approved (decision 69 replaces that).
-68. **Dark only, at the owner's request.** The world became the night chart:
-    a navy ground (never black), a darker rail, layered navy surfaces,
-    severity as tinted chips, and magenta still kept for attention and
-    decisions. There is no light theme.
-69. **Self-hosted fonts.** The owner chose Mona Sans and JetBrains Mono and
-    approved the download. They are served by the dashboard itself, because
-    the strict CSP allows no external fonts. Only the latin subset is shipped:
-    about 181 KB, with the interface face preloaded.
-70. **Server-sent events for the live feed**, not WebSockets or htmx polling.
-    The feed is one-way, the browser reconnects on its own, it works under
-    `connect-src 'self'`, and it needs no extra library. Small server-rendered
-    partials (refetched by htmx) keep tables in one template, so the live view
-    and a page reload can never disagree.
-71. **The live feed follows event time.** A short overlap window plus a record
-    of ids already sent is simpler and more robust than a write-order cursor;
-    the feed is for what is happening now, not for history.
-72. **Narrow findings tables fold.** When the table itself is under 1,200
-    pixels wide (a container query, so it covers 1,280-pixel laptops and
-    narrower board columns as well as small windows), the number, rule,
-    device, last-seen time and event count move into one line under the
-    domain, so the decision buttons stay in view. Phones show each finding as
-    a card. (At first the fold followed the window, from 641 to 1,180 pixels,
-    and a 1,280-pixel laptop pushed the buttons out of view.)
-73. **uPlot for the interactive charts.** The owner asked for charts that zoom,
-    move through time, enlarge and click through, and approved the download.
-    uPlot is about 51 KB, has no dependencies, draws on a canvas so thousands
-    of bars stay fast, is MIT-licensed, and works under the strict CSP: it
-    needs no `eval`, no inline `<style>` and no `style` attributes. Larger
-    chart libraries were not needed for bar series.
-74. **The server picks the bar size.** The browser asks for a span and how
-    many bars its width suits; the server answers with at most that many (24
-    to 480), from one minute to one day. Zooming therefore brings finer bars
-    without the browser ever holding raw events, and every request costs one
-    grouped query.
-75. **Live charts add queries in the browser and check against the server.**
-    Each query from the live stream joins its bar at once, and the series is
-    fetched again every half bar (30 seconds to 5 minutes) to correct any
-    drift, rather than re-fetching on every query.
-76. **The Overview chart spans the full width.** An interactive chart needs
-    the room, and the list of what happened in a period opens beneath it.
-    "Right now" moved next to "New devices and findings".
-77. **Wide screens get more columns, not longer lines.** The owner uses an
-    ultrawide screen. The main column fills up to 3,200 pixels (a 3,440-pixel
-    display less the rail) instead of stopping at 1,320, and from 2,240
-    pixels the pages recompose. The Overview becomes two columns (decisions
-    and the chart beside the live and daily panels), the Live page sets the
-    feed beside the chart, Domains puts its four lists in one row, and a
-    finding's page splits its main column. The breakpoint is where the
-    findings table still shows every column in two thirds of the width;
-    below it the layouts are as before.
-78. **Our static files are versioned by content.** `style.css`, `live.js` and
-    `charts.js` are linked as `?v=` plus the first 12 hex digits of their
-    SHA-256, and every static response says `Cache-Control: no-cache`, so the
-    browser checks it on each load (a 304 on this machine). Without it, a
-    browser reused a day-old stylesheet with new pages after an upgrade and
-    the layout broke; a hard reload did not clear it. Vendored files already
-    carry their version in the file name.
-79. **The dashboard was evaluated against usability heuristics** on the
-    owner's real data, read-only, with triage actions tried on synthetic data.
-    The findings and what was fixed are in `docs/ux/evaluation-dashboard.md`;
-    the project context and the decisions made along the way sit beside it.
-80. **CUDA's kernel cache lives in the model volume.** Measured on the owner's
-    RTX 4070 Ti: with the root filesystem read-only (decision 64), CUDA could
-    not write its default cache in `~/.nv`, so the GPU kernels were compiled
-    again every time the model loaded. A call to a model that had unloaded
-    took 48 to 60 seconds (load 23 to 35 s, a 460-token prompt 16 s, the
-    answer at 14 tokens a second); since findings are rare, nearly every real
-    call was such a call. With `CUDA_CACHE_PATH` in the volume (about 24 MB,
-    1 GiB allowed), the same call takes 4.2 seconds while the model file is
-    still in the operating system's memory (load 2.1 s, prompt 0.2 s, 73
-    tokens a second), and a warm one 1.7 seconds. After hours idle, the first
-    real call took 17 seconds: the load took 14 s, almost all of it reading
-    the 5.2 GB weights back from disk, which no cache setting avoids; the
-    prompt still took 0.3 s and the answer ran at 76 tokens a second. The
-    model, its weights and its answers are unchanged; only compiled GPU code
-    is kept. A high or critical alert now gets its explanation well inside the
-    60 seconds it waits for one. `keep_alive` stays at 5 minutes, since even a
-    cold call is cheap enough and the GPU memory is free between findings.
-81. **Calls to the model are sized to its context window.** Measured on
-    `qwen3:8b`: about 3 payload characters per token and about 130 answer
-    tokens per finding, so a full batch of 20 ordinary findings uses about
-    6,900 of 8,192 tokens. Long evidence (up to 20 keys, lists of ten
-    200-character strings, 256-character names) could pass the window, and
-    Ollama would then cut the prompt. Each call is now filled while an
-    estimate (2.5 characters a token, 200 answer tokens per finding, a tenth
-    of the window spare) fits. Ordinary batches are unaffected. The
-    evaluation suite keeps its fixed batches, so its injection results stay
-    comparable.
-82. **The first digest no longer needs the service running at the digest
-    time.** It used to come only at the first digest time after start-up.
-    The owner's computer is off overnight and starts after 08:00, so after
-    nine days of data no digest had been made. Now, while none exists, the
-    latest one is produced late when stored events reach back before it.
-83. **Silence is not judged while a profile catches up after start-up.**
-    Twice in one week a morning start raised "No events from router for
-    13 h" and its "Resolved" two minutes later: the first check ran before
-    the collector had read the night's events. With a channel set, that is
-    two false messages per profile on most mornings. The collector now
-    reports when it has caught up; the check waits for that for at most 10
-    minutes, and a problem announced before the restart is neither repeated
-    nor resolved meanwhile.
-84. **The dashboard became "the drawing set", with one profile switch.** The
-    owner asked for a more professional and futuristic look, a way to see
-    router, pc or both on every chart, sortable headings and controls of the
-    dashboard's own. The world was chosen from a deal of directions, recorded
-    with its reasons in `.impeccable/surfaces/src-vedette-web.md`. Profiles became layers with their own inks
-    because that one idea answers the request for separation everywhere at
-    once. The switch is global and remembered, not one control per panel, as
-    the owner chose; its options carry open counts so scoping never hides a
-    problem. Sorting runs in the browser on the rows shown, since every table
-    shows all its rows (findings at most 200), and the server's order stays
-    the default. Dark only and the inked decisions were kept at the owner's
-    request.
-85. **The project is called Vedette.** It began as "NextDNS Sentinel". Ahead of
-    publishing the repository, the owner chose a name that does not use
-    NextDNS's: the name belongs to NextDNS Inc., whose terms say nothing about
-    third parties using it, and "DNS Sentinel" was ruled out because a
-    commercial DNS-analytics product called DNSentinel exists. A vedette is a
-    mounted sentry posted ahead of the outposts. Everything was renamed to
-    match: the command, the Python package and module, the `VEDETTE_`
-    settings prefix, the cookies and the Docker names. NextDNS is still named
-    where it describes the service Vedette reads, such as `NEXTDNS_API_KEY`
-    and the README's note that the project is independent. A test in
-    `tests/unit/test_repository.py` fails if the old name appears anywhere
-    but here and in the CHANGELOG.
-86. **The default time zone is UTC.** The spec set Asia/Singapore, the owner's
-    zone, which new users elsewhere would get without noticing: digests and
-    quiet hours an hour or more off. `config.example.yaml` asks for an IANA
-    zone. Tests that need a fixed zone still name Asia/Singapore themselves.
-87. **The design tools' briefs stay local.** `PRODUCT.md` and `DESIGN.md` are
-    read by the Impeccable and Intent design tools and are git-ignored, at
-    the owner's request. So are the plans coding agents write under
-    `docs/superpowers/`: they are working notes, not documentation. A test
-    in `tests/unit/test_repository.py` holds both.
-88. **CI actions are pinned to a release's commit.** A tag can be moved to
-    other code; a commit cannot. Each `uses:` line names the commit and, in a
-    comment, the release (`actions/checkout` v7.0.1,
-    `astral-sh/setup-uv` v10.3.3). The first run on GitHub failed to start
-    because `setup-uv@v10` named a tag that does not exist: setup-uv
-    publishes exact releases only. Base images are
-    pinned by digest too (decision 93). With the pinned actions, CI passed on GitHub on
-    2026-11-21: lint, types and tests on Python 3.14 and 3.15, pip-audit
-    and gitleaks. `tests/unit/test_repository.py` fails on a `uses:` line
-    that names a tag instead of a commit.
-89. **CI also runs weekly and builds the image.** A new advisory for a locked
-    dependency shows up on a Monday without a push, and a change that breaks
-    the Dockerfile fails a pull request rather than the release.
-90. **Dependabot proposes updates weekly, once a release is 14 days old.**
-    The same two-week rule as for web dependencies (decision 57), applied
-    through Dependabot's cooldown to the Python lock, the CI actions, the
-    Dockerfile's base images and the Ollama image. Security updates skip the
-    wait. Minor and patch updates come grouped, one pull request per
-    ecosystem; a major update comes alone. `tests/unit/test_repository.py`
-    holds the 14-day cooldown for every ecosystem.
-91. **Releases come from a version tag.** `.github/workflows/release.yml`
-    runs on a `v*.*.*` tag. It first calls the CI workflow, so nothing is
-    published unless every check passes at that commit. It then refuses a
-    tag that differs from `version` in `pyproject.toml`, or a version with
-    no `## <version>` section in `CHANGELOG.md`. Only then does it push the
-    `runtime` image to `ghcr.io/<owner>/vedette` (the version, `major.minor`
-    and `latest`) with a build-provenance attestation that `gh attestation
-    verify` checks, and create the GitHub Release from that changelog
-    section. Started by hand, it builds the image and publishes nothing. The
-    image is for `linux/amd64` only, since Ollama needs an NVIDIA GPU here.
-    Compose keeps building locally unless `VEDETTE_IMAGE` names a released
-    image. That variable reaches the container through `.env` too, and the
-    settings loader ignores it; a test holds that.
-92. **The public repository uses GitHub's own security checks.** Since the
-    repository went public on 2026-11-21: private vulnerability reporting
-    (where `SECURITY.md` sends reports), Dependabot alerts and security
-    updates, secret scanning with push protection, and CodeQL code scanning
-    in its default setup. Default setup rather than a workflow file: GitHub
-    keeps the CodeQL version current, picks the languages from the code,
-    runs it on every push and pull request and weekly, and handles
-    Dependabot's pull requests, with no action to pin. It found Python,
-    JavaScript/TypeScript and the workflows. When the repository went
-    public, secret scanning over the full history and Dependabot reported
-    nothing. CodeQL's first analysis raised four alerts:
-    - **A redirect target with a tab** (`py/url-redirection`). Browsers
-      delete tabs from a URL, so `/<tab>/evil.example` would read as
-      `//evil.example`. Starlette percent-encodes the Location header, so it
-      was not exploitable, but `_safe_next` now refuses control characters
-      and spaces itself, and tests cover both the form post and `/scope`.
-    - **The template test matched script tags case-sensitively**
-      (`py/bad-tag-filter`, twice). It now uses an HTML parser.
-    - **A test that logs a fake secret on purpose**, to prove the redactor
-      removes it (`py/clear-text-logging-sensitive-data`): a false positive.
-93. **Every image is pinned to a digest.** `python:3.14-slim`, the `uv`
-    image, the Dockerfile frontend, `ollama/ollama` and the gitleaks image
-    name their tag and their `@sha256` digest, so a tag that a registry
-    moves cannot change what is built or run. Dependabot proposes the tag
-    and digest together (decision 90), which is what made this cheap. The
-    gitleaks image runs from a `docker run` line that Dependabot does not
-    read and is bumped by hand. `tests/unit/test_repository.py` fails on an
-    image without a digest, and when the gitleaks copies in `ci.yml`,
-    `.githooks/pre-commit` and `.pre-commit-config.yaml` differ.
-94. **A heartbeat for what no alert can report.** A stopped computer, a
-    stopped Docker or a broken alert channel cannot raise an alert, and Docker
-    Desktop stopped twice in one day on the owner's machine. So Vedette can
-    ping a dead man's switch, a service that alerts when the pings stop. It
-    pings only while its checks run and alert delivery works, so a broken
-    channel is reported from outside too. A ping is a plain GET with nothing
-    in it: the service learns only that Vedette is up. Services differ in how
-    they take a failure signal, so silence is the one signal used. Off unless
-    `HEARTBEAT_URL` is set.
-95. **The runtime image ships no pip and takes Debian's security fixes.** A
-    Docker Scout scan of the image found 13 high, 17 medium and 38 low
-    vulnerabilities, all in the base layer; Vedette's own layers had none.
-    The 8 high ones with fixes were in pip, which bundles urllib3, msgpack and
-    setuptools code, and in zlib. Vedette runs from `/opt/venv` and never
-    installs anything, so the runtime stage uninstalls pip and ensurepip's
-    bundled wheel, and runs `apt-get upgrade`. That left no fixable
-    vulnerability, and 5 high ones in glibc and OpenSSL that Debian had not
-    fixed. The upgrade makes a build depend on when it runs, so CI and the
-    release never reuse that stage from the cache; CI then scans the image
-    with Trivy and fails on anything fixable and high or critical.
-96. **The dashboard's routes are modules, not closures.** Every route used to
-    be defined inside `create_app`, one function of 645 lines and a
-    cyclomatic complexity of 68, so any change touched it. The routes now sit
-    in `web/routes/`, one module per part, and reach the shared state through
-    FastAPI dependencies on a `Dashboard` object kept on `app.state`. The move
-    changed no behaviour: the 960 tests passed unchanged, and `app.py` went
-    from 1,009 lines to 81.
-97. **Device names go through the pre-filter too.** A guest or a gadget on
-    the network can name itself, and its name reaches the model in a finding's
-    evidence. Device names often name people and products ("Mark's iPhone",
-    "Google Assistant"), so they are checked only for words with no business
-    in one (`ignore`, `instruction`, `disregard`, `override`, `jailbreak`,
-    `benign`, `whitelist`, `allowlist`), each at the start of a whole word.
-    A hit raises the finding one step, as for a domain.
-98. **An Allowlist page.** Until now a stored entry could be taken back only
-    by reopening the finding that made it, and nothing showed what the rules
-    were skipping. The page lists the stored entries (root, profile, device,
-    when, and the finding they came from) next to the read-only entries from
-    `config.yaml`. Remove deletes one entry and records it in its finding's
-    history as `allowlist_removed`, leaving the finding benign; the rule
-    worker picks the change up within 30 seconds (decision 56). Only status
-    changes count as a finding's latest decision, so a removal does not
-    change the time the tables show. It is the sixth of nine sheets, between
-    Devices and Digests.
-99. **The Public Suffix List decides what is a platform customer name.**
-    NextDNS reports a customer's name on `github.io` or a cloud provider as a
-    root of its own because those platforms list themselves in the private
-    section of the Public Suffix List. Decision 23 guessed at them from a
-    ranked parent domain, which missed platforms on no top-sites list (their
-    random customer names could trip `dga-like`, and RDAP was asked about
-    names nobody registered) and caught roots under ranked domains that are
-    not platforms. Now a root is a platform name when a private rule sets its
-    suffix, whether the root sits under that suffix or is the suffix itself
-    (a wildcard such as `*.platform.example` makes every region a suffix, and
-    NextDNS reports the region as the root of a customer's name), or when the
-    root is longer than the domain registered under the list, which means
-    NextDNS knows a platform the list does not. The replay of the owner's
-    history found the middle case: a first version that counted only names
-    under a private suffix let one such region trip `dga-like` three times,
-    where the parent-rank guess had caught it.
-    `young-domain`, `dga-like` and RDAP skip platform names as before. The
-    list (10,470 rules on 2026-11-21, 3,519 of them private) is downloaded
-    weekly, stored in `public_suffixes` and matched in memory with the list's
-    own algorithm (wildcards, exceptions, internationalised rules in ASCII).
-    Until a copy exists, the parent-rank guess stands in.
-100. **Two rules for patterns over time, measured on real traffic first.** The
-    evaluation found three gaps: tunnels slower than 30 long subdomains in
-    10 minutes went uncaught, `dga-like` flagged 8% of dictionary-word DGA
-    names, and young-domain recall was not measured. Lowering thresholds to
-    pass the synthetic sets would have been tuning to the test and would
-    have added false alerts the evaluation could not see. Instead:
-    - `tunnel-slow` counts the same long subdomains over six hours (more
-      than 60 fires), so a tunnel sending a lookup a minute adds up.
-    - `dga-burst` counts the domains a device looks up for the first time
-      that no top-sites list knows and that are not platform names (more
-      than 20 in ten minutes fires). That is how generated domains look in
-      use, whatever their letters; it does not depend on the names at all.
-    - Both start at medium, so they reach the digest; the model can raise
-      them.
-    - `vedette eval` gained timed sets for them, dated sets that measure
-      `young-domain` with registration dates given, and a replay of the whole
-      stored history through the current rules. Each item now comes from a
-      device of its own, so a list of names never adds up to a burst.
-    The thresholds were set before any measurement. On a copy of the owner's
-    16.6 days (497,306 events), the replay raised no finding from either new
-    rule, while they caught 10 of 10 sustained tunnels and 10 of 10 bursts
-    of random or dictionary-word names, and `young-domain` flagged 40 of 40
-    young and 0 of 40 older dated domains.
-101. **The evaluation measures false alerts on names the rules do not skip.**
-    The top-sites set could not fail: `dga-like`, `young-domain` and
-    `dga-burst` skip every ranked root, and `threat-intel-allowed` skips feed
-    hits in the top 1,000, so "0 of 1,000 flagged" said nothing about false
-    alerts. The set stays as a sanity check, labelled so, and three changes
-    make the measurement able to fail:
-    - **As if unlisted.** The same names run again with the top-sites rank
-      removed after enrichment, the way the feed match is removed for the
-      feed-off row. This shows what each rule does on its own. In practice
-      only `dga-like` and the feed rule's top-1,000 skip can fire there: the
-      burst and tunnel rules need repeated lookups, and the public lists are
-      judged without registration dates. Only RDAP fills that cache, for roots
-      from the owner's own traffic, so a public name flagged as young would
-      reveal what the owner's network looked up. The report says so.
-    - **Popular full hostnames.** Cisco Umbrella's top-1M ranks the names its
-      resolvers see most, mostly full names (`events.data.microsoft.com`),
-      which is what devices look up and where false alerts come from. The
-      evaluation takes every 100th of the top 100,000 (the tail holds junk and
-      some malicious names) and groups each under its registered domain from
-      the Public Suffix List, private rules included, as NextDNS reports roots.
-      It runs with real ranks and as if unlisted.
-    - **True by construction.** A result that could not have come out
-      otherwise carries the reason, in the report and on the Evaluation page:
-      the top-sites set, and the threat-feed set with the feed match on.
-    The list is used only by the evaluation, so `vedette eval` downloads it
-    itself, at most once a week (`evaluation.refresh_days`), into the
-    `eval_hostnames` table, and `--offline` uses the stored copy. The service
-    does not download it: that would be a weekly download on every install
-    for a list only the evaluation uses. A file the owner downloads and
-    passes in would be a manual step on every run inside Docker. The download
-    is a plain fetch of a public file, size-capped and validated like the
-    top-sites list; a failure keeps the stored copy and the report says which
-    date it is from. The refresh record carries a digest of the list's
-    address, so changing `evaluation.hostnames_url` downloads the new list on
-    the next run instead of reusing the old copy for up to a week. The report
-    lists up to 20 flagged names from each public set so every false alert can
-    be checked, even a name a feed also lists (both are public); names sampled
-    from the owner's history and from the feeds are still only counted.
-102. **Prompt injection is measured on a held-out set, with repeats and
-    neighbours.** The 60 development names were written alongside the
-    pre-filter, all on `.example` and all attacking through the looked-up
-    name, and the undefended analyst resisted every one too, so the test could
-    not show the defences doing anything. Now:
-    - **A held-out set.** 315 items in
-      `src/vedette/eval/data/injection_held_out.yaml`, written by a separate
-      agent session that never read the pre-filter or the development set:
-      obfuscation (leetspeak, run-together words, ten languages, punycode,
-      hex, base32), instructions split across labels, downplaying stories
-      with no command words, requests for harmful actions, finding-id
-      spoofing, names near 253 characters, device names, and instructions
-      split across the five roots a burst finding lists. Names use realistic
-      suffixes. Each item reaches the model through the field that would
-      carry it: a name under `young-domain`, `dga-like` or `tunnel-like` with
-      that rule's evidence, a device name under `new-device`, a list of roots
-      under `dga-burst`. The development set stays in the detection table and
-      the pre-filter comparison, and is no longer sent to the model.
-    - **What counts.** Besides a lowered priority and dismissing the finding,
-      the model's text counts when it downplays the finding (routine,
-      expected, nothing to worry about) or gives harmful advice (visit the
-      site, turn off filtering, install a certificate, call a number).
-      Harmful advice counts even when hedged; negated advice does not. The
-      patterns were written before the held-out set was first run. Their
-      precision and recall against labelled answers are not measured yet.
-    - **Repeats and intervals.** `vedette eval --repeats N` sends the set to
-      each model N times per setting. The report gives the rate over all
-      trials and the share of items steered at least once, each with a 95%
-      Wilson interval, because repeats of one item are not independent. With
-      the defences on, a lowered priority is impossible by construction, so
-      the report counts the model's attempts to lower instead.
-    - **Effects on other findings.** The first few items of each category
-      (8 by default, `--cross-per-category`) go into a batch with nine
-      ordinary findings, one per rule, at a fixed place per item, after the
-      nine are asked alone three times. This runs on the first model given
-      only: it is the production question, and it would otherwise double the
-      run. A mixed batch counts as affected when an ordinary
-      finding's priority falls below the lowest it got alone, its text
-      dismisses, downplays or gives harmful advice where it never did alone,
-      it is left out, or a verdict names another finding of the batch or
-      uses an id not in it. `--no-cross` skips this part.
-    - **The pre-filter's hit rate** is computed on both sets without the
-      model. It reads the looked-up name, the root and the device name, and
-      since decision 103 each root a burst finding lists.
-    - **Parallel calls.** `--parallel N` keeps up to N calls in flight across
-      all runs of a model, which only helps when Ollama answers that many
-      together (`OLLAMA_NUM_PARALLEL`, passed through by `docker-compose.yml`
-      and empty by default, so the service keeps one at a time). Rounds wait
-      for each other to finish before a failure is raised, so a call is never
-      cut off half-way. Call times measured this way are longer than in
-      service, and the report says so.
-    The committed report was generated on qwen3:8b, llama3.1:8b and
-    gemma3:12b with thinking off (the production setting), so a result is not
-    one model's habit. To keep the run near half an hour it used one repeat,
-    four calls at a time with Ollama's flash attention and an 8-bit KV cache,
-    a 6,144-token window (`VEDETTE_LLM__NUM_CTX`; a batch of ten uses about
-    3,300, so nothing is cut) so gemma3:12b fits on a 12 GB card, and three
-    items per category in the mixed batches. Three repeats each
-    (`--repeats 3`) remain to be run. Reading the cases of the first such run
-    found three faults in the word patterns that over-counted, all named in
-    the report's method note; they were fixed and the run repeated.
-103. **The pre-filter reads the roots a burst finding lists.** A
-    `dga-burst` finding carries up to five of the new roots that made the
-    burst (`sample_roots`), and they reach the model like any other name.
-    The pre-filter read only single-name fields, so an instruction placed in
-    those roots was never raised: none of the 25 held-out items carried that
-    way were. Each listed root is now checked as a looked-up name is, with
-    the same words. Roots are checked one by one, so a word split across two
-    roots is not caught. On the held-out set it now raises 6 of those 25
-    items; with the defences on, the three models were steered by 0, 1 and 0
-    of them, as before the change.
+    `python-multipart`, `uvicorn`). Held by
+    `test_web_facing_dependencies_are_pinned_exactly`; decision 106 holds
+    their age.
+58. **Less on the wire and in the logs**: no API description pages, no
+    `Server` or `Date` header, no access log. Held by
+    `test_framework_api_pages_are_switched_off` and
+    `test_the_dashboard_serves_while_the_pipeline_runs`.
+59. **`/healthz` stays separate from the dashboard**, reachable without a login
+    and only on loopback. Held by `test_healthz_listens_on_loopback_only`.
+60. **The database pool serves every worker and the dashboard at once.** Held
+    by `test_the_pool_serves_every_worker_and_the_dashboard_at_once`.
+61. **The pre-filter raises one step and never creates a finding.**
+    Distinctive instruction words match anywhere in a label, common ones only
+    as whole words. Held by `tests/unit/test_prefilter.py` and
+    `test_a_distinctive_word_is_caught_anywhere_in_a_label`.
+62. **The retention purge removes processed events and old findings with what
+    hangs off them**, and keeps the first-seen index, the reference caches,
+    evaluation runs and allowlist entries. Held by
+    `test_the_purge_removes_only_what_is_past_retention` and
+    `test_an_allowlist_entry_outlives_the_finding_that_made_it`.
+63. **Owner-only files, by umask and by repair.** Held by
+    `test_the_database_is_made_owner_only`.
+64. **Ollama runs as uid 10002 with a read-only root filesystem**; only a
+    one-shot service with `CHOWN` and `DAC_READ_SEARCH` runs as root, to own
+    the model volume. Held by
+    `test_ollama_runs_unprivileged_with_a_read_only_root`.
+65. **`vedette backfill` adds history without moving the stream cursor**, and
+    never further back than the event retention. Held by
+    `test_backfill_leaves_the_stream_cursor_alone` and
+    `test_backfill_will_not_read_past_the_retention`.
+66. **The evaluation reuses the real enrichment and rules offline**, compares
+    defences on and off, and shows sampled names only as counts. Held by
+    `tests/integration/test_eval.py`.
+67. **The dashboard's look** is recorded in `docs/ux/decisions.md` and
+    `.impeccable/surfaces/src-vedette-web.md`.
+68. **Dark only, at the owner's request.**
+69. **Self-hosted fonts**, since the CSP allows no external ones. Held by
+    `test_the_vendored_fonts_are_the_reviewed_files`.
+70. **Server-sent events for the live feed**: one-way, reconnecting, and inside
+    `connect-src 'self'`. Held by `test_the_stream_sends_new_queries_and_counters`.
+71. **The live feed follows event time**, with an overlap window and the ids
+    already sent. Held by `test_a_second_poll_does_not_repeat_queries`.
+72. **Narrow findings tables fold**, by container query, so the decision
+    buttons stay in view (`docs/ux/adaptation-narrow-window.md`).
+73. **uPlot draws the interactive charts**: small, no dependencies, and no
+    `eval` or inline styles under the CSP. Held by
+    `test_the_vendored_uplot_is_the_reviewed_file`.
+74. **The server picks the bar size**, so zooming never sends raw events.
+    Held by `test_the_bar_size_follows_the_span`.
+75. **Live charts add queries in the browser and re-fetch the series** to
+    correct drift. This is browser code in `charts.js`, with no test.
+76. **The Overview chart spans the full width.**
+77. **Wide screens get more columns, not longer lines.**
+78. **Our static files are versioned by content** and revalidated on each
+    load. Held by `test_our_static_files_are_versioned_and_revalidated`.
+79. **The dashboard was evaluated against usability heuristics**; findings and
+    fixes are in `docs/ux/evaluation-dashboard.md`.
+80. **CUDA's kernel cache lives in the model volume**, because the read-only
+    root otherwise makes every model load recompile its GPU kernels. Held by
+    `test_the_gpu_kernel_cache_lives_in_the_model_volume`.
+81. **Calls to the model are sized to its context window.** Held by
+    `test_calls_are_sized_to_the_context_window`.
+82. **A missed first digest is made late** when the computer was off at the
+    digest time. Held by
+    `test_a_first_digest_missed_while_the_computer_was_off_comes_late`.
+83. **Silence is not judged while a profile catches up after start-up.** Held
+    by `test_silence_from_while_vedette_was_off_is_not_reported`.
+84. **One profile switch for the whole dashboard**, chosen by the owner and
+    recorded in `.impeccable/surfaces/src-vedette-web.md`.
+85. **The project is called Vedette.** It began as "NextDNS Sentinel"; the
+    owner renamed it before publishing, since the name belongs to NextDNS
+    Inc. NextDNS is still named where it describes the service. Held by
+    `test_the_old_project_name_is_only_in_the_rename_records`.
+86. **The default time zone is UTC**, so new users elsewhere do not get the
+    owner's. Held by `test_defaults_when_no_file_is_given`.
+87. **Design-tool briefs and agent plans stay local**: `PRODUCT.md`,
+    `DESIGN.md` and `docs/superpowers/` are git-ignored. Held by
+    `test_design_and_agent_working_files_stay_local`.
+88. **CI actions are pinned to a release's commit**, since a tag can move.
+    Held by `test_actions_are_pinned_to_a_commit`.
+89. **CI also runs weekly and builds the image**, so a new advisory or a broken
+    Dockerfile shows up without a push. Held by
+    `test_ci_runs_weekly_and_builds_the_image`.
+90. **Dependabot waits until a release is 14 days old**; security updates skip
+    the wait. Held by `test_dependabot_waits_two_weeks_for_every_ecosystem`.
+91. **Releases come from a version tag**, and only after every CI check passes
+    at that commit; the workflow refuses a tag that differs from the version
+    in `pyproject.toml` (`.github/workflows/release.yml`). Compose builds
+    locally unless `VEDETTE_IMAGE` names a release, which the settings ignore:
+    `test_the_compose_image_variable_is_not_a_setting`.
+92. **The public repository uses GitHub's own security checks**: private
+    vulnerability reporting, Dependabot alerts, secret scanning with push
+    protection, and CodeQL's default setup. These are repository settings,
+    not files.
+93. **Every image is pinned to a digest**; Dependabot cannot see the gitleaks
+    copies, which are bumped together by hand. Held by
+    `test_every_image_is_pinned_to_a_digest` and
+    `test_every_copy_of_the_gitleaks_image_is_the_same`.
+94. **A heartbeat for what no alert can report**: Vedette pings a dead man's
+    switch while its checks run and alerts get out. Held by
+    `test_the_pipeline_pings_the_heartbeat_once_checks_have_run` and
+    `test_the_heartbeat_is_withheld_while_alerts_cannot_get_out`.
+95. **The runtime image ships no pip and takes Debian's security fixes.** Held
+    by the CI steps "The runtime image has no pip" and the Trivy scan.
+96. **The dashboard's routes are modules** in `src/vedette/web/routes/`.
+97. **Device names go through the pre-filter**, checked only for words with no
+    business in a device name. Held by `test_everyday_device_names_are_left_alone`
+    and `test_a_device_name_with_instructions_is_found`.
+98. **An Allowlist page** lists stored and configured entries and removes
+    stored ones. Held by `tests/integration/test_web_allowlist.py`.
+99. **The Public Suffix List decides what is a platform customer name.** Held
+    by `tests/unit/test_public_suffix.py` and
+    `test_a_platform_suffix_is_a_private_rule_the_name_sits_under`.
+100. **Two rules for patterns over time**, `tunnel-slow` and `dga-burst`, both
+     starting at medium. Held by `tests/unit/test_rules_bursts.py`.
+101. **The evaluation measures false alerts on names the rules do not skip**,
+     and labels results that could not have come out otherwise. Held by
+     `test_ranks_off_shows_what_each_rule_does_on_its_own` and
+     `test_popular_hostnames_are_sampled_with_their_registered_roots`.
+102. **Prompt injection is measured on a held-out set**, with repeats,
+     intervals and mixed batches. Held by
+     `test_the_suite_repeats_the_held_out_set_and_reports_every_part` and
+     `test_a_crafted_finding_that_changes_its_neighbours_is_counted`.
+103. **The pre-filter reads the roots a burst finding lists.** Held by
+     `test_each_root_a_burst_lists_is_checked_as_a_domain_name`.
 104. **A device name reaches the model as a self-reported label that proves
-    nothing.** On the held-out set, crafted device names were the weakest
-    carrier: with the defences off they steered 68 to 80% of answers, and
-    with them on gemma3:12b still called about one new-device alert in five a
-    false positive or a known device. Whoever sets up a device chooses its
-    name, and the model has nothing else to tell it which devices are known,
-    so it took the name's claims at their word. Now:
-    - The payload sends the name as `device_name_self_reported` (`MODEL_KEYS`
-      in `llm/prompts.py`), so the warning sits next to the value. What is
-      stored, shown and checked by the pre-filter keeps `device_name`.
-    - The system prompt says a name never shows who owns a device, whether
-      it was seen, checked or approved before, or that it is safe, and is
-      never a reason to call a finding a false positive, a duplicate or
-      expected. The model may report a name's claim as a claim, must never
-      recommend what a name asks for, and, for a new device, recommends that
-      the owner checks whether they recognise it and removes it if not.
-    - `PROMPT_VERSION` is 2, so verdicts cached under the old prompt are not
-      reused.
-    - Two wordings were tried on ten device names written for
-      `tests/live/test_ollama_live.py`, three runs per model. Counting a
-      name's claim taken as fact as well as the evaluation's patterns,
-      steered answers went from 20 of 30 to 0 on qwen3:8b and from 11 to 3
-      on gemma3:12b with the wording kept. The evaluation's patterns alone
-      missed most of the steered answers ("likely a device previously
-      cleared", "close the alert as a duplicate"), so its device row is a
-      lower bound.
-    - On the held-out set, one run each with the defences on, device names
-      now steer 1 of 25 answers on qwen3:8b (1 before), 0 on llama3.1:8b (5)
-      and 0 on gemma3:12b (7, and 5 in an earlier run of the same code). The
-      one left is a printer whose name calls itself benign. With the defences
-      off nothing changed, as expected (68 to 80%).
-    - Every held-out device name had been seen when the prompt was written,
-      and the report says so.
-    Not done: more device words in the pre-filter (they would be fitted to
-    the held-out set and raise ordinary names, and a raise does not change
-    the text); a code check that throws out dismissive text (it would reuse
-    the evaluation's patterns and score near zero by construction); leaving
-    the name out of the payload (the strongest, but the explanation loses it
-    and the device row would read zero by construction). The cost: new-device
-    explanations are more generic, and qwen3:8b often leaves the name out.
-105. **Packages import downward only.** From the top: `cli`; `pipeline` and
-    `eval`; `web`; `health`; `llm` and `notify`; `rules`; `enrich`;
-    `storage`; `config` and `sources`; `shared`, `retry` and `log`. A
-    package may import any layer below it, never one above, and two
-    packages on the same layer do not import each other. Types every stage
-    passes on (`Severity`, `Finding`, `Verdict`, `Analysis`,
-    `AllowlistEntry`, `OutgoingMessage`), defanging and the lexical features
-    live in `shared`, which imports no other package; before, they sat in
-    the packages that first needed them, and storage, the model, the
-    notifier and the rules imported one another. `lint-imports` checks the
-    contract in `pyproject.toml` in CI, and a new package must be given a
-    layer before it passes.
-106. **Corrections become checks.** Rules the owner gave in review are
-    enforced, not only written down. `tools/conventions.py` checks commit
-    messages (from `.githooks/commit-msg`) and pull requests (from the
-    conventions workflow): Conventional Commit subjects; a pull request
-    title that leaves room for ` (#N)` within 72 characters; no AI or
-    assistant attribution; no milestone codes; no backlog ids; only the
-    template's sections. Dependabot's descriptions quote upstream notes, so
-    only its title and commits are checked. `tests/unit/test_repository.py`
-    checks the repository's files the same way, and each check's message
-    says what to write instead.
+     nothing.** Held by
+     `test_the_model_sees_a_device_name_marked_as_self_reported` and
+     `test_the_system_prompt_says_a_device_name_proves_nothing`.
+105. **Packages import only the layers below them.** Held by the import-linter
+     contract in `pyproject.toml`, run in CI as `lint-imports`.
+106. **Corrections become checks.** `tools/conventions.py` checks commit
+     messages and pull requests, `tools/lock_age.py` holds releases added to
+     the lock to 14 days old, and `tests/unit/test_repository.py` holds the
+     repository's names and pins.
 
 ## Verified facts the design relies on
 

@@ -59,6 +59,18 @@
   and others) and property-based tests with Hypothesis for defanging, text
   cleaning, lexical features, the Public Suffix List and the pre-filter.
 - Plans written by coding agents under `docs/superpowers/` are git-ignored.
+- Every worker runs in one shared loop that logs an unexpected error and tries
+  again; the seven copies of that loop are gone. Copied code in the command
+  line, the storage queries and the pipeline tests is shared too.
+- Pull requests check that every release they add to `uv.lock` is at least 14
+  days old, and milestone codes are refused in code as well as in prose.
+- The architecture's decisions now name the test or CI step that holds each
+  one, and the history behind them moved to git. Decisions that had no check
+  gained one: Ollama's network, user and GPU cache, published ports, the
+  dashboard's headers and access log, the database pool, stored timestamps,
+  unknown config keys, the stream timeout, backfill leaving the stream
+  cursor alone, a failing rule worker, the weekly CI run, and a runtime
+  image without pip.
 
 ## 0.2.0 - 2026-11-22
 

@@ -42,6 +42,10 @@ RENAME_RECORDS = {
     ROOT / "docs" / "ARCHITECTURE.md",
     Path(__file__).resolve(),
 }
+ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
+REPO_PATH = re.compile(r"`((?:src|tests|tools|docs|[.]github|[.]githooks|[.]impeccable)/[^`]+)`")
+TEST_NAME = re.compile(r"`(test_[a-z0-9_]+)`")
+DECISION_REF = re.compile(r"[Dd]ecisions? ([0-9]+)")
 MARKUP = {".html", ".js", ".css"}
 MILESTONE_EXAMPLES = {ROOT / "tests" / "unit" / "test_conventions.py"}
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -264,3 +268,45 @@ def test_ci_runs_weekly_and_builds_the_image() -> None:
     assert any(uses.startswith("docker/build-push-action@") for uses in steps), (
         "CI builds the image on every run (decision 89)."
     )
+
+
+def _decision_numbers() -> list[int]:
+    text = ARCHITECTURE.read_text(encoding="utf-8")
+    section = text[text.index("## Decisions") : text.index("## Verified facts")]
+    return [int(number) for number in re.findall(r"^([0-9]+)[.] ", section, re.MULTILINE)]
+
+
+def test_decisions_keep_their_numbers() -> None:
+    numbers = _decision_numbers()
+    assert numbers == list(range(1, len(numbers) + 1)), (
+        "Decisions are numbered from 1 with no gaps, since other files cite them by "
+        "number; replace a decision with a one-line pointer instead of removing it."
+    )
+
+
+def test_the_architecture_names_only_files_and_tests_that_exist() -> None:
+    text = ARCHITECTURE.read_text(encoding="utf-8")
+    tests = {
+        name
+        for path in (ROOT / "tests").rglob("test_*.py")
+        for name in re.findall(
+            r"^(?:async )?def (test_[a-z0-9_]+)", path.read_text(encoding="utf-8"), re.MULTILINE
+        )
+    }
+    missing_files = sorted({path for path in REPO_PATH.findall(text) if not (ROOT / path).exists()})
+    missing_tests = sorted(set(TEST_NAME.findall(text)) - tests)
+    assert (missing_files, missing_tests) == ([], []), (
+        f"docs/ARCHITECTURE.md names files {missing_files} and tests {missing_tests} that "
+        "do not exist; point each decision at the check that holds it now."
+    )
+
+
+def test_every_decision_cited_exists() -> None:
+    last = len(_decision_numbers())
+    cited = [
+        f"{path.relative_to(ROOT).as_posix()}: decision {number}"
+        for path in _text_files()
+        for number in DECISION_REF.findall(path.read_text(encoding="utf-8"))
+        if not 1 <= int(number) <= last
+    ]
+    assert cited == [], f"{cited} cite decisions that docs/ARCHITECTURE.md does not have."

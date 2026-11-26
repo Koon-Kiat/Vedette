@@ -106,10 +106,12 @@ def test_the_assigned_name_platforms_can_be_replaced_in_the_override_file(tmp_pa
         "rules:\n  - id: dga-like\n    params:\n      assigned_name_platforms: [cdn.example]\n",
     )
 
+    defaults = {spec.id: spec for spec in load_rules()}
+
     rules = {spec.id: spec for spec in load_rules(path)}
 
     assert rules["dga-like"].params["assigned_name_platforms"] == ["cdn.example"]
-    assert "cloudfront.net" in rules["dga-burst"].params["assigned_name_platforms"]
+    assert rules["dga-burst"] == defaults["dga-burst"]
 
 
 def test_both_name_rules_skip_the_same_platforms_by_default() -> None:

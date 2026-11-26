@@ -314,7 +314,7 @@ class DashboardQueries:
     async def shell(self) -> Shell:
         """Open findings, health check results and the newest event, for the rail."""
         async with self._engine.connect() as connection:
-            by_profile = {pid: 0 for pid in self._ids}
+            by_profile = dict.fromkeys(self._ids, 0)
             for profile_id, count in (
                 await connection.execute(
                     select(findings.c.profile_id, func.count())

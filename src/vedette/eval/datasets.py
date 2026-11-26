@@ -213,10 +213,28 @@ def held_out_injection(text: str | None = None) -> list[Crafted]:
 
 # --- synthetic malicious names ----------------------------------------------------------
 
-_WORDS = (
-    "light river stone cloud green paper forest silver market window garden "
-    "summer bright ocean north winter golden castle simple yellow"
-).split()
+_WORDS = [
+    "light",
+    "river",
+    "stone",
+    "cloud",
+    "green",
+    "paper",
+    "forest",
+    "silver",
+    "market",
+    "window",
+    "garden",
+    "summer",
+    "bright",
+    "ocean",
+    "north",
+    "winter",
+    "golden",
+    "castle",
+    "simple",
+    "yellow",
+]
 
 
 def dga_names(rng: random.Random | None = None) -> tuple[list[Name], list[Name]]:

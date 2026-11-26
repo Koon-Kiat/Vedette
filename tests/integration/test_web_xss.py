@@ -64,7 +64,7 @@ class Audit(HTMLParser):
                 self.problems.append(f"event handler {name}= on <{tag}>")
             if name in URL_ATTRIBUTES:
                 lowered = value.strip().lower()
-                if lowered.startswith("javascript:") or lowered.startswith("data:"):
+                if lowered.startswith(("javascript:", "data:")):
                     self.problems.append(f"{name}={value!r}")
                 inside = value.startswith("/") and not value.startswith("//")
                 same_page = name == "href" and IN_PAGE.fullmatch(value) is not None

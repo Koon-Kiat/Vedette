@@ -232,14 +232,14 @@ def _cross_section(summary: dict[str, Any]) -> list[str]:
         "ids | Neighbours left out |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for row in rows:
-        lines.append(
-            f"| {row['model']} | {'on' if row['think'] else 'off'} "
-            f"| {'on' if row['defences'] else 'off'} | {row['batches']} "
-            f"| {row['affected']} ({_pct1(row['affected_rate'])}; {_ci(row['ci'])}) "
-            f"| {row['lowered']} | {row['echoed']} | {row['misattributed']} | {row['stray_ids']} "
-            f"| {row['unanswered']} |"
-        )
+    lines.extend(
+        f"| {row['model']} | {'on' if row['think'] else 'off'} "
+        f"| {'on' if row['defences'] else 'off'} | {row['batches']} "
+        f"| {row['affected']} ({_pct1(row['affected_rate'])}; {_ci(row['ci'])}) "
+        f"| {row['lowered']} | {row['echoed']} | {row['misattributed']} | {row['stray_ids']} "
+        f"| {row['unanswered']} |"
+        for row in rows
+    )
     cases = [
         (row, case)
         for row in rows
@@ -326,9 +326,27 @@ def _replay_section(replay: dict[str, Any] | None) -> list[str]:
 
 def _findings(summary: dict[str, Any]) -> list[str]:
     """Plain statements about what the numbers show, failures first."""
-    out: list[str] = []
     detection = summary["detection"]
-    history = summary["history"]
+    combined = _combined(summary)
+    out = [
+        *_dga_findings(detection),
+        *_tunnel_findings(detection),
+        *_burst_findings(detection),
+        *_lookup_findings(detection),
+        *_injection_name_findings(detection),
+        *_false_positive_findings(detection),
+        *_history_findings(summary),
+        *_model_findings(combined),
+        *_prefilter_findings(summary),
+        *_cross_findings(summary.get("cross_finding") or []),
+        *_undefended_findings(combined),
+    ]
+    return out or ["- Nothing failed in this run."]
+
+
+def _dga_findings(detection: list[dict[str, Any]]) -> list[str]:
+    """Where the dga-like rule misses generated names."""
+    out: list[str] = []
     words = _by_name(detection, "Dictionary-word DGA names")
     if words and (words["rate"] or 0) < 0.5:
         out.append(
@@ -343,6 +361,12 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "Labels shorter than 12 characters, or with too few distinct characters, stay below "
             "the rule's length and entropy thresholds."
         )
+    return out
+
+
+def _tunnel_findings(detection: list[dict[str, Any]]) -> list[str]:
+    """How many slow tunnels the two tunnel rules catch."""
+    out: list[str] = []
     slow = _by_name(detection, "Tunnels, 20 lookups in 10 minutes")
     if slow and slow["items"] and slow["by_rule"].get("tunnel-like", 0) < slow["items"]:
         caught = slow["by_rule"].get("tunnel-like", 0)
@@ -366,6 +390,12 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "lookup a minute for two hours: more than 60 different long subdomains within six "
             "hours."
         )
+    return out
+
+
+def _burst_findings(detection: list[dict[str, Any]]) -> list[str]:
+    """How many bursts of new names dga-burst catches."""
+    out: list[str] = []
     for dataset in (
         "Bursts of 30 random-character domains",
         "Bursts of 30 dictionary-word domains",
@@ -379,6 +409,12 @@ def _findings(summary: dict[str, Any]) -> list[str]:
                 "the names look like: it counts new, unranked domains one device looks up within "
                 "ten minutes."
             )
+    return out
+
+
+def _lookup_findings(detection: list[dict[str, Any]]) -> list[str]:
+    """Rules that depend on registration dates or a feed match."""
+    out: list[str] = []
     young = _by_name(detection, "Young domains, registration dates given")
     if young and young["items"]:
         out.append(
@@ -394,6 +430,12 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "the young-domain rule cannot help here because registration dates are not looked "
             "up during the evaluation."
         )
+    return out
+
+
+def _injection_name_findings(detection: list[dict[str, Any]]) -> list[str]:
+    """How few injection names produce a finding at all."""
+    out: list[str] = []
     crafted = _by_name(detection, "Crafted injection names")
     held = _by_name(detection, "Held-out injection names")
     if crafted and crafted["items"]:
@@ -404,13 +446,18 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "model, so it cannot steer it; the injection test below forces every name in front "
             "of the model to measure the worst case."
         )
-    for row in detection:
-        if row["dataset"].endswith("as if unlisted") and row["items"]:
-            out.append(
-                f"- Without the top-sites exemption, the rules flag {row['flagged']} of "
-                f'{row["items"]} names in "{row["dataset"]}" ({_pct(row["rate"])}): '
-                f"{_rules(row)}. This is what the rules do on their own on popular names."
-            )
+    return out
+
+
+def _false_positive_findings(detection: list[dict[str, Any]]) -> list[str]:
+    """Benign names the rules flag, with and without the top-sites exemption."""
+    out = [
+        f"- Without the top-sites exemption, the rules flag {row['flagged']} of "
+        f'{row["items"]} names in "{row["dataset"]}" ({_pct(row["rate"])}): '
+        f"{_rules(row)}. This is what the rules do on their own on popular names."
+        for row in detection
+        if row["dataset"].endswith("as if unlisted") and row["items"]
+    ]
     for dataset in (
         "Top sites, local list",
         "Popular hostnames (Cisco Umbrella)",
@@ -423,6 +470,13 @@ def _findings(summary: dict[str, Any]) -> list[str]:
                 f"flagged ({benign['alerting']} at high or critical). These are false positives "
                 "of the rules as they stand."
             )
+    return out
+
+
+def _history_findings(summary: dict[str, Any]) -> list[str]:
+    """Alerts the stored history raises, now and as it happened."""
+    out: list[str] = []
+    history = summary["history"]
     replay = summary.get("replay")
     if replay and replay["days"] >= 1:
         total = sum(row["alerting"] for row in replay["rules"])
@@ -441,7 +495,12 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             f"{FALSE_ALERT_TARGET:g}. {history['alerts_marked_benign']} "
             f"{'is' if history['alerts_marked_benign'] == 1 else 'are'} marked benign."
         )
-    combined = _combined(summary)
+    return out
+
+
+def _model_findings(combined: list[dict[str, Any]]) -> list[str]:
+    """How often each model was steered, with the defences on and off."""
+    out: list[str] = []
     for row in combined:
         mode = f"{row['model']} with thinking {'on' if row['think'] else 'off'}"
         kinds = (
@@ -466,8 +525,12 @@ def _findings(summary: dict[str, Any]) -> list[str]:
                 f"{row['trials']} trials ({_pct1(row['success_rate'])}, 95% interval "
                 f"{_ci(row['ci'])}): lowered {row['lowered']}, {kinds}."
             )
-    out += _prefilter_findings(summary)
-    crosses = summary.get("cross_finding") or []
+    return out
+
+
+def _cross_findings(crosses: list[dict[str, Any]]) -> list[str]:
+    """Whether a crafted finding changed what was said about its neighbours."""
+    out: list[str] = []
     if crosses and not any(row["affected"] for row in crosses):
         worst = max((row["ci"] or [0, 0])[1] for row in crosses)
         out.append(
@@ -477,14 +540,20 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             f"{crosses[0]['batches']} batches per arm the rate could still be up to "
             f"{_pct1(worst)} (95% upper bound)."
         )
-    for row in crosses:
-        if row["affected"]:
-            out.append(
-                f"- In {row['affected']} of {row['batches']} mixed batches, a crafted finding "
-                f"changed what {_mode(row)} said about the ordinary findings beside it, defences "
-                f"{'on' if row['defences'] else 'off'} ({_pct1(row['affected_rate'])}, 95% "
-                f"interval {_ci(row['ci'])})."
-            )
+    out.extend(
+        f"- In {row['affected']} of {row['batches']} mixed batches, a crafted finding "
+        f"changed what {_mode(row)} said about the ordinary findings beside it, defences "
+        f"{'on' if row['defences'] else 'off'} ({_pct1(row['affected_rate'])}, 95% "
+        f"interval {_ci(row['ci'])})."
+        for row in crosses
+        if row["affected"]
+    )
+    return out
+
+
+def _undefended_findings(combined: list[dict[str, Any]]) -> list[str]:
+    """Whether the run shows the defences making a difference at all."""
+    out: list[str] = []
     undefended = [row for row in combined if not row["defences"]]
     if undefended and all(row["succeeded"] == 0 for row in combined):
         out.append(
@@ -495,7 +564,7 @@ def _findings(summary: dict[str, Any]) -> list[str]:
             "name carries instruction words. A stronger attack set or another model may tell "
             "the two modes apart."
         )
-    return out or ["- Nothing failed in this run."]
+    return out
 
 
 def _prefilter_findings(summary: dict[str, Any]) -> list[str]:

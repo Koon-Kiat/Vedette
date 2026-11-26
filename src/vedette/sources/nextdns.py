@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 import httpx
 import structlog
-from httpx_sse import aconnect_sse
+from httpx_sse import ServerSentEvent, aconnect_sse
 
 from vedette.retry import backoff_delay, parse_retry_after
 from vedette.sources.base import (
@@ -348,34 +348,44 @@ class NextDnsSource(LogSource):
             async with aconnect_sse(
                 self._client, "GET", path, params=params, timeout=self._stream_timeout
             ) as source:
-                response = source.response
-                content_type = response.headers.get("Content-Type", "")
-                if response.status_code != 200 or "text/event-stream" not in content_type:
-                    await response.aread()
-                    status = response.status_code
-                    if status in (401, 403, 429) or status >= 500:
-                        raise self._error_for(response)
-                    # Undocumented territory: any other refusal is treated as
-                    # "this cursor is no longer accepted".
-                    raise StreamCursorRejected(f"NextDNS refused the stream cursor (HTTP {status})")
+                await self._refuse_unless_streaming(source.response)
                 opened = True
                 if on_open is not None:
                     on_open()
                 async for message in source.aiter_sse():
-                    if not message.data:
-                        continue
-                    try:
-                        entry = json.loads(message.data)
-                        if not isinstance(entry, Mapping):
-                            raise ValueError("stream event is not an object")
-                        event = parse_log_entry(profile_id, entry, raw=self._raw)
-                    except ValueError:
-                        log.warning("nextdns_stream_event_skipped", profile_id=profile_id)
-                        continue
-                    yield StreamedEvent(event=event, cursor=message.id or None)
+                    streamed = self._streamed(profile_id, message)
+                    if streamed is not None:
+                        yield streamed
         except httpx.ReadTimeout as exc:
             if opened:
                 raise StreamIdle("no stream data within the idle timeout") from exc
             raise SourceUnavailable(f"NextDNS stream failed: {type(exc).__name__}") from exc
         except httpx.TransportError as exc:
             raise SourceUnavailable(f"NextDNS stream failed: {type(exc).__name__}") from exc
+
+    async def _refuse_unless_streaming(self, response: httpx.Response) -> None:
+        """Raise unless NextDNS answered with an event stream."""
+        content_type = response.headers.get("Content-Type", "")
+        if response.status_code == 200 and "text/event-stream" in content_type:
+            return
+        await response.aread()
+        status = response.status_code
+        if status in (401, 403, 429) or status >= 500:
+            raise self._error_for(response)
+        # Undocumented territory: any other refusal is treated as
+        # "this cursor is no longer accepted".
+        raise StreamCursorRejected(f"NextDNS refused the stream cursor (HTTP {status})")
+
+    def _streamed(self, profile_id: str, message: ServerSentEvent) -> StreamedEvent | None:
+        """The event a stream message carries; ``None`` for a keep-alive or an unreadable one."""
+        if not message.data:
+            return None
+        try:
+            entry = json.loads(message.data)
+            if not isinstance(entry, Mapping):
+                raise ValueError("stream event is not an object")
+            event = parse_log_entry(profile_id, entry, raw=self._raw)
+        except ValueError:
+            log.warning("nextdns_stream_event_skipped", profile_id=profile_id)
+            return None
+        return StreamedEvent(event=event, cursor=message.id or None)

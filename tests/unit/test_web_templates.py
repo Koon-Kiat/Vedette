@@ -63,8 +63,8 @@ def test_templates_contain_no_inline_script_or_style(template: Path) -> None:
     # Every script tag, in any case, is one the parser saw.
     assert text.lower().count("<script") == len(scripts.tags)
     assert "<style" not in text.lower()
-    assert not re.search(r"\sstyle\s*=", text, flags=re.I)
-    assert not re.search(r"\son[a-z]+\s*=", text, flags=re.I)
+    assert not re.search(r"\sstyle\s*=", text, flags=re.IGNORECASE)
+    assert not re.search(r"\son[a-z]+\s*=", text, flags=re.IGNORECASE)
     assert "javascript:" not in text.lower()
     assert "hx-on" not in text
 

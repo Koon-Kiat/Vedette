@@ -308,13 +308,11 @@ async def test_stream_dropped_midway_delivers_what_arrived_then_is_unavailable(
 ) -> None:
     server.add_entries(6)
     server.break_stream_after = 2
-    received: list[str | None] = []
+    stream = aiter(source.stream("abc123", "s0"))
 
+    assert [(await anext(stream)).cursor for _ in range(2)] == ["s1", "s2"]
     with pytest.raises(SourceUnavailable):
-        async for item in source.stream("abc123", "s0"):
-            received.append(item.cursor)
-
-    assert received == ["s1", "s2"]
+        await anext(stream)
 
 
 async def test_malformed_stream_events_are_skipped(

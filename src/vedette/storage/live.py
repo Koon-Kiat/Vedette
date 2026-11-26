@@ -172,7 +172,7 @@ class LiveQueries:
                     )
                 )
             ).one()
-            by_profile = {pid: 0 for pid in self._ids}
+            by_profile = dict.fromkeys(self._ids, 0)
             newest_finding: int | None = None
             for profile_id, count, newest in (
                 await connection.execute(

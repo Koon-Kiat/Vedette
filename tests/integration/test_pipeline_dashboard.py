@@ -51,7 +51,7 @@ async def started(logs: Sequence[Mapping[str, Any]]) -> None:
     """Wait until start-up has finished, so stopping does not interrupt it."""
 
     async def done() -> bool:
-        return STARTED <= {str(entry["event"]) for entry in logs}
+        return {str(entry["event"]) for entry in logs} >= STARTED
 
     await wait_until(done, timeout=10)
 

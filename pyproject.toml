@@ -74,7 +74,10 @@ target-version = "py314"
 src = ["src", "tests", "tools"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "BLE", "D", "RUF"]
+select = [
+    "ASYNC", "B", "BLE", "C4", "C90", "D", "DTZ", "E", "ERA", "F", "FURB", "I", "PERF",
+    "PGH", "PIE", "PTH", "RET", "RUF", "S", "SIM", "SLF", "T20", "UP", "W",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

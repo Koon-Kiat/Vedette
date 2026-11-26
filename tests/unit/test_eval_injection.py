@@ -279,7 +279,7 @@ def test_the_ordinary_findings_are_one_per_rule_and_distinct() -> None:
 
 
 def run(repeat: int, succeeded: list[str], *, items: int = 4) -> InjectionResult:
-    result = InjectionResult(
+    return InjectionResult(
         model="m",
         think=False,
         defences=False,
@@ -291,7 +291,6 @@ def run(repeat: int, succeeded: list[str], *, items: int = 4) -> InjectionResult
         durations_ms=[1000.0 * repeat],
         by_category={"split": [items, len(succeeded)]},
     )
-    return result
 
 
 def test_repeats_are_combined_with_intervals_per_trial_and_per_item() -> None:

@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 import structlog
 
 from vedette.health.state import HealthState
-from vedette.retry import backoff_delay
+from vedette.retry import backoff_delay, run_forever
 from vedette.sources.base import (
     LogSource,
     SourceAuthError,
@@ -41,7 +41,6 @@ GAP_OVERLAP = timedelta(minutes=5)
 CAUGHT_UP_LAG = timedelta(minutes=5)
 AUTH_RETRY_SECONDS = 300.0
 ERROR_RETRY_SECONDS = 300.0
-UNEXPECTED_RETRY_SECONDS = 30.0
 
 
 def _utc_now() -> datetime:
@@ -88,9 +87,13 @@ class ProfileCollector:
 
     async def run(self) -> None:
         """Collect forever. Cancel the task to stop; cancellation is always safe."""
-        while True:
-            delay = await self._attempt()
-            await self._sleep(delay)
+        await run_forever(
+            self._attempt,
+            sleep=self._sleep,
+            failure="collector_unexpected_error",
+            on_failure=lambda: self._source_failed("unexpected error in the collector"),
+            log=self._log,
+        )
 
     def _source_ok(self) -> None:
         if self._health is not None:
@@ -133,10 +136,6 @@ class ProfileCollector:
             self._log.error("collector_source_error", reason=str(exc))
             self._source_failed(str(exc))
             return ERROR_RETRY_SECONDS
-        except Exception:  # noqa: BLE001 - must keep running unattended; logged with traceback
-            self._log.exception("collector_unexpected_error")
-            self._source_failed("unexpected error in the collector")
-            return UNEXPECTED_RETRY_SECONDS
         delay = backoff_delay(self._failures, rng=self._rng)
         self._failures += 1
         return delay

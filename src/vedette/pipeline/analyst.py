@@ -15,12 +15,11 @@ import structlog
 
 from vedette.llm.analyst import Analyst
 from vedette.llm.ollama import OllamaUnavailable
-from vedette.retry import backoff_delay
+from vedette.retry import backoff_delay, run_forever
 from vedette.storage.analysis import AnalysisStore
 
 log = structlog.get_logger(__name__)
 
-UNEXPECTED_RETRY_SECONDS = 30.0
 MAX_UNAVAILABLE_WAIT_SECONDS = 300.0
 
 
@@ -64,8 +63,7 @@ class AnalystWorker:
 
     async def run(self) -> None:
         """Analyse forever. Cancel the task to stop."""
-        while True:
-            await self._sleep(await self._pass())
+        await run_forever(self._pass, sleep=self._sleep, failure="analyst_unexpected_error")
 
     async def _pass(self) -> float:
         """Handle one batch; return seconds to wait before the next."""
@@ -82,8 +80,5 @@ class AnalystWorker:
             self._failures += 1
             log.warning("analyst_ollama_unavailable", reason=str(exc), retry_in=delay)
             return delay
-        except Exception:  # must keep running unattended; logged with traceback
-            log.exception("analyst_unexpected_error")
-            return UNEXPECTED_RETRY_SECONDS
         self._failures = 0
         return 0.0

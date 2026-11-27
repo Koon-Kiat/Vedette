@@ -549,6 +549,76 @@ def _replay_section(replay: dict[str, Any] | None) -> list[str]:
     return lines
 
 
+def _minutes(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:,.1f} min" if value < 60 else f"{value / 60:,.1f} h"
+
+
+def _traffic_section(summary: dict[str, Any]) -> list[str]:
+    """Attacks blended into the stored history: detection, time to detect, side effects."""
+    data = summary.get("in_traffic")
+    if not data:
+        return []
+    lines = [
+        "",
+        "### Attacks in your traffic",
+        "",
+        "The detection sets above run each attack alone: on a device of its own, with fresh "
+        "rule state and no learning period. Here the same kinds of attack were blended into "
+        "your history, and the whole of it was replayed once more. Each attack starts just "
+        "after one of its device's own lookups, at a random time after the "
+        f"{_num(data['learning_days'], 0)}-day learning period, at least an hour from any other "
+        "attack on that device, and its lookups are allowed. Detected counts attacks with a "
+        "finding on their own lookups; time to detect runs from an attack's first lookup to "
+        "that finding. Alone is the same attacks run the old way. The new-device rule is not "
+        "counted: it cannot fire on a device already known, and alone it always does. Feed "
+        "domains are only counted here.",
+        "",
+    ]
+    if not data["placed"]:
+        return [
+            *lines,
+            "No attack could be placed: no device has enough lookups after the learning period.",
+        ]
+    devices = data["devices"]
+    lines += [
+        f"{data['placed']} of {data['sessions']} attacks ({data['lookups']:,} lookups) went to "
+        f"{devices} device{'' if devices == 1 else 's'}; a profile that reports no devices "
+        "counts as one.",
+        "",
+        "| Attack | Placed | Detected | Rate (95% interval) | High or critical | Alone "
+        "| Time to detect, median | Slowest | Rules that fired |",
+        "| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |",
+    ]
+    lines += [
+        f"| {row['attack']} | {row['placed']} | {row['detected']} | {_pct(row['rate'])} "
+        f"({_ci(row['ci'])}) | {row['alerting']} | {row['alone']} of {row['sessions']} "
+        f"| {_minutes(row['p50_minutes'])} | {_minutes(row['max_minutes'])} | {_rules(row)} |"
+        for row in data["kinds"]
+    ]
+    changed = [
+        row
+        for row in data["own"]
+        if (row["replay"], row["replay_alerting"]) != (row["blended"], row["blended_alerting"])
+    ]
+    if not changed:
+        return [*lines, "", "The attacks changed no finding on your own lookups."]
+    lines += [
+        "",
+        "Findings on your own lookups that the attacks changed:",
+        "",
+        "| Rule | Plain replay | With the attacks | High or critical, plain | With the attacks |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    lines += [
+        f"| {row['rule']} | {row['replay']:,} | {row['blended']:,} | {row['replay_alerting']:,} "
+        f"| {row['blended_alerting']:,} |"
+        for row in changed
+    ]
+    return lines
+
+
 def _findings(summary: dict[str, Any]) -> list[str]:
     """Plain statements about what the numbers show, failures first."""
     detection = summary["detection"]
@@ -562,6 +632,7 @@ def _findings(summary: dict[str, Any]) -> list[str]:
         *_injection_name_findings(detection),
         *_false_positive_findings(detection),
         *_history_findings(summary),
+        *_traffic_findings(summary),
         *_quality_findings(summary),
         *_model_findings(combined),
         *_prefilter_findings(summary),
@@ -764,6 +835,49 @@ def _history_findings(summary: dict[str, Any]) -> list[str]:
             f"{FALSE_ALERT_TARGET:g}. {history['alerts_marked_benign']} "
             f"{'is' if history['alerts_marked_benign'] == 1 else 'are'} marked benign."
         )
+    return out
+
+
+def _traffic_findings(summary: dict[str, Any]) -> list[str]:
+    """How the attacks fared inside the owner's traffic against alone, and what they changed."""
+    data = summary.get("in_traffic") or {}
+    rows = [row for row in data.get("kinds", []) if row["placed"]]
+    if not rows:
+        return []
+    detected = sum(row["detected"] for row in rows)
+    placed = sum(row["placed"] for row in rows)
+    alone = sum(row["alone"] for row in rows)
+    sessions = sum(row["sessions"] for row in rows)
+    out = [
+        f"- Blended into your own history after the learning period, {detected} of {placed} "
+        f"attacks raise a finding ({_share(detected, placed)}); run alone, {alone} of "
+        f"{sessions} do ({_share(alone, sessions)}). The table under the replay gives each "
+        "kind of attack and how soon it was flagged."
+    ]
+    out += [
+        f"- {row['attack']}: {row['detected']} of {row['placed']} in your traffic, "
+        f"{row['alone']} of {row['sessions']} alone ({_rules(row)} in your traffic)."
+        for row in rows
+        if row["detected"] * row["sessions"] != row["alone"] * row["placed"]
+    ]
+    slow = [row for row in rows if row["p50_minutes"] is not None and row["p50_minutes"] >= 10]
+    out += [
+        f"- {row['attack']} is flagged a median of {_minutes(row['p50_minutes'])} after it "
+        "starts, once enough of its lookups have added up."
+        for row in slow
+    ]
+    changed = [
+        f"{row['rule']} {row['replay']} to {row['blended']}"
+        for row in data["own"]
+        if row["replay"] != row["blended"]
+    ]
+    out.append(
+        "- With the attacks blended in, your own lookups' findings changed: "
+        + ", ".join(changed)
+        + "."
+        if changed
+        else "- The attacks changed no finding on your own lookups."
+    )
     return out
 
 
@@ -1097,6 +1211,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         *_family_section(summary),
         *_examples_section(summary["detection"]),
         *_replay_section(summary.get("replay")),
+        *_traffic_section(summary),
         "",
         "## Prompt injection",
         "",
@@ -1148,6 +1263,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "with dates given, not how often the registry lookup finds them.",
         "- The replay treats your history as benign too, and starts with fresh first "
         "sightings, so its first days are spent learning, as a new install's are.",
+        "- The attacks blended into your history are the synthetic sessions of the detection "
+        "sets, each sent once and allowed. Malware that keeps trying for days would raise more "
+        "findings than one session, and a lookup NextDNS blocks is skipped by the rules about "
+        "a domain.",
         *_hostname_limit(summary),
         "- The real DGA families each run on one date or seed. Real campaigns change these, "
         "but a family's style of name stays the same. Tunnelling names are synthetic.",

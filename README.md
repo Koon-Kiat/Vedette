@@ -479,8 +479,10 @@ that part. A sample of those items is
 also put among ordinary findings, to see whether one crafted finding changes
 what the model says about the others. It also replays all of your stored history
 through the rules as they are now, which shows how often each rule would fire
-on your own traffic. It writes a report and fills the dashboard's Evaluation
-page. The known-good names also run "as if unlisted", with their top-sites rank
+on your own traffic, and replays it once more with the synthetic attacks
+blended in on your own devices after the learning period, to show which are
+caught inside real traffic and how soon. It writes a report and fills the
+dashboard's Evaluation page. The known-good names also run "as if unlisted", with their top-sites rank
 removed, because the rules skip listed domains; a result that could not have
 come out otherwise is labelled true by construction. Names sampled from your
 history and the feeds are only counted, never printed; flagged names from the

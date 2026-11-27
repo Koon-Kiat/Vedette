@@ -665,8 +665,8 @@ def evaluate(
         bool,
         typer.Option(
             "--full",
-            help="Run every model test in full: all held-out items with the defences off too, "
-            "both cross-finding arms, three explanation runs. About 25 minutes instead of 9.",
+            help="Run every model test in full: both held-out sets with the defences on and "
+            "off, both cross-finding arms, three explanation runs. About 30 minutes.",
         ),
     ] = False,
     parallel: Annotated[

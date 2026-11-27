@@ -49,13 +49,21 @@
 
 ### Evaluation
 
-- A plain `vedette eval` now finishes in about nine minutes instead of more
+- A fresh held-out injection set of 124 items, written after every defence
+  was final: the first set shaped five defences after its results were read,
+  so its downplay, spoof, device and sample-roots rows no longer measure
+  unseen attacks. 32 of the new items plant a crafted name as a lookup made
+  just before an ordinary finding, so it reaches the model only through the
+  context pack. The report names the set on every row and takes the target
+  from the fresh one.
+- A plain `vedette eval` now finishes in under ten minutes instead of more
   than half an hour: thinking off by default (as the service runs), four calls
-  in flight, and the comparison tests trimmed. The defended injection arm
-  still sees all 315 held-out items; the undefended arm sees every third item
-  of each category, the cross-finding test one item per category with the
-  defences on, and the gold set one run. `--full` runs everything, in about 25
-  minutes, and the report says which depth ran.
+  in flight, and the comparison tests trimmed. The fresh set goes to the
+  defended analyst in full and every third of its items to the undefended
+  one; the first set's every third item goes to the defended analyst only;
+  the cross-finding test runs one item per category with the defences on, and
+  the gold set one run. `--full` runs everything, in about 30 minutes, and the
+  report says which depth ran.
 - New explanation-quality test: a gold set of 60 synthetic findings, six per
   rule, with the records around each and patterns for the right cause, a
   fitting step and claims to avoid. Each model explains it three times; the

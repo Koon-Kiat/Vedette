@@ -491,11 +491,16 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 ```
 
 (bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
-it takes about nine minutes on a 12 GB card: the model sees all 315 held-out
-items with the defences on, every third with them off, one mixed batch per
-category with the defences on, and the gold set once, with thinking off as the
-service runs. `--full` runs every model test in full (both cross-finding arms,
-eight items per category, three runs of the gold set), in about 25 minutes.
+it takes under ten minutes on a 12 GB card, with thinking off as the service
+runs. The model sees the fresh held-out set of 124 items with the defences on,
+every third of its items with them off, every third item of the first
+held-out set with the defences on, one mixed batch per category, and the gold
+set once. The fresh set was written after the defences were final and is the
+one to read; 32 of its items plant a crafted name in the records around an
+ordinary finding, where it reaches the model only through the context pack.
+`--full` runs every model test in full (both sets and both arms, both
+cross-finding arms with eight items per category, three runs of the gold set),
+in about 30 minutes.
 `--think both` adds thinking on, `--no-cross` skips the mixed batches,
 `--no-injection` runs only the explanation test, `--no-llm` skips the model
 entirely, `--model` (repeatable) tests another downloaded model, and

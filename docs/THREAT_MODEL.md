@@ -100,9 +100,10 @@ Mitigations:
 Residual risk:
 - The context pack is a new way for a name to reach the model: a device that
   looks up a crafted name just before a real finding puts that name in the
-  finding's context. Names with instruction words are withheld, but the
-  injection test does not yet plant names in the context, so how often one
-  without such words steers the model is not measured.
+  finding's context. The pack lists registered roots only, so a payload must
+  sit in the root itself, and names with instruction words are withheld. The
+  fresh held-out injection set plants 32 such names; `docs/EVALUATION.md`
+  gives how often they steer the model.
 - The model can still write misleading prose. For example it can call an
   attack routine, even though it cannot change the priority. The evaluation
   counts such "echoes" with a heuristic and lists every case.

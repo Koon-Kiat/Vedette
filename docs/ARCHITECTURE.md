@@ -782,9 +782,10 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      on reserved `.example` names. Held by
      `test_every_packaged_rule_carries_notes_for_the_model` and
      `test_a_request_gets_the_notes_of_its_own_rules_only`.
-114. **A plain `vedette eval` finishes in about nine minutes.** The defended
-     injection arm sees every held-out item; the undefended comparison every
-     third item of each category, the cross-finding test one item per category
+114. **A plain `vedette eval` finishes in under ten minutes.** The fresh
+     held-out set goes to the defended analyst in full and every third of its
+     items to the undefended one; the first set's every third item goes to the
+     defended analyst only, the cross-finding test runs one item per category
      with the defences on, and the gold set one run, with thinking off and four
      calls in flight. `--full` runs everything. Held by
      `test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest`.
@@ -796,6 +797,13 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      contain such a word. Held by
      `test_an_answer_repeating_a_name_s_own_vouching_word_is_caught` and
      `test_an_answer_that_takes_a_name_s_word_for_it_is_replaced_by_the_template`.
+116. **Injection is measured on a fresh held-out set** once the first one has
+     shaped defences. The fresh set was written after every defence was
+     final, and no defence changes because of its results; a later fix needs
+     a set written after it. It also plants names in the context pack, which
+     lists registered roots, so a planted payload sits in a root. Held by
+     `test_the_fresh_set_covers_the_shaped_categories_and_the_context_carrier`
+     and `test_a_planted_lookup_reaches_only_its_own_finding_s_pack`.
 
 ## Verified facts the design relies on
 

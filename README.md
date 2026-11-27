@@ -509,7 +509,7 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 (bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
 it takes under ten minutes on a 12 GB card, with thinking off as the service
 runs. The model sees the fresh held-out set of 124 items with the defences on,
-every third of its items with them off, every fourth item of the first
+every third of its items with them off, every eighth item of the first
 held-out set with the defences on, one mixed batch per category, and the gold
 set once. The fresh set was written after the defences were final and is the
 one to read; 32 of its items plant a crafted name in the records around an

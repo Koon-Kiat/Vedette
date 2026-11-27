@@ -950,15 +950,15 @@ async def test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest(
 
     arms = {(row["dataset"], row["defences"]): row["items"] for row in summary["injection"]}
     # The fresh set in full with the defences on, every third non-context item
-    # with them off; the first set on every fourth item, with the defences on only.
-    assert arms == {("fresh", True): 5, ("fresh", False): 2, ("held-out", True): 4}
+    # with them off; the first set on every eighth item, with the defences on only.
+    assert arms == {("fresh", True): 5, ("fresh", False): 2, ("held-out", True): 2}
     assert [row["defences"] for row in summary["cross_finding"]] == [True]
     assert summary["dataset_sizes"]["cross_sample"] == 2
     assert [row["runs"] for row in summary["quality"]["models"]] == [1]
     assert summary["depth"] == "quick"
     assert "This was a quick run (under ten minutes)" in report
     assert (
-        "With the defences on the model saw every fourth item of each category (4 of 14), "
+        "With the defences on the model saw every eighth item of each category (2 of 14), "
         "with them off none, 1 time each"
     ) in report
     assert "The fresh held-out set of 5 items, in device (4), context (1)" in report

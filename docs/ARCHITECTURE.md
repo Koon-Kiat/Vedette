@@ -784,7 +784,7 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      `test_a_request_gets_the_notes_of_its_own_rules_only`.
 114. **A plain `vedette eval` finishes in under ten minutes.** The fresh
      held-out set goes to the defended analyst in full and every third of its
-     items to the undefended one; the first set's every fourth item goes to the
+     items to the undefended one; the first set's every eighth item goes to the
      defended analyst only, the cross-finding test runs one item per category
      with the defences on, and the gold set one run, with thinking off and four
      calls in flight. `--full` runs both sets on and off, three gold runs and

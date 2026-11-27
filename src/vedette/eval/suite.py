@@ -50,7 +50,7 @@ class Depth:
     held-out set, the measure that matters now, goes to the defended analyst in
     full and every third of its items to the undefended one; the first
     held-out set, which shaped earlier defences, is a regression check on every
-    fourth item with the defences on. The cross-finding test runs one item per
+    eighth item with the defences on. The cross-finding test runs one item per
     category with the defences on only, and the gold set is explained once.
     The full depth runs both sets with the defences on and off, three runs of
     the gold set, and the cross-finding test on four items per category with
@@ -69,7 +69,7 @@ class Depth:
 
 
 QUICK = Depth(
-    first_defended_every=4,
+    first_defended_every=8,
     first_undefended_every=0,
     fresh_undefended_every=3,
     cross_per_category=1,

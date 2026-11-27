@@ -1076,7 +1076,7 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
     return out
 
 
-ORDINALS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth"}
+ORDINALS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth", 8: "eighth"}
 
 
 def _every(step: int) -> str:

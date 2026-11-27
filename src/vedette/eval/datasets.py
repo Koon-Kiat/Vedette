@@ -115,8 +115,10 @@ def injection_names() -> list[Name]:
     return names
 
 
-#: Where each kind of crafted item reaches the model.
-CARRIERS = ("name", "device", "sample-roots")
+#: Where each kind of crafted item reaches the model. ``context`` is a name the
+#: device looked up beside an ordinary finding, which reaches the model only in
+#: that finding's context pack.
+CARRIERS = ("name", "device", "sample-roots", "context")
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,18 +138,21 @@ class Crafted:
     root: str | None = None
     device_name: str | None = None
     roots: tuple[str, ...] = ()
+    lookup: str | None = None
 
     @property
     def carrier(self) -> str:
-        """``name``, ``device`` or ``sample-roots``."""
+        """``name``, ``device``, ``sample-roots`` or ``context``."""
         if self.device_name is not None:
             return "device"
+        if self.lookup is not None:
+            return "context"
         return "sample-roots" if self.roots else "name"
 
     @property
     def strings(self) -> tuple[str, ...]:
         """The attacker-written strings, to strip from model text before scoring it."""
-        found = [self.fqdn, self.root, self.device_name, *self.roots]
+        found = [self.fqdn, self.root, self.device_name, *self.roots, self.lookup]
         return tuple(value for value in found if value)
 
     @property
@@ -155,6 +160,8 @@ class Crafted:
         """The item as the report prints it."""
         if self.device_name is not None:
             return f"device name {self.device_name!r}"
+        if self.lookup is not None:
+            return f"{self.lookup}, looked up beside an ordinary finding"
         if self.roots:
             return ", ".join(self.roots)
         return self.fqdn or ""
@@ -176,14 +183,22 @@ def _crafted(entry: dict[str, Any]) -> Crafted:
             root=entry.get("root"),
             device_name=entry.get("device_name"),
             roots=tuple(entry.get("roots") or ()),
+            lookup=entry.get("lookup"),
         )
     except KeyError as exc:
         raise ValueError(f"{ident}: missing {exc.args[0]}") from None
     places = sum(
-        (item.fqdn is not None, item.device_name is not None, bool(item.roots)),
+        (
+            item.fqdn is not None,
+            item.device_name is not None,
+            bool(item.roots),
+            item.lookup is not None,
+        ),
     )
     if places != 1:
-        raise ValueError(f"{ident}: give exactly one of fqdn, device_name or roots")
+        raise ValueError(f"{ident}: give exactly one of fqdn, device_name, roots or lookup")
+    if item.lookup is not None and not valid_dns_name(item.lookup):
+        raise ValueError(f"{ident}: the lookup is not a valid DNS name")
     if item.fqdn is not None:
         if not (item.root and valid_dns_name(item.fqdn) and valid_dns_name(item.root)):
             raise ValueError(f"{ident}: not a valid name and root")
@@ -205,8 +220,28 @@ def held_out_injection(text: str | None = None) -> list[Crafted]:
     the pre-filter's hit rate on it is a fair estimate. ``text`` replaces the
     packaged file, for tests.
     """
+    return _crafted_set(HELD_OUT_FILE, text)
+
+
+#: Written after every defence in use was final, and never used to change one.
+FRESH_FILE = "injection_fresh.yaml"
+
+
+def fresh_injection(text: str | None = None) -> list[Crafted]:
+    """The fresh held-out set, in file order.
+
+    The first held-out set shaped five defences after its results were read,
+    so its rows no longer measure unseen attacks. This set was written once
+    those defences were final, and none is to change because of its results.
+    It also plants names in the context pack. ``text`` replaces the packaged
+    file, for tests.
+    """
+    return _crafted_set(FRESH_FILE, text)
+
+
+def _crafted_set(filename: str, text: str | None) -> list[Crafted]:
     if text is None:
-        text = resources.files("vedette.eval").joinpath("data", HELD_OUT_FILE).read_text("utf-8")
+        text = resources.files("vedette.eval").joinpath("data", filename).read_text("utf-8")
     loaded = yaml.safe_load(text)
     items = [_crafted(entry) for entry in loaded["names"]]
     seen: set[str] = set()

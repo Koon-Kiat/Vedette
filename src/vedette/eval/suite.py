@@ -13,7 +13,7 @@ import httpx
 import structlog
 
 from vedette.config import LlmConfig, Settings
-from vedette.eval import datasets, dga_families, quality
+from vedette.eval import blend, datasets, dga_families, quality
 from vedette.eval.detection import DetectionResult, Detector
 from vedette.eval.history import history_metrics
 from vedette.eval.hostnames import ensure_hostnames
@@ -543,14 +543,23 @@ async def run_suite(
                 ),
             ]
             family_rows = await _families(detector, families)
+            allowlist = [
+                *settings.allowlist,
+                *await TriageStore(store.engine).allowlist_entries(),
+            ]
+            learning = timedelta(days=settings.rules.learning_days)
             replay = await detector.replay(
+                store, profile_ids, allowlist=allowlist, learning=learning
+            )
+            in_traffic = await blend.attacks_in_traffic(
+                detector,
                 store,
                 profile_ids,
-                allowlist=[
-                    *settings.allowlist,
-                    *await TriageStore(store.engine).allowlist_entries(),
-                ],
-                learning=timedelta(days=settings.rules.learning_days),
+                allowlist=allowlist,
+                learning=learning,
+                clean=replay,
+                families=families,
+                feeds=feeds,
             )
         history = await history_metrics(store.engine, profile_ids, now)
 
@@ -655,6 +664,7 @@ async def run_suite(
                 for rule, count in replay.findings.items()
             ],
         },
+        "in_traffic": in_traffic,
         "injection": [_injection(result) for result in results],
         "injection_combined": combine(results),
         "cross_finding": [_cross(result) for result in crosses],

@@ -579,6 +579,9 @@ async def test_the_suite_runs_without_the_model_and_is_stored(
     assert rows["Young domains, registration dates given"]["flagged"] == 40
     assert rows["Older domains, registration dates given"]["flagged"] == 0
     assert summary["replay"]["events"] == 0, "no stored history to replay"
+    traffic = summary["in_traffic"]
+    assert (traffic["placed"], traffic["lookups"]) == (0, 0), "nowhere to put an attack"
+    assert [row["attack"] for row in traffic["kinds"]][-1] == "Visit to a threat-feed domain"
 
 
 async def test_the_suite_reports_a_missing_list_and_an_unreachable_model(
@@ -646,6 +649,7 @@ async def test_the_evaluation_page_shows_the_latest_run(store: Store) -> None:
     assert page.text.count("True by construction") == 1
     assert "No evaluation has run yet" not in page.text
     assert "Real DGA families" not in page.text, "a run from before the families has no table"
+    assert "Attacks in your traffic" not in page.text, "nor one from before the blended replay"
 
 
 async def test_the_evaluation_page_lists_each_real_dga_family(store: Store) -> None:
@@ -669,6 +673,38 @@ async def test_the_evaluation_page_lists_each_real_dga_family(store: Store) -> N
         '<td class="num">21</td><td class="num">20</td>'
     ) in page.text
     assert "Explanation quality" not in page.text, "a run from before the quality test"
+
+
+async def test_the_evaluation_page_shows_attacks_in_your_traffic(store: Store) -> None:
+    row = {
+        "attack": "Tunnel, 40 lookups in 5 minutes",
+        "sessions": 10,
+        "placed": 10,
+        "detected": 9,
+        "alone": 10,
+        "rate": 0.9,
+        "p50_minutes": 3.75,
+    }
+    missed = {**row, "attack": "Tunnel, 20 lookups in 10 minutes", "detected": 0, "rate": 0.0}
+    await EvalStore(store.engine).save(
+        started_at=NOW,
+        finished_at=NOW,
+        summary={
+            **_minimal_summary(),
+            "in_traffic": {"placed": 20, "kinds": [row, {**missed, "p50_minutes": None}]},
+        },
+        report="# Evaluation",
+    )
+
+    async with logged_in(store) as (client_, _):
+        page = await client_.get("/evaluation")
+
+    assert '<h2 id="traffic-title">Attacks in your traffic</h2>' in page.text
+    assert (
+        '<td>Tunnel, 40 lookups in 5 minutes</td><td class="num">10</td><td class="num">9</td>'
+        '<td class="num">90%</td><td class="num">10</td><td class="num">3.8</td>'
+    ) in page.text
+    assert '<td class="num">10</td><td class="num">n/a</td>' in page.text
 
 
 async def test_the_evaluation_page_compares_model_and_template_explanations(store: Store) -> None:

@@ -46,6 +46,24 @@
   </div>
 </section>
 
+{% set traffic = s.get("in_traffic") or {} %}
+{% if traffic.get("placed") %}
+<section class="block" aria-labelledby="traffic-title">
+  <h2 id="traffic-title">Attacks in your traffic</h2>
+  <p class="note">The same kinds of attack blended into your history on your own devices after the learning period, then the history replayed once. Alone is each attack on a device of its own.</p>
+  <div class="table-wrap">
+  <table class="sortable" id="t-traffic">
+    <thead><tr><th>Attack</th><th class="num">Placed</th><th class="num">Detected</th><th class="num">Rate</th><th class="num">Detected alone</th><th class="num">Median minutes to detect</th></tr></thead>
+    <tbody>
+      {% for row in traffic.kinds %}
+      <tr><td>{{ row.attack|text }}</td><td class="num">{{ row.placed|num }}</td><td class="num">{{ row.detected|num }}</td><td class="num">{{ pct(row.rate) }}</td><td class="num">{{ row.alone|num }}</td><td class="num">{% if row.p50_minutes is not none %}{{ "%.1f"|format(row.p50_minutes) }}{% else %}n/a{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 {% set quality = s.get("quality") or {} %}
 {% if quality.get("items") %}
 <section class="block" aria-labelledby="quality-title">

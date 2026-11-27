@@ -52,6 +52,19 @@
 
 ### Evaluation
 
+- Attacks are also tested inside your own traffic. The synthetic attacks
+  (bursts of generated domains, including 13 real malware families, fast,
+  slow and sustained tunnels, visits to young and threat-feed domains) are
+  blended into the stored history on your own devices after the learning
+  period, each just after one of the device's lookups and an hour from the
+  others, and the history is replayed once more. The report and the
+  Evaluation page give, per kind of attack, how many were caught in your
+  traffic and alone, the time from its first lookup to the first finding,
+  and any finding the attacks changed on your own lookups. On 22.7 days of
+  history, 73 of 83 attacks were caught, the same as alone; dictionary-word
+  bursts took 3.3 minutes, fast tunnels 3.8 and one-a-minute tunnels an
+  hour, and none of your own findings changed. The extra replay adds under
+  a minute to a run.
 - A fresh held-out injection set of 124 items, written after every defence
   was final: the first set shaped five defences after its results were read,
   so its downplay, spoof, device and sample-roots rows no longer measure

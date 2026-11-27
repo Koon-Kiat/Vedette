@@ -807,6 +807,17 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      lists registered roots, so a planted payload sits in a root. Held by
      `test_the_fresh_set_covers_the_shaped_categories_and_the_context_carrier`
      and `test_a_planted_lookup_reaches_only_its_own_finding_s_pack`.
+117. **Attacks are also measured inside the owner's traffic.** The detection
+     sets run each attack alone, on a device of its own with no learning
+     period. The evaluation also blends the same sessions into the stored
+     history, each just after one of a real device's lookups once the
+     learning period is over and at least an hour from any other attack on
+     that device, and replays the whole history once more. A finding on an
+     attack's own lookups detects it, and its delay is the time to detect;
+     the owner's own findings are compared with the plain replay. Only counts
+     and timings are kept. Held by
+     `test_attacks_in_the_history_are_found_and_timed` and
+     `test_attacks_go_to_real_devices_after_learning_and_apart`.
 
 ## Verified facts the design relies on
 

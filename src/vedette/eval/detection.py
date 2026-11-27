@@ -7,8 +7,9 @@ rule only fires for roots whose age was already known. First sightings go to
 a scratch database, so the evaluation leaves the real one untouched.
 """
 
-from collections import Counter
-from collections.abc import Sequence
+import heapq
+from collections import Counter, deque
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -59,6 +60,16 @@ class DetectionResult:
         return self.flagged / self.items if self.items else None
 
 
+@dataclass(frozen=True, slots=True)
+class Hit:
+    """A finding raised on one of the events blended into a replay."""
+
+    event_id: str
+    rule: str
+    severity: Severity
+    ts: datetime
+
+
 @dataclass(slots=True)
 class ReplayResult:
     """What the current rules raise when the stored history is run through them again."""
@@ -67,10 +78,42 @@ class ReplayResult:
     days: float = 0.0
     findings: dict[str, int] = field(default_factory=dict)  # per rule
     alerting: dict[str, int] = field(default_factory=dict)  # per rule, high or critical
+    #: Findings on blended events, which are not counted in ``findings``.
+    hits: list[Hit] = field(default_factory=list)
 
     def per_day(self, count: int) -> float | None:
         """A count spread over the days replayed; ``None`` without a day of history."""
         return count / self.days if self.days >= 1 else None
+
+
+class _GivenAges(ReferenceStore):
+    """The cached registration dates, with dates given for synthetic roots on top."""
+
+    def __init__(self, engine: AsyncEngine, given: Mapping[str, DomainAgeRecord]) -> None:
+        super().__init__(engine)
+        self._given = dict(given)
+
+    async def domain_ages(self, roots: Collection[str]) -> dict[str, DomainAgeRecord]:
+        """Cached answers for the roots without a given date, and the given ones."""
+        found = await super().domain_ages([root for root in roots if root not in self._given])
+        return found | {root: self._given[root] for root in roots if root in self._given}
+
+
+def _order(event: DnsEvent) -> tuple[datetime, str]:
+    return event.ts, event.event_id
+
+
+def _merged(chunk: Sequence[DnsEvent], pending: deque[DnsEvent]) -> list[DnsEvent]:
+    """``chunk`` with the pending events up to its last one merged in, in time order.
+
+    The merged events are taken off ``pending``, which is in time order.
+    """
+    taken = []
+    while pending and pending[0].ts <= chunk[-1].ts:
+        taken.append(pending.popleft())
+    if not taken:
+        return list(chunk)
+    return list(heapq.merge(chunk, taken, key=_order))
 
 
 class Detector:
@@ -80,6 +123,7 @@ class Detector:
         self, reference: AsyncEngine, scratch: AsyncEngine, specs: Sequence[RuleSpec], now: datetime
     ) -> None:
         """Read reference data from ``reference``; write first sightings to ``scratch``."""
+        self._reference_engine = reference
         self._reference = ReferenceStore(reference)
         self._scratch = ReferenceStore(scratch)
         self._specs = list(specs)
@@ -116,6 +160,11 @@ class Detector:
         """Whether a Public Suffix List is available locally."""
         return self._suffixes.known
 
+    @property
+    def rule_ids(self) -> frozenset[str]:
+        """The ids of the enabled rules."""
+        return frozenset(spec.id for spec in self._specs if spec.enabled)
+
     def is_platform(self, root: str) -> bool:
         """Whether ``root`` is a customer name on a hosting platform, by the stored list."""
         return self._suffixes.known and self._suffixes.is_platform_name(root)
@@ -140,6 +189,21 @@ class Detector:
             rdap_max_lookups_per_batch=0,
             suffixes=self._suffixes,
         )
+
+    def _with_ages(self, ages: Mapping[str, int] | None) -> ReferenceStore | None:
+        """The cached registration dates plus ``ages`` (root to days), if any are given."""
+        if not ages:
+            return None
+        given = {
+            root: DomainAgeRecord(
+                root=root,
+                status="found",
+                registered_at=self._now - timedelta(days=days),
+                fetched_at=self._now,
+            )
+            for root, days in ages.items()
+        }
+        return _GivenAges(self._reference_engine, given)
 
     def _engine(self, *, prefilter: bool) -> RuleEngine:
         return RuleEngine(
@@ -306,6 +370,23 @@ class Detector:
         )
         return self._summarise(dataset, "malicious", found, "")
 
+    async def alone(
+        self,
+        sessions: Sequence[Sequence[tuple[str, str, float]]],
+        *,
+        counted: frozenset[str],
+        ages: Mapping[str, int] | None = None,
+    ) -> list[list[tuple[str, Severity]]]:
+        """Findings of the ``counted`` rules on each session, run on a device of its own.
+
+        Each session is a list of (fqdn, root, seconds after its start), with
+        fresh rule state and no learning period. ``ages`` gives registration
+        ages in days for roots the cache does not know.
+        """
+        return await self._evaluate(
+            sessions, feeds=True, prefilter=True, counted=counted, ages=self._with_ages(ages)
+        )
+
     async def replay(
         self,
         store: Store,
@@ -313,35 +394,57 @@ class Detector:
         *,
         allowlist: Sequence[AllowlistEntry],
         learning: timedelta,
+        blend: Iterable[DnsEvent] = (),
+        ages: Mapping[str, int] | None = None,
     ) -> ReplayResult:
         """Run every stored event through the current rules again, counting what fires.
 
         Each profile is replayed in order with fresh rule state and fresh first
         sightings, after the same learning period as the running service.
         Names are only counted.
+
+        ``blend`` events are merged into their profile's history in time order
+        and go through the same enrichment and rules. Findings on them are kept
+        as hits, not counted with the history's. ``ages`` gives registration
+        ages in days for roots the cache does not know.
         """
         result = ReplayResult()
         findings: Counter[str] = Counter()
         alerting: Counter[str] = Counter()
+        extra = sorted(blend, key=_order)
+        blended = {event.event_id for event in extra}
+        given = self._with_ages(ages)
         span = timedelta(0)
+
+        async def run(enricher: Enricher, engine: RuleEngine, batch: Sequence[DnsEvent]) -> None:
+            for seen in await enricher.enrich_batch(batch, self._now):
+                for finding in engine.evaluate(seen):
+                    if finding.event_id in blended:
+                        result.hits.append(
+                            Hit(finding.event_id, finding.rule_id, finding.severity, finding.ts)
+                        )
+                        continue
+                    findings[finding.rule_id] += 1
+                    if finding.severity.rank >= Severity.HIGH.rank:
+                        alerting[finding.rule_id] += 1
+
         for profile_id in profile_ids:
-            enricher = self._enricher()
+            enricher = self._enricher(given)
             engine = RuleEngine(
                 self._specs,
                 allowlist=Allowlist(allowlist, labels={profile_id: profile_id}),
                 learning=learning,
             )
+            pending = deque(event for event in extra if event.profile_id == profile_id)
             first: datetime | None = None
             last: datetime | None = None
             async for chunk in store.iter_events(profile_id):
                 first = first or chunk[0].ts
                 last = chunk[-1].ts
                 result.events += len(chunk)
-                for seen in await enricher.enrich_batch(chunk, self._now):
-                    for finding in engine.evaluate(seen):
-                        findings[finding.rule_id] += 1
-                        if finding.severity.rank >= Severity.HIGH.rank:
-                            alerting[finding.rule_id] += 1
+                await run(enricher, engine, _merged(chunk, pending))
+            if pending:
+                await run(enricher, engine, list(pending))
             if first is not None and last is not None:
                 span = max(span, last - first)
         result.days = span.total_seconds() / 86400

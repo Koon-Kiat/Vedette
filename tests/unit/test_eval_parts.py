@@ -494,3 +494,115 @@ def test_a_clean_cross_finding_run_names_only_the_arms_it_ran() -> None:
     assert "cannot show the defences making a difference" not in one
     assert "with the defences on or off, so this run cannot show the defences making a " in both
     assert "With 64 batches per arm the rate" in both
+
+
+def _kind(attack: str, placed: int, detected: int, alone: int, **extra: Any) -> dict[str, Any]:
+    return {
+        "attack": attack,
+        "sessions": placed,
+        "placed": placed,
+        "detected": detected,
+        "alerting": 0,
+        "alone": alone,
+        "by_rule": {},
+        "rate": detected / placed if placed else None,
+        "ci": wilson(detected, placed),
+        "p50_minutes": None,
+        "max_minutes": None,
+        **extra,
+    }
+
+
+def _traffic(**overrides: Any) -> dict[str, Any]:
+    values: dict[str, Any] = {
+        "sessions": 20,
+        "placed": 20,
+        "lookups": 1_220,
+        "devices": 2,
+        "learning_days": 3.0,
+        "kinds": [
+            _kind(
+                "Tunnel, 40 lookups in 5 minutes",
+                10,
+                10,
+                10,
+                by_rule={"tunnel-like": 10},
+                p50_minutes=3.75,
+                max_minutes=3.75,
+            ),
+            _kind(
+                "Tunnel, a lookup a minute for 2 hours",
+                10,
+                8,
+                10,
+                by_rule={"tunnel-slow": 8},
+                p50_minutes=60.0,
+                max_minutes=95.0,
+            ),
+        ],
+        "own": [
+            {
+                "rule": "volume-spike",
+                "replay": 2,
+                "blended": 2,
+                "replay_alerting": 0,
+                "blended_alerting": 0,
+            }
+        ],
+    }
+    values.update(overrides)
+    return values
+
+
+def test_the_report_compares_attacks_in_your_traffic_with_alone() -> None:
+    report = render_markdown(summary(in_traffic=_traffic()))
+
+    assert "### Attacks in your traffic" in report
+    assert "20 of 20 attacks (1,220 lookups) went to 2 devices;" in report
+    assert "after the 3-day learning period" in report
+    assert (
+        "| Tunnel, 40 lookups in 5 minutes | 10 | 10 | 100% (72.2% to 100.0%) | 0 | 10 of 10 "
+        "| 3.8 min | 3.8 min | tunnel-like 10 |"
+    ) in report
+    assert "| 1.0 h | 1.6 h | tunnel-slow 8 |" in report
+    assert "The attacks changed no finding on your own lookups." in report
+    assert (
+        "- Blended into your own history after the learning period, 18 of 20 attacks raise a "
+        "finding (90%); run alone, 20 of 20 do (100%)."
+    ) in report
+    assert (
+        "- Tunnel, a lookup a minute for 2 hours: 8 of 10 in your traffic, 10 of 10 alone "
+        "(tunnel-slow 8 in your traffic)."
+    ) in report
+    assert "- Tunnel, 40 lookups in 5 minutes: " not in report, "same in traffic as alone"
+    assert (
+        "- Tunnel, a lookup a minute for 2 hours is flagged a median of 1.0 h after it starts"
+    ) in report
+    assert "- The attacks changed no finding on your own lookups." in report
+
+
+def test_the_report_lists_own_findings_the_attacks_changed() -> None:
+    changed = {
+        "rule": "dga-burst",
+        "replay": 1,
+        "blended": 0,
+        "replay_alerting": 0,
+        "blended_alerting": 0,
+    }
+    report = render_markdown(summary(in_traffic=_traffic(own=[changed])))
+
+    assert "Findings on your own lookups that the attacks changed:" in report
+    assert "| dga-burst | 1 | 0 | 0 | 0 |" in report
+    assert (
+        "- With the attacks blended in, your own lookups' findings changed: dga-burst 1 to 0."
+        in (report)
+    )
+
+
+def test_the_report_says_when_no_attack_could_be_placed() -> None:
+    empty = _traffic(placed=0, lookups=0, devices=0, kinds=[_kind("Tunnel", 0, 0, 10)], own=[])
+    report = render_markdown(summary(in_traffic=empty))
+
+    assert "No attack could be placed: no device has enough lookups" in report
+    assert "Blended into your own history" not in report
+    assert "### Attacks in your traffic" not in render_markdown(summary())

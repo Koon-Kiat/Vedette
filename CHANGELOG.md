@@ -22,7 +22,9 @@
   finding's own names use ("benign", "false positive", "verified",
   "trusted", "ignore") is discarded, and the standard explanation stands in.
   The richer prompt had let crafted names that vouch for themselves steer
-  the model in five of 315 injection items, against one before.
+  the model in five of 315 injection items, against one before. With this
+  check, the burst note corrected and a prompt line to the same effect, one
+  item steers it again.
 
 ### Detection
 

@@ -1,19 +1,100 @@
 """Storage for the LLM stage: analyses, the verdict cache and call records."""
 
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from itertools import batched
+from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy import case, delete, func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from vedette.shared.models import Analysis, Severity, Verdict
+from vedette.shared.models import ASSESSMENTS, Analysis, Severity, Verdict, confidence_band
 from vedette.storage.models import finding_analysis, findings, llm_cache, llm_calls
 from vedette.storage.store import StoredFinding, finding_from_row
 
 _IN_CHUNK = 500
+#: The lists of an analysis, as kept in its ``details`` column.
+_LISTS = ("harmless", "malicious", "checks", "evidence_used", "removed_names")
+#: Triage decisions that say which way a finding went: benign means harmless,
+#: acknowledged means the owner took it as real.
+OUTCOMES = {"benign": "harmless", "acknowledged": "threat"}
+#: Decided findings needed before the dashboard compares leanings with decisions.
+CALIBRATION_MINIMUM = 20
+
+
+@dataclass(frozen=True, slots=True)
+class CachedVerdict:
+    """A cached model verdict, and the names the guards took out of it when it was stored."""
+
+    verdict: Verdict
+    removed_names: tuple[str, ...] = ()
+
+
+def _strings(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(str(item) for item in value)
+
+
+def _details(analysis: Analysis) -> dict[str, list[str]]:
+    return {name: list(getattr(analysis, name)) for name in _LISTS}
+
+
+def analysis_from_row(row: Any) -> Analysis:
+    """An analysis from a ``finding_analysis`` row; one stored before the lists has none."""
+    details: Mapping[str, Any] = row.details if isinstance(row.details, Mapping) else {}
+    return Analysis(
+        finding_id=row.finding_id,
+        summary=row.summary,
+        likely_cause=row.likely_cause,
+        recommended_action=row.recommended_action,
+        priority=Severity(row.priority),
+        group_key=row.group_key,
+        confidence=row.confidence,
+        source=row.source,
+        model=row.model,
+        assessment=row.assessment if row.assessment in ASSESSMENTS else None,
+        **{name: _strings(details.get(name)) for name in _LISTS},
+    )
+
+
+@dataclass(slots=True)
+class BandOutcomes:
+    """How the model's leanings in one confidence band compare with the owner's decisions."""
+
+    band: str
+    decided: int = 0
+    agreed: int = 0
+
+
+async def leaning_outcomes(connection: AsyncConnection) -> tuple[list[BandOutcomes], int]:
+    """Model leanings against triage decisions, per confidence band.
+
+    Counts every finding the model leaned on (harmless or threat) that the owner
+    then marked benign or acknowledged. It agreed when it leaned harmless on a
+    finding marked benign, or threat on one acknowledged. Also returns how many
+    such findings there are in all.
+    """
+    rows = await connection.execute(
+        select(finding_analysis.c.assessment, finding_analysis.c.confidence, findings.c.status)
+        .join(findings, findings.c.id == finding_analysis.c.finding_id)
+        .where(
+            finding_analysis.c.source.in_(("llm", "cache")),
+            finding_analysis.c.assessment.in_(tuple(OUTCOMES.values())),
+            findings.c.status.in_(tuple(OUTCOMES)),
+        )
+    )
+    bands = {band: BandOutcomes(band) for band in ("low", "medium", "high")}
+    total = 0
+    for assessment, confidence, status in rows.all():
+        entry = bands[confidence_band(float(confidence))]
+        entry.decided += 1
+        entry.agreed += OUTCOMES[str(status)] == assessment
+        total += 1
+    return list(bands.values()), total
 
 
 async def analysis_sources(connection: AsyncConnection, *, since: datetime) -> dict[str, int]:
@@ -68,6 +149,8 @@ class AnalysisStore:
                 "source": item.source,
                 "model": item.model,
                 "created_at": now,
+                "assessment": item.assessment,
+                "details": _details(item),
             }
             for item in analyses
         ]
@@ -90,27 +173,17 @@ class AnalysisStore:
                     select(finding_analysis).where(finding_analysis.c.finding_id.in_(chunk))
                 )
                 for row in rows:
-                    found[row.finding_id] = Analysis(
-                        finding_id=row.finding_id,
-                        summary=row.summary,
-                        likely_cause=row.likely_cause,
-                        recommended_action=row.recommended_action,
-                        priority=Severity(row.priority),
-                        group_key=row.group_key,
-                        confidence=row.confidence,
-                        source=row.source,
-                        model=row.model,
-                    )
+                    found[row.finding_id] = analysis_from_row(row)
         return found
 
     # --- verdict cache ----------------------------------------------------------------
 
-    async def cache_get(self, keys: Collection[str], now: datetime) -> dict[str, Verdict]:
+    async def cache_get(self, keys: Collection[str], now: datetime) -> dict[str, CachedVerdict]:
         """Unexpired cached verdicts for the given keys.
 
         An entry that no longer validates is treated as absent.
         """
-        found: dict[str, Verdict] = {}
+        found: dict[str, CachedVerdict] = {}
         async with self._engine.connect() as connection:
             for chunk in batched(keys, _IN_CHUNK, strict=False):
                 rows = await connection.execute(
@@ -119,12 +192,13 @@ class AnalysisStore:
                     )
                 )
                 for row in rows:
+                    payload = dict(row.payload)
+                    removed = _strings(payload.pop("removed_names", None))
                     try:
-                        found[row.cache_key] = Verdict.model_validate(
-                            {**row.payload, "finding_id": 0}
-                        )
+                        verdict = Verdict.model_validate({**payload, "finding_id": 0})
                     except ValidationError:
                         continue
+                    found[row.cache_key] = CachedVerdict(verdict, removed)
         return found
 
     async def cache_put(
@@ -138,6 +212,12 @@ class AnalysisStore:
             "priority": analysis.priority.value,
             "group_key": analysis.group_key,
             "confidence": analysis.confidence,
+            "assessment": analysis.assessment,
+            "harmless_explanations": list(analysis.harmless),
+            "malicious_explanations": list(analysis.malicious),
+            "checks": list(analysis.checks),
+            "evidence_used": list(analysis.evidence_used),
+            "removed_names": list(analysis.removed_names),
         }
         statement = sqlite_insert(llm_cache).values(
             cache_key=key,

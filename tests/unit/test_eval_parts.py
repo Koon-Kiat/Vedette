@@ -428,7 +428,7 @@ def test_the_report_compares_the_model_s_explanations_with_the_template() -> Non
     assert "4 harmless look-alikes, 2 real threats and 0 that could be either" in report
     assert (
         "| tunnel-like | 6 | 2 (33%) | 3 (50%) | 2 (33%) | 6 | 5 (83%) | 5 (83%) | 1 (17%) "
-        "| 4 (67%) |"
+        "| 0 (0%) | 4 (67%) |"
     ) in report
     assert "| Harmless look-alikes | 4 | 1 (25%) | 4 | 3 (75%) |" in report
     assert (
@@ -438,6 +438,7 @@ def test_the_report_compares_the_model_s_explanations_with_the_template() -> Non
     ) in report
     assert "| Explanations: right cause, a fitting step, nothing invented | report as " in report
     assert "67% right, 17% inventing a fact (qwen3:8b, thinking off); template 33%" in report
+    assert "Which way the answers leaned" not in report, "a run from before the leaning"
     assert (
         "- `tl-sophos` (tunnel-like): missed the cause; invented name 'av.example' in: See "
         'av.example.. Cause given: "DNS tunnelling." Step given: "Block it."'
@@ -606,3 +607,41 @@ def test_the_report_says_when_no_attack_could_be_placed() -> None:
     assert "No attack could be placed: no device has enough lookups" in report
     assert "Blended into your own history" not in report
     assert "### Attacks in your traffic" not in render_markdown(summary())
+
+
+def test_the_report_shows_leanings_calibration_and_the_domains_the_guard_took_out() -> None:
+    template = {**quality_scores(2, 3, 0, 2), "source": "template", "think": False, "cases": []}
+    model = {
+        **quality_scores(5, 5, 0, 4),
+        "source": "qwen3:8b",
+        "think": False,
+        "names_removed": 1,
+        "removals": [{"id": "tl-sophos", "rule": "tunnel-like", "names": "av[.]example"}],
+        "leanings": {"benign": {"harmless": 3, "unclear": 1}, "suspicious": {"threat": 2}},
+        "by_band": {"high": [3, 3], "medium": [2, 2]},
+        "leaning_right": 5,
+        "leaning_scored": 5,
+    }
+    model["by_rule"]["tunnel-like"] = {**model["by_rule"]["tunnel-like"], "names_removed": 1}
+    report = render_markdown(
+        summary(
+            quality={
+                "items": 6,
+                "kinds": {"benign": 4, "suspicious": 2, "uncertain": 0},
+                "template": template,
+                "models": [model],
+            }
+        )
+    )
+
+    assert "| 0 (0%) | 1 (17%) | 4 (67%) |" in report
+    assert "| Harmless look-alikes | 4 | 3 | 0 | 1 |" in report
+    assert "| Real threats | 2 | 0 | 2 | 0 |" in report
+    assert "| low (under 0.5) | 0 | n/a |" in report
+    assert "| high (0.8 and over) | 3 | 3 (100%) |" in report
+    assert "- `tl-sophos` (tunnel-like): av[.]example" in report
+    assert "The name guard took a domain the model was not given out of 1 (17%) answers." in report
+    assert (
+        "It leaned the right way on 5 (100%) harmless look-alikes and real threats; by stated "
+        "confidence: 100% of 2 medium, 100% of 3 high."
+    ) in report

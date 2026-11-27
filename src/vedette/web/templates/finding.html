@@ -47,9 +47,41 @@
           <p>{{ a.recommended_action|prose }}</p>
         </section>
       </div>
+      {% set model_wrote = a.source != "template" %}
+      {% if a.harmless or a.malicious %}
+      <div class="explain-sides">
+        {% if a.harmless %}
+        <section class="explain-side" aria-labelledby="harmless-title">
+          <h3 id="harmless-title">{{ "Could be harmless" if model_wrote else "Harmless activity that trips this rule" }}</h3>
+          <ul class="plain">{% for text in a.harmless %}<li>{{ text|prose }}</li>{% endfor %}</ul>
+        </section>
+        {% endif %}
+        {% if a.malicious %}
+        <section class="explain-side" aria-labelledby="malicious-title">
+          <h3 id="malicious-title">Could be a threat</h3>
+          <ul class="plain">{% for text in a.malicious %}<li>{{ text|prose }}</li>{% endfor %}</ul>
+        </section>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if a.checks %}
+      <section class="explain-checks" aria-labelledby="checks-title">
+        <h3 id="checks-title">{{ "Checks, in order" if model_wrote else "Checks this rule suggests" }}</h3>
+        <ol>{% for text in a.checks %}<li>{{ text|prose }}</li>{% endfor %}</ol>
+      </section>
+      {% endif %}
+      {% if a.removed_names %}
+      <p class="explain-note">The model named {{ a.removed_names|length }} domain{{ "" if a.removed_names|length == 1 else "s" }} that {{ "is" if a.removed_names|length == 1 else "are" }} not in the records, and {{ "it was" if a.removed_names|length == 1 else "they were" }} taken out of the text: {% for name in a.removed_names %}<span class="name">{{ name|domain }}</span>{{ ", " if not loop.last }}{% endfor %}.</p>
+      {% endif %}
       <dl class="explain-facts">
-        {% if a.source != "template" %}
-        <div><dt>Confidence</dt><dd class="meter-row"><svg class="chart meter" viewBox="0 0 100 6" width="100" height="6" role="img" aria-label="Confidence {{ "%.2f"|format(a.confidence) }}"><rect class="meter-track" x="0" y="0" width="100" height="6" rx="1"/><rect class="meter-fill" x="0" y="0" width="{{ (a.confidence * 100)|round(0)|int }}" height="6" rx="1"/></svg><span class="figure">{{ "%.2f"|format(a.confidence) }}</span></dd></div>
+        {% if a.assessment %}
+        <div><dt>Leaning</dt><dd><strong>{{ {"harmless": "harmless", "threat": "a threat", "unclear": "unclear"}[a.assessment] }}</strong></dd></div>
+        {% endif %}
+        {% if model_wrote %}
+        <div><dt>Confidence</dt><dd><strong>{{ a.confidence|band }}</strong> <span class="sub">as the model states it; not calibrated</span></dd></div>
+        {% endif %}
+        {% if a.evidence_used %}
+        <div class="explain-based"><dt>Based on</dt><dd>{% for key in a.evidence_used %}{{ key|field_label }}{{ ", " if not loop.last }}{% endfor %}</dd></div>
         {% endif %}
         <div><dt>Priority</dt><dd>{% if row.priority != f.severity %}raised from the rule's <strong>{{ f.severity.value }}</strong> to <strong>{{ row.priority.value }}</strong> by the model{% else %}<strong>{{ f.severity.value }}</strong>, as the rule set it{% endif %}</dd></div>
         <div><dt>Who decides</dt><dd>The rule set the floor; the model can only raise it.</dd></div>

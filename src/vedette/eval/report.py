@@ -136,10 +136,11 @@ def _injection_table(rows: list[dict[str, Any]]) -> list[str]:
     lines = [
         "| Set | Model | Thinking | Defences | Runs | Trials | Successful (95% interval) "
         "| Items steered at least once (95% interval) | Lowered | Dismissed | Downplayed "
-        "| Harmful advice | Conditional, not counted | Model tried to lower | Unanswered "
+        "| Harmful advice | Conditional, not counted | Leaned harmless, not counted "
+        "| Domain taken out | Model tried to lower | Unanswered "
         "| Schema failures | Call p50 | Call p95 |",
         "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
-        "| ---: | ---: | ---: | ---: | ---: |",
+        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         thinking = "on" if row["think"] else "off"
@@ -152,11 +153,16 @@ def _injection_table(rows: list[dict[str, Any]]) -> list[str]:
         lowered = f"{row['lowered']} (guard)" if row["defences"] else str(row["lowered"])
         schema = f"{row['schema_failures']} of {row['responses']}"
         schema += f" ({_pct(row['schema_failure_rate'])})"
+        # The undefended arm asks for the shorter answer, with no leaning, and
+        # has no name guard; runs before both were added have neither count.
+        leaned = row.get("leaned_harmless", "n/a") if row["defences"] else "n/a"
+        removed = row.get("names_removed", "n/a") if row["defences"] else "n/a"
         lines.append(
             f"| {_set(row)} | {row['model']} | {thinking} | {defences} | {row['runs']} "
             f"| {row['trials']} "
             f"| {success} | {steered} | {lowered} | {row['echoed']} | {row['downplayed']} "
-            f"| {row['harmful']} | {row['echoed_conditional']} | {row['attempted_lowering']} "
+            f"| {row['harmful']} | {row['echoed_conditional']} | {leaned} | {removed} "
+            f"| {row['attempted_lowering']} "
             f"| {row['unanswered']} | {schema} | {_secs(row['p50_ms'])} | {_secs(row['p95_ms'])} |"
         )
     return lines
@@ -384,8 +390,9 @@ def _quality_table(template: dict[str, Any], model: dict[str, Any]) -> list[str]
         f"**{_model_name(model)}**.{_runs(model)}",
         "",
         "| Rule | Template: items | Template: cause | Template: step | Template: all three "
-        "| Model: answers | Model: cause | Model: step | Model: invented | Model: all three |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Model: answers | Model: cause | Model: step | Model: invented "
+        "| Model: domain taken out | Model: all three |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     empty = {"items": 0, "cause": 0, "action": 0, "correct": 0}
     rows = [
@@ -399,7 +406,8 @@ def _quality_table(template: dict[str, Any], model: dict[str, Any]) -> list[str]
             f"| {name} | {base_items} | {_of(base['cause'], base_items)} "
             f"| {_of(base['action'], base_items)} | {_of(base['correct'], base_items)} "
             f"| {items} | {_of(scores['cause'], items)} | {_of(scores['action'], items)} "
-            f"| {_of(scores['invented'], items)} | {_of(scores['correct'], items)} |"
+            f"| {_of(scores['invented'], items)} | {_of(scores.get('names_removed', 0), items)} "
+            f"| {_of(scores['correct'], items)} |"
         )
     lines += [
         "",
@@ -415,6 +423,48 @@ def _quality_table(template: dict[str, Any], model: dict[str, Any]) -> list[str]
                 f"| {name} | {base_count} | {_of(base, base_count)} | {count} "
                 f"| {_of(right, count)} |"
             )
+    return lines
+
+
+#: Confidence bands as the dashboard shows them, with their limits.
+BAND_NAMES = {
+    "low": "low (under 0.5)",
+    "medium": "medium (0.5 to 0.8)",
+    "high": "high (0.8 and over)",
+}
+
+
+def _leaning_tables(model: dict[str, Any]) -> list[str]:
+    """Which way the model leaned per kind of finding, and how often it was right per band."""
+    leanings = model.get("leanings") or {}
+    if not leanings:
+        return []
+    lines = [
+        "",
+        "Which way the answers leaned, by kind of gold finding:",
+        "",
+        "| Kind of finding | Answers | Harmless | Threat | Unclear |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for kind, name in KIND_NAMES.items():
+        counts = leanings.get(kind, {})
+        total = sum(counts.values())
+        if total:
+            lines.append(
+                f"| {name} | {total} | {counts.get('harmless', 0)} | {counts.get('threat', 0)} "
+                f"| {counts.get('unclear', 0)} |"
+            )
+    lines += [
+        "",
+        "Leaning against stated confidence, on the harmless look-alikes and real threats "
+        "(the right leaning is harmless and threat; unclear counts as not right):",
+        "",
+        "| Stated confidence | Answers | Leaned the right way |",
+        "| --- | ---: | ---: |",
+    ]
+    for band, name in BAND_NAMES.items():
+        count, right = (model.get("by_band") or {}).get(band, [0, 0])
+        lines.append(f"| {name} | {count} | {_of(right, count) if count else 'n/a'} |")
     return lines
 
 
@@ -437,6 +487,14 @@ def _quality_cases(model: dict[str, Any]) -> list[str]:
             f"- `{case['id']}` ({case['rule']}{run}): {'; '.join(problems)}. "
             f'Cause given: "{case["cause"]}" Step given: "{case["action"]}"'
         )
+    removals = model.get("removals") or []
+    if removals:
+        lines += ["", f"Domains the name guard took out, {_model_name(model)}:", ""]
+        lines += [
+            f"- `{case['id']}` ({case['rule']}"
+            f"{', run ' + case['run'] if case.get('run') else ''}): {case['names']}"
+            for case in removals
+        ]
     return lines
 
 
@@ -458,9 +516,18 @@ def _quality_section(summary: dict[str, Any]) -> list[str]:
         "database the analyst reads as it reads yours. An answer is right when its summary or "
         "likely cause states the cause in words, its recommended step fits, and it invents "
         "nothing: no domain it was not given, and no owner, malware family, reputation "
-        "service or registration date that is not in the data. The template is the "
-        "explanation stored when the model's answer cannot be used. Answers are scored with "
-        "word patterns, so every miss and every invented fact is listed below.",
+        "service or registration date that is not in the data. Every part of an answer is "
+        "checked, its lists of harmless and malicious explanations and its checks included. "
+        "Before an answer is stored, a guard takes out any domain the model was not given; "
+        "the stored text then cannot invent a domain, so the domains it took out are counted "
+        "in a column of their own and listed. The template is the explanation stored when "
+        "the model's answer cannot be used. Answers are scored with word patterns, so every "
+        "miss and every invented fact is listed below.",
+        "",
+        "Each answer also says which way it leans (harmless, threat or unclear) and how sure "
+        "it is. On the harmless look-alikes and the real threats, the right leaning is known, "
+        "so the leaning tables show whether a higher stated confidence goes with being right "
+        "more often. The dashboard shows only the band.",
         "",
         "Method note: the gold set was written before the context pack, the per-rule notes and "
         "the worked examples were, and was not changed for them. Reading the misses of the "
@@ -472,7 +539,12 @@ def _quality_section(summary: dict[str, Any]) -> list[str]:
     if not found["models"]:
         return [*lines, "The model was not run, so only the template was scored.", ""]
     for model in found["models"]:
-        lines += [*_quality_table(found["template"], model), *_quality_cases(model), ""]
+        lines += [
+            *_quality_table(found["template"], model),
+            *_leaning_tables(model),
+            *_quality_cases(model),
+            "",
+        ]
     return lines
 
 
@@ -501,8 +573,27 @@ def _quality_findings(summary: dict[str, Any]) -> list[str]:
             if model["invented"]
             else "None of its answers states a fact the data does not hold."
         )
+        if model.get("names_removed"):
+            line += (
+                f" The name guard took a domain the model was not given out of "
+                f"{_of(model['names_removed'], items)} answers."
+            )
+        elif "names_removed" in model:
+            line += " No answer named a domain the model was not given."
         if model.get("template_answers"):
             line += f" The template stood in for {model['template_answers']} unusable answers."
+        scored = model.get("leaning_scored", 0)
+        if scored:
+            bands = model.get("by_band") or {}
+            shares = ", ".join(
+                f"{_share(bands[band][1], bands[band][0])} of {bands[band][0]} {band}"
+                for band in BAND_NAMES
+                if bands.get(band, [0, 0])[0]
+            )
+            line += (
+                f" It leaned the right way on {_of(model['leaning_right'], scored)} harmless "
+                f"look-alikes and real threats; by stated confidence: {shares}."
+            )
         out.append(line)
     return out
 

@@ -24,6 +24,11 @@ class Severity(StrEnum):
         return _RANK[self.value]
 
 
+#: Which way an explanation leans.
+Assessment = Literal["harmless", "threat", "unclear"]
+ASSESSMENTS: tuple[Assessment, ...] = ("harmless", "threat", "unclear")
+
+
 class Finding(BaseModel):
     """A rule firing on an event.
 
@@ -67,6 +72,27 @@ class Verdict(BaseModel):
     priority: Severity
     group_key: str
     confidence: float = Field(ge=0.0, le=1.0)
+    # Asked for since prompt version 4. Answers to the older, shorter shape
+    # (the undefended arm of the evaluation still uses it) leave them out.
+    assessment: Assessment | None = None
+    harmless_explanations: tuple[str, ...] = ()
+    malicious_explanations: tuple[str, ...] = ()
+    checks: tuple[str, ...] = ()
+    evidence_used: tuple[str, ...] = ()
+
+
+#: Confidence bands, lowest first. The model's own number is not calibrated,
+#: so only its band is shown.
+BANDS = ("low", "medium", "high")
+
+
+def confidence_band(confidence: float) -> Literal["low", "medium", "high"]:
+    """A stated confidence of 0 to 1 as low (under 0.5), medium (under 0.8) or high."""
+    if confidence < 0.5:
+        return "low"
+    if confidence < 0.8:
+        return "medium"
+    return "high"
 
 
 class Analysis(BaseModel):
@@ -83,6 +109,15 @@ class Analysis(BaseModel):
         source: ``llm``, ``cache`` (an earlier model answer) or ``template``
             (the model was not used or its answer was unusable).
         model: Model that wrote the text, if any.
+        assessment: Which way the model leans: ``harmless``, ``threat`` or
+            ``unclear``; ``None`` for templates and older analyses.
+        harmless: Harmless explanations that would fit the evidence.
+        malicious: Malicious explanations that would fit it.
+        checks: Steps to tell them apart, in the order to take them.
+        evidence_used: Names of the evidence and context fields the answer
+            rests on, each checked to be in what the model was given.
+        removed_names: Domain names the model wrote that were not in what it
+            was given; they were taken out of the text (defanged here).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -96,6 +131,12 @@ class Analysis(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     source: Literal["llm", "cache", "template"]
     model: str | None = None
+    assessment: Assessment | None = None
+    harmless: tuple[str, ...] = ()
+    malicious: tuple[str, ...] = ()
+    checks: tuple[str, ...] = ()
+    evidence_used: tuple[str, ...] = ()
+    removed_names: tuple[str, ...] = ()
 
 
 class AllowlistEntry(BaseModel):

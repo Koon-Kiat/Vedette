@@ -52,6 +52,10 @@ class FindingGroup(BaseModel):
     other_targets: list[str]
     #: NextDNS's name for a category finding's reason, when recorded.
     target_name: str | None = None
+    #: The explanation's lists; empty in digests stored before them.
+    harmless: list[str] = []
+    malicious: list[str] = []
+    checks: list[str] = []
 
 
 class VolumeLine(BaseModel):
@@ -263,6 +267,7 @@ class DigestBuilder:
                 finding_analysis.c.group_key.label("a_group"),
                 finding_analysis.c.model.label("a_model"),
                 finding_analysis.c.source.label("a_source"),
+                finding_analysis.c.details.label("a_details"),
             )
             .outerjoin(finding_analysis, finding_analysis.c.finding_id == findings.c.id)
             .where(
@@ -287,6 +292,7 @@ class DigestBuilder:
             spec = self._specs.get(top.rule_id)
             explained = top.a_summary is not None and top.a_source != "template"
             summary = top.a_summary or (spec.description if spec is not None else top.rule_id)
+            details = top.a_details if isinstance(top.a_details, dict) else {}
             result.append(
                 FindingGroup(
                     priority=Severity(top.a_priority or top.severity),
@@ -305,6 +311,10 @@ class DigestBuilder:
                     action=top.a_action,
                     explained_by=top.a_model if explained else None,
                     other_targets=sorted({m.target for m in members} - {top.target})[:3],
+                    # A template's look-alikes are the rule's, not this finding's: left out.
+                    harmless=_listed(details.get("harmless")) if explained else [],
+                    malicious=_listed(details.get("malicious")),
+                    checks=_listed(details.get("checks")),
                 )
             )
         result.sort(key=lambda g: (g.priority.rank, g.events, g.last_ts), reverse=True)
@@ -382,6 +392,10 @@ def _findings_line(digest: Digest) -> list[str]:
     return [counts, f"7-day average: {average}"]
 
 
+def _listed(value: Any) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
 def _group_lines(index: int, group: FindingGroup, tz: ZoneInfo) -> list[str]:
     target = (
         group.profile
@@ -404,6 +418,14 @@ def _group_lines(index: int, group: FindingGroup, tz: ZoneInfo) -> list[str]:
     ]
     if group.action:
         lines.append(f"   Do: {prose(group.action, limit=300)}")
+    if group.harmless:
+        lines.append(f"   Could be harmless: {'; '.join(prose(text) for text in group.harmless)}")
+    if group.malicious:
+        lines.append(f"   Could be a threat: {'; '.join(prose(text) for text in group.malicious)}")
+    lines += [
+        f"   Check {number}: {prose(text, limit=300)}"
+        for number, text in enumerate(group.checks, start=1)
+    ]
     if group.other_targets:
         lines.append(f"   Also: {safe(group.other_targets, limit=120)}")
     explained = (

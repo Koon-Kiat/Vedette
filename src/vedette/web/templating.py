@@ -18,6 +18,7 @@ from markupsafe import Markup, escape
 from vedette.health.monitor import CATCHING_UP, OK, duration
 from vedette.notify.render import about_text, prose, safe
 from vedette.shared.defang import clean_text, defang_names
+from vedette.shared.models import confidence_band
 from vedette.storage.store import StoredFinding
 from vedette.web.charts import span
 
@@ -81,6 +82,37 @@ EVIDENCE_LABELS = {
     "attribution": "Device attribution",
     "instruction_tokens": "Instruction-like words",
 }
+
+#: The rest of what the model is given about a finding (the context pack and
+#: the finding's own fields), in plain words, for the fields an answer cites.
+FIELD_LABELS = {
+    **EVIDENCE_LABELS,
+    "device_name_self_reported": "Device name (self-reported)",
+    "usual_queries_an_hour": "Device's usual queries an hour",
+    "queries_that_hour": "Device's queries that hour",
+    "first_seen_days_before": "Device first seen, days before",
+    "top_sites": "Top-sites band",
+    "registered_days_before": "Domain registered, days before",
+    "top_level_domain": "Top-level domain",
+    "devices_that_looked_it_up": "Devices that looked it up",
+    "first_looked_up_days_before": "First looked up, days before",
+    "customer_name_on_hosting_platform": "Customer name on a hosting platform",
+    "lookups_within_5_minutes": "Lookups within 5 minutes",
+    "other_findings_within_an_hour": "Other findings within an hour",
+    "earlier_findings_same_rule_and_target": "Earlier findings like it",
+    "rule_findings_last_30_days_other_targets": "The rule's other findings, 30 days",
+    "event_count": "Events",
+    "first_seen": "First seen",
+    "last_seen": "Last seen",
+    "target": "Target",
+    "rule_description": "What the rule checks",
+}
+
+
+def _field_label(key: str) -> str:
+    """A field the model cited, in plain words."""
+    words = str(key).replace("_", " ")
+    return FIELD_LABELS.get(str(key)) or safe(words[:1].upper() + words[1:], limit=60)
 
 
 def _evidence_value(key: str, value: Any) -> str:
@@ -207,6 +239,8 @@ TEMPLATE_ENV.filters.update(
         "pct": lambda value: f"{value:.0%}",
         "secs": lambda value: f"{value / 1000:.1f} s",
         "avg": _average,
+        "field_label": _field_label,
+        "band": confidence_band,
     }
 )
 TEMPLATE_ENV.globals["version"] = _version

@@ -228,7 +228,8 @@ def _injection(result: InjectionResult) -> dict[str, Any]:
 def _quality(result: quality.QualityResult) -> dict[str, Any]:
     data = asdict(result)
     data.pop("durations_ms")
-    return {**data, "mean_ms": result.mean_ms}
+    right, scored = result.leaning_right
+    return {**data, "mean_ms": result.mean_ms, "leaning_right": right, "leaning_scored": scored}
 
 
 def _cross(result: CrossResult) -> dict[str, Any]:

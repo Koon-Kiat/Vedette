@@ -71,14 +71,30 @@
   <p class="note">{{ quality["items"]|num }} synthetic findings with the records around them. Right means the cause is named, the step fits, and nothing is invented.</p>
   <div class="table-wrap">
   <table id="t-quality">
-    <thead><tr><th>Explained by</th><th class="num">Cause</th><th class="num">Step</th><th class="num">Invented a fact</th><th class="num">Right</th></tr></thead>
+    <thead><tr><th>Explained by</th><th class="num">Cause</th><th class="num">Step</th><th class="num">Invented a fact</th><th class="num">Domain taken out</th><th class="num">Right</th></tr></thead>
     <tbody>
       {% for row in [quality.template] + quality.models %}
-      <tr><td>{% if row.source == "template" %}Template{% else %}{{ row.source|text }}, thinking {{ "on" if row.think else "off" }}{% endif %}</td><td class="num">{{ row.cause|num }}</td><td class="num">{{ row.action|num }}</td><td class="num">{{ row.invented|num }}</td><td class="num">{{ row.correct|num }} of {{ row["items"]|num }}</td></tr>
+      <tr><td>{% if row.source == "template" %}Template{% else %}{{ row.source|text }}, thinking {{ "on" if row.think else "off" }}{% endif %}</td><td class="num">{{ row.cause|num }}</td><td class="num">{{ row.action|num }}</td><td class="num">{{ row.invented|num }}</td><td class="num">{{ row.get("names_removed", 0)|num if row.source != "template" else "n/a" }}</td><td class="num">{{ row.correct|num }} of {{ row["items"]|num }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
   </div>
+  <p class="note">A guard takes out of each answer any domain the model was not given, so the stored text cannot invent one; "Domain taken out" counts the answers it changed.</p>
+  {% for row in quality.models if row.get("leaning_scored") %}
+  <h3 class="table-title">Stated confidence against being right, {{ row.source|text }}</h3>
+  <p class="note">On the harmless look-alikes and real threats, how often the answer leaned the right way in each confidence band. A confidence that means something is right more often when it is higher.</p>
+  <div class="table-wrap">
+  <table id="t-calibration-{{ loop.index }}">
+    <thead><tr><th>Stated confidence</th><th class="num">Answers</th><th class="num">Leaned the right way</th></tr></thead>
+    <tbody>
+      {% for band in ["low", "medium", "high"] %}
+      {% set counts = row.by_band.get(band, [0, 0]) %}
+      <tr><td>{{ band }}</td><td class="num">{{ counts[0]|num }}</td><td class="num">{% if counts[0] %}{{ counts[1]|num }} ({{ (counts[1] / counts[0])|pct }}){% else %}n/a{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endfor %}
 </section>
 {% endif %}
 
@@ -135,4 +151,23 @@
 {% endif %}
 <p class="note">The full report, with every counted injection case and the limits of the method, is written by <code>vedette eval</code> to docs/EVALUATION.md.</p>
 {% endif %}
+
+<section class="block" aria-labelledby="decided-title">
+  <h2 id="decided-title">The model's leaning against your decisions</h2>
+  {% if triaged < triaged_needed %}
+  <p class="empty">{{ triaged }} of the {{ triaged_needed }} decided findings needed. Once you have marked {{ triaged_needed }} findings the model leaned on benign or acknowledged, this compares its stated confidence with your decisions.</p>
+  {% else %}
+  <p class="note">Findings the model leaned on that you then marked benign or acknowledged. It agreed when it leaned harmless on a finding you marked benign, or threat on one you acknowledged.</p>
+  <div class="table-wrap">
+  <table id="t-decided">
+    <thead><tr><th>Stated confidence</th><th class="num">Decided</th><th class="num">Agreed with you</th></tr></thead>
+    <tbody>
+      {% for band in triaged_bands %}
+      <tr><td>{{ band.band }}</td><td class="num">{{ band.decided|num }}</td><td class="num">{% if band.decided %}{{ band.agreed|num }} ({{ (band.agreed / band.decided)|pct }}){% else %}n/a{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

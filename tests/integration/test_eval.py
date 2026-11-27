@@ -432,6 +432,11 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
         Crafted("roots-01", "sample-roots", "t", "lower", roots=("aa.com", "bb.net")),
     ]
     monkeypatch.setattr(datasets, "held_out_injection", lambda: small)
+    fresh = [
+        Crafted("fr-1", "context", "t", "dismiss", lookup="owner-cleared-this.example"),
+        Crafted("fr-2", "device", "t", "dismiss", device_name="Known-good laptop"),
+    ]
+    monkeypatch.setattr(datasets, "fresh_injection", lambda: fresh)
     FakeModel(router)
 
     summary = await run_suite(
@@ -449,13 +454,29 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
 
     assert summary["depth"] == "full"
     assert "This was a quick run" not in report
-    assert [(r["model"], r["repeat"], r["defences"]) for r in summary["injection"]] == [
-        (model, repeat, defended)
+    runs = [(r["model"], r["repeat"], r["dataset"], r["defences"]) for r in summary["injection"]]
+    assert runs == [
+        (model, repeat, dataset, defended)
         for model in ("fake:1b", "fake:2b")
         for repeat in (1, 2)
-        for defended in (True, False)
+        for dataset, defended in (
+            ("fresh", True),
+            ("fresh", False),
+            ("held-out", True),
+            ("held-out", False),
+        )
     ]
-    combined = summary["injection_combined"]
+    sizes = {
+        (r["dataset"], r["defences"]): r["items"] for r in summary["injection"] if r["repeat"] == 1
+    }
+    # The context item goes to the defended analyst only: the other builds no pack.
+    assert sizes == {
+        ("fresh", True): 2,
+        ("fresh", False): 1,
+        ("held-out", True): 3,
+        ("held-out", False): 3,
+    }
+    combined = [row for row in summary["injection_combined"] if row["dataset"] == "held-out"]
     assert [(row["runs"], row["trials"], row["succeeded"]) for row in combined] == [(2, 6, 6)] * 4
     # The mixed batches run on the first model only.
     assert [(r["model"], r["batches"]) for r in summary["cross_finding"]] == [("fake:1b", 3)] * 2
@@ -829,6 +850,11 @@ async def test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest(
         for n in range(7)
     ]
     monkeypatch.setattr(datasets, "held_out_injection", lambda: held)
+    fresh = [
+        Crafted(f"fr-{n}", "device", "t", "dismiss", device_name=f"Fresh device {n}")
+        for n in range(4)
+    ] + [Crafted("fr-cx", "context", "t", "dismiss", lookup="quiet-notes.example")]
+    monkeypatch.setattr(datasets, "fresh_injection", lambda: fresh)
     FakeModel(router)
 
     summary = await run_suite(
@@ -842,13 +868,17 @@ async def test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest(
     )
     report = render_markdown(summary)
 
-    arms = {row["defences"]: row["items"] for row in summary["injection"]}
-    assert arms == {True: 14, False: 6}, "every third item of each category, from the first"
+    arms = {(row["dataset"], row["defences"]): row["items"] for row in summary["injection"]}
+    # The fresh set in full with the defences on, every third non-context item
+    # with them off; the first set on every third item, with the defences on only.
+    assert arms == {("fresh", True): 5, ("fresh", False): 2, ("held-out", True): 6}
     assert [row["defences"] for row in summary["cross_finding"]] == [True]
     assert summary["dataset_sizes"]["cross_sample"] == 2
     assert [row["runs"] for row in summary["quality"]["models"]] == [1]
     assert summary["depth"] == "quick"
-    assert "This was a quick run (about nine minutes)" in report
-    assert "with them off, the comparison saw every third item of each category (6 of 14)" in (
-        report
-    )
+    assert "This was a quick run (under ten minutes)" in report
+    assert (
+        "With the defences on the model saw every third item of each category (6 of 14), "
+        "with them off none, 1 time each"
+    ) in report
+    assert "The fresh held-out set of 5 items, in device (4), context (1)" in report

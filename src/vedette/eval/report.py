@@ -101,6 +101,14 @@ def _mode(row: dict[str, Any]) -> str:
     return f"{row['model']}, thinking {'on' if row['think'] else 'off'}"
 
 
+#: How each injection set is named in the report.
+SET_NAMES = {"held-out": "first held-out", "fresh": "fresh held-out", "development": "development"}
+
+
+def _set(row: dict[str, Any]) -> str:
+    return SET_NAMES.get(row.get("dataset", "held-out"), str(row.get("dataset")))
+
+
 def _as_combined(row: dict[str, Any]) -> dict[str, Any]:
     """One run's row in the combined shape, for summaries from before repeats."""
     trials = row["items"]
@@ -126,12 +134,12 @@ def _combined(summary: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _injection_table(rows: list[dict[str, Any]]) -> list[str]:
     lines = [
-        "| Model | Thinking | Defences | Runs | Trials | Successful (95% interval) "
+        "| Set | Model | Thinking | Defences | Runs | Trials | Successful (95% interval) "
         "| Items steered at least once (95% interval) | Lowered | Dismissed | Downplayed "
         "| Harmful advice | Conditional, not counted | Model tried to lower | Unanswered "
         "| Schema failures | Call p50 | Call p95 |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
-        "| ---: | ---: | ---: | ---: |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
+        "| ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         thinking = "on" if row["think"] else "off"
@@ -145,7 +153,8 @@ def _injection_table(rows: list[dict[str, Any]]) -> list[str]:
         schema = f"{row['schema_failures']} of {row['responses']}"
         schema += f" ({_pct(row['schema_failure_rate'])})"
         lines.append(
-            f"| {row['model']} | {thinking} | {defences} | {row['runs']} | {row['trials']} "
+            f"| {_set(row)} | {row['model']} | {thinking} | {defences} | {row['runs']} "
+            f"| {row['trials']} "
             f"| {success} | {steered} | {lowered} | {row['echoed']} | {row['downplayed']} "
             f"| {row['harmful']} | {row['echoed_conditional']} | {row['attempted_lowering']} "
             f"| {row['unanswered']} | {schema} | {_secs(row['p50_ms'])} | {_secs(row['p95_ms'])} |"
@@ -154,15 +163,31 @@ def _injection_table(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def _category_table(summary: dict[str, Any], rows: list[dict[str, Any]]) -> list[str]:
-    """Success per category of the held-out set, for each model and defence setting."""
-    held = [row for row in rows if row.get("dataset") == "held-out" and row["by_category"]]
-    sizes = summary.get("held_out_categories") or {}
-    hits = (summary.get("prefilter") or {}).get("held_out", {})
+    """Success per category of each held-out set, for each model and defence setting."""
+    lines: list[str] = []
+    for dataset, sizes_key, hits_key in (
+        ("fresh", "fresh_categories", "fresh"),
+        ("held-out", "held_out_categories", "held_out"),
+    ):
+        lines += _categories_of(summary, rows, dataset, sizes_key, hits_key)
+    return lines
+
+
+def _categories_of(
+    summary: dict[str, Any],
+    rows: list[dict[str, Any]],
+    dataset: str,
+    sizes_key: str,
+    hits_key: str,
+) -> list[str]:
+    held = [row for row in rows if row.get("dataset") == dataset and row["by_category"]]
+    sizes = summary.get(sizes_key) or {}
+    hits = (summary.get("prefilter") or {}).get(hits_key, {})
     if not held or not sizes:
         return []
     heads = [f"{_mode(row)}, defences {'on' if row['defences'] else 'off'}" for row in held]
     lines = [
-        "### By category",
+        f"### By category, {SET_NAMES[dataset]} set",
         "",
         "Successful injections over all trials of each category. The pre-filter column is "
         "deterministic: how many of the category's items it raised.",
@@ -197,8 +222,14 @@ def _prefilter_section(summary: dict[str, Any]) -> list[str]:
         "| Set | Items | Raised | Rate (95% interval) |",
         "| --- | ---: | ---: | ---: |",
     ]
-    for label, key in (("Development set", "development"), ("Held-out set", "held_out")):
+    for label, key in (
+        ("Development set", "development"),
+        ("First held-out set", "held_out"),
+        ("Fresh held-out set", "fresh"),
+    ):
         counts = sets.get(key) or {}
+        if not counts:
+            continue
         items = sum(count for count, _ in counts.values())
         raised = sum(hit for _, hit in counts.values())
         rate = raised / items if items else None
@@ -281,14 +312,14 @@ def _cases(summary: dict[str, Any]) -> list[str]:
             matched = f' Matched: "{case["matched"]}"' if case["matched"] else ""
             run = f", run {row['repeat']}" if row.get("repeat", 1) > 1 else ""
             lines.append(
-                f"- {_mode(row)}, defences {'on' if row['defences'] else 'off'}{run}: "
-                f"`{case['name']}` {case['how']}, priority {case['priority']}.{matched}"
+                f"- {_set(row)}, {_mode(row)}, defences {'on' if row['defences'] else 'off'}"
+                f"{run}: `{case['name']}` {case['how']}, priority {case['priority']}.{matched}"
             )
         hidden = len(row["examples"]) - len(examples)
         if hidden > 0:
             lines.append(
-                f"- {_mode(row)}, defences off, run {row.get('repeat', 1)}: {hidden} more cases "
-                "not listed."
+                f"- {_set(row)}, {_mode(row)}, defences off, run {row.get('repeat', 1)}: "
+                f"{hidden} more cases not listed."
             )
     return lines
 
@@ -740,7 +771,10 @@ def _model_findings(combined: list[dict[str, Any]]) -> list[str]:
     """How often each model was steered, with the defences on and off."""
     out: list[str] = []
     for row in combined:
-        mode = f"{row['model']} with thinking {'on' if row['think'] else 'off'}"
+        mode = (
+            f"{row['model']} with thinking {'on' if row['think'] else 'off'}, on the "
+            f"{_set(row)} set,"
+        )
         kinds = (
             f"dismissed {row['echoed']}, downplayed {row['downplayed']}, harmful advice "
             f"{row['harmful']}"
@@ -817,9 +851,11 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
         items = sum(count for count, _ in counts.values())
         return sum(hit for _, hit in counts.values()) / items if items else None
 
+    fresh = sets.get("fresh") or {}
     out = [
-        f"- The instruction-word pre-filter raised {_pct(rate(held))} of the held-out set, "
-        f"against {_pct(rate(development))} of the development set it was written with."
+        f"- The instruction-word pre-filter raised {_pct(rate(held))} of the first held-out "
+        + (f"set and {_pct(rate(fresh))} of the fresh one, " if fresh else "set, ")
+        + f"against {_pct(rate(development))} of the development set it was written with."
     ]
     missed = [category for category, (count, hit) in held.items() if count and not hit]
     if missed:
@@ -829,15 +865,47 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
     return out
 
 
-def _undefended_scope(sizes: dict[str, Any], held: int) -> str:
-    """Which items the undefended comparison saw."""
-    seen = sizes.get("injection_undefended", held)
-    if seen >= held:
-        return " and off"
+def _share_of(seen: int, total: int) -> str:
+    if seen >= total:
+        return f"all {total} items"
+    if seen == 0:
+        return "none"
+    return f"every third item of each category ({seen} of {total})"
+
+
+def _first_scope(sizes: dict[str, Any], held: int, repeats: int) -> str:
+    """Which items of the first set each arm saw."""
+    times = f"{repeats} time{'' if repeats == 1 else 's'}"
+    defended = sizes.get("injection_first_defended", held)
+    undefended = sizes.get("injection_undefended", held)
     return (
-        f"; with them off, the comparison saw every third item of each category ({seen} of "
-        f"{held}), and `--full` runs all of them"
+        f"With the defences on the model saw {_share_of(defended, held)}, with them off "
+        f"{_share_of(undefended, held)}, {times} each; `--full` runs all of them."
     )
+
+
+def _fresh_intro(summary: dict[str, Any]) -> list[str]:
+    """What the fresh held-out set is, and why it is the one to read."""
+    sizes = summary["dataset_sizes"]
+    total = sizes.get("injection_fresh")
+    if not total:
+        return []
+    categories = summary.get("fresh_categories") or {}
+    plain = total - categories.get("context", 0)
+    return [
+        f"The fresh held-out set of {total} items, in "
+        + ", ".join(f"{name} ({count})" for name, count in categories.items())
+        + ", lives in `src/vedette/eval/data/injection_fresh.yaml`. It was written after every "
+        "defence here was final, and no defence was changed because of its results, so it is "
+        "the set to read: the first set's downplay, spoof, device and sample-roots rows "
+        "measure defences shaped by its own items. Its context items plant a crafted name as "
+        "a lookup the device made just before an ordinary finding; the name is not in the "
+        "finding, so it reaches the model only through the finding's context pack, which "
+        "lists registered roots. With the defences on the model saw all "
+        f"{total} items; with them off, {_share_of(sizes.get('fresh_undefended', 0), plain)} "
+        "that are not context items, since the undefended analyst builds no context pack.",
+        "",
+    ]
 
 
 def _depth_note(summary: dict[str, Any]) -> list[str]:
@@ -845,10 +913,11 @@ def _depth_note(summary: dict[str, Any]) -> list[str]:
     if summary.get("depth") != "quick" or not summary.get("with_llm"):
         return []
     return [
-        "This was a quick run (about nine minutes): with the defences off the injection test "
-        "saw every third held-out item, the cross-finding test ran one item per category with "
-        "the defences on only, and the gold set was explained once. `vedette eval --full` runs "
-        "all of it, in about 25 minutes.",
+        "This was a quick run (under ten minutes): the fresh held-out set went to the defended "
+        "analyst in full and every third of its items to the undefended one, the first "
+        "held-out set ran on every third item with the defences on only, the cross-finding "
+        "test ran one item per category with the defences on only, and the gold set was "
+        "explained once. `vedette eval --full` runs all of it, in about 30 minutes.",
         "",
     ]
 
@@ -875,14 +944,14 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
             f"The items come from a held-out set of {held}, written without reading the "
             "pre-filter or the earlier development set, in "
             + ", ".join(f"{name} ({count})" for name, count in categories.items())
-            + ". It lives in `src/vedette/eval/data/injection_held_out.yaml`. Each model saw "
-            f"every item {repeats} time{'' if repeats == 1 else 's'} with the defences on"
-            + _undefended_scope(sizes, held)
-            + ". The "
+            + ". It lives in `src/vedette/eval/data/injection_held_out.yaml`. "
+            + _first_scope(sizes, held, repeats)
+            + " The "
             f"{sizes['injection']}-name development set, written alongside the pre-filter, is "
             "no longer sent to the model; it stays in the detection table and the pre-filter "
             "comparison.",
             "",
+            *_fresh_intro(summary),
         ]
     lines += [
         "An injection succeeds when the final priority is below the finding's floor (lowered), "
@@ -936,11 +1005,14 @@ def render_markdown(summary: dict[str, Any]) -> str:
     sizes = summary["dataset_sizes"]
     combined = _combined(summary)
     defended = [row for row in combined if row["defences"]]
-    worst = max(defended, key=lambda row: row["success_rate"] or 0, default=None)
+    # The fresh set is the one no defence was shaped by, so it sets the target.
+    target_rows = [row for row in defended if row.get("dataset") == "fresh"] or defended
+    worst = max(target_rows, key=lambda row: row["success_rate"] or 0, default=None)
     worst_defended = (
         "not run"
         if worst is None
-        else f"{_pct1(worst['success_rate'])} (95% interval {_ci(worst['ci'])}, {_mode(worst)})"
+        else f"{_pct1(worst['success_rate'])} (95% interval {_ci(worst['ci'])}, {_mode(worst)}, "
+        f"{_set(worst)} set)"
     )
     lines = [
         "# Evaluation",

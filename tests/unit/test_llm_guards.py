@@ -23,7 +23,14 @@ from vedette.llm.guards import (
     slug,
     unsupported_names,
 )
-from vedette.llm.prompts import SYSTEM_PROMPT, build_payload, payload_items
+from vedette.llm.prompts import (
+    MAX_CHECKS,
+    MAX_EVIDENCE_USED,
+    MAX_EXPLANATIONS,
+    SYSTEM_PROMPT,
+    build_payload,
+    payload_items,
+)
 from vedette.llm.schema import BASE_RESPONSE_SCHEMA, RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules.loader import load_rules
 from vedette.shared.models import Severity, Verdict, confidence_band
@@ -155,6 +162,15 @@ def test_the_cause_and_step_come_before_the_leaning_and_the_lists() -> None:
         "checks",
         "evidence_used",
     ]
+
+
+def test_the_schema_caps_each_list_where_the_code_does() -> None:
+    fields = RESPONSE_SCHEMA["properties"]["verdicts"]["items"]["properties"]
+
+    assert fields["harmless_explanations"]["maxItems"] == MAX_EXPLANATIONS
+    assert fields["malicious_explanations"]["maxItems"] == MAX_EXPLANATIONS
+    assert fields["checks"]["maxItems"] == MAX_CHECKS
+    assert fields["evidence_used"]["maxItems"] == MAX_EVIDENCE_USED
 
 
 def test_the_shorter_schema_keeps_the_fields_asked_for_before_the_lists() -> None:
@@ -443,8 +459,8 @@ def test_a_template_lists_the_rule_s_look_alikes_and_checks_but_no_leaning(spec:
     analysis = template_analysis(stored(rule=spec.id, severity=spec.severity.value), spec)
 
     assert spec.analyst_notes is not None
-    assert analysis.harmless == tuple(spec.analyst_notes.look_alikes[:3])
-    assert analysis.checks == tuple(spec.analyst_notes.checks[:3])
+    assert analysis.harmless == tuple(spec.analyst_notes.look_alikes[:MAX_EXPLANATIONS])
+    assert analysis.checks == tuple(spec.analyst_notes.checks[:MAX_CHECKS])
     assert analysis.assessment is None
     assert analysis.malicious == analysis.evidence_used == analysis.removed_names == ()
 

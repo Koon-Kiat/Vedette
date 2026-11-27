@@ -60,11 +60,11 @@ MAX_ATTEMPTS = 2  # the first try plus one retry
 
 # Sizing a call to the model's context window. Measured on qwen3:8b: the JSON
 # payload ran about 3 characters per token, and each answer about 140 tokens
-# before the leaning, the lists and the checks were added and about 230 after.
+# before the leaning, the lists and the checks were added and about 200 after.
 # The allowances below are looser (names that tokenise badly, longer answers),
 # and a tenth of the window stays free, so a call is never cut short.
 CHARS_PER_TOKEN = 2.5
-ANSWER_TOKENS = 320
+ANSWER_TOKENS = 300
 CONTEXT_USE = 0.9
 #: Longest item kept in an answer's lists.
 MAX_ITEM = 160

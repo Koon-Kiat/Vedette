@@ -651,7 +651,7 @@ async def test_the_leaning_lists_and_cited_fields_are_kept_capped_and_checked(
     await analysis_store.save_analyses([result], now=T0)
 
     assert result.assessment == "threat"
-    assert result.harmless == ("A new shop", "Ads", "Fourth")
+    assert result.harmless == ("A new shop", "Ads")
     assert result.malicious == ("Phishing page",)
     assert result.checks == ("Ask who opened it.", "Scan the device.", "Block it.")
     assert result.evidence_used == ("domain_age_days", "fqdn"), "only fields the finding has"

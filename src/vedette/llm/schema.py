@@ -8,9 +8,14 @@ fields, tool calls) is used.
 import json
 from typing import Any
 
+from vedette.llm.prompts import MAX_CHECKS, MAX_EVIDENCE_USED, MAX_EXPLANATIONS
 from vedette.shared.models import ASSESSMENTS, Severity, Verdict
 
-_LIST: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
+
+def _list(most: int) -> dict[str, Any]:
+    """A list of strings; Ollama's grammar stops the model after ``most`` items."""
+    return {"type": "array", "items": {"type": "string"}, "maxItems": most}
+
 
 # The verdict's fields in the order the model writes them. The cause and the
 # step come first, as they did before the lists were added: asked for harmless
@@ -27,10 +32,10 @@ _VERDICT_SCHEMA: dict[str, Any] = {
         "group_key": {"type": "string"},
         "confidence": {"type": "number"},
         "assessment": {"type": "string", "enum": list(ASSESSMENTS)},
-        "harmless_explanations": _LIST,
-        "malicious_explanations": _LIST,
-        "checks": _LIST,
-        "evidence_used": _LIST,
+        "harmless_explanations": _list(MAX_EXPLANATIONS),
+        "malicious_explanations": _list(MAX_EXPLANATIONS),
+        "checks": _list(MAX_CHECKS),
+        "evidence_used": _list(MAX_EVIDENCE_USED),
     },
 }
 _VERDICT_SCHEMA["required"] = list(_VERDICT_SCHEMA["properties"])

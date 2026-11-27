@@ -250,9 +250,12 @@ docker compose exec vedette vedette findings --json
 
 Each finding shows when it was last seen, its priority, the rule, what it is
 about, the profile and device, how many events triggered it, the local model's
-summary, likely cause and recommended action, and the evidence. A finding the
+summary, likely cause and recommended action, which way it leans (harmless,
+threat or unclear), the harmless and malicious explanations that would fit,
+the checks that tell them apart in order, and the evidence. A finding the
 model has not reached yet says "not analysed yet"; one the model could not
-explain gets a standard explanation and says so.
+explain gets a standard explanation, with the rule's own look-alikes and
+checks, and says so.
 
 The model reads more than the rule that fired. Each finding goes with the
 records around it: when the device was first seen and how busy it usually is,
@@ -261,6 +264,14 @@ same few minutes, its other findings that hour, and how you handled earlier
 findings like it. Each rule also carries notes in `rules.yaml` on the harmless
 activity that trips it and the checks worth suggesting; change them in your
 rules override file like any other rule field.
+
+Three checks in code keep the answer to what the records show. Any domain the
+model names that it was not given is taken out of the text, and the finding's
+page says which. Each answer lists the fields it relied on, and only fields
+the finding has are kept. A harmless leaning that cites none of the records
+(only a name or an address) is shown as unclear. The model's confidence is
+shown as low, medium or high, since its number is not calibrated; the
+Evaluation page shows how often each band is right.
 Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs
 are attacker-controlled, so they are never shown in a form a terminal or chat
 client would turn into a link. `--json` prints them raw for scripts.
@@ -474,8 +485,9 @@ Both go through the real rules and the local model, with the defences on and
 off. The model also explains a
 gold set of 60 synthetic findings, each with the records around it, three
 times; the answers are scored for the right cause, a fitting step and
-invented facts, against the standard explanation. `--no-injection` runs only
-that part. A sample of those items is
+invented facts, against the standard explanation, and each answer's leaning
+is checked against the kind of finding, per confidence band. `--no-injection`
+runs only that part. A sample of those items is
 also put among ordinary findings, to see whether one crafted finding changes
 what the model says about the others. It also replays all of your stored history
 through the rules as they are now, which shows how often each rule would fire
@@ -497,7 +509,7 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 (bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
 it takes under ten minutes on a 12 GB card, with thinking off as the service
 runs. The model sees the fresh held-out set of 124 items with the defences on,
-every third of its items with them off, every third item of the first
+every third of its items with them off, every fourth item of the first
 held-out set with the defences on, one mixed batch per category, and the gold
 set once. The fresh set was written after the defences were final and is the
 one to read; 32 of its items plant a crafted name in the records around an

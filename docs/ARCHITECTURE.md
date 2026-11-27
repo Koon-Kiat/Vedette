@@ -784,7 +784,7 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      `test_a_request_gets_the_notes_of_its_own_rules_only`.
 114. **A plain `vedette eval` finishes in under ten minutes.** The fresh
      held-out set goes to the defended analyst in full and every third of its
-     items to the undefended one; the first set's every third item goes to the
+     items to the undefended one; the first set's every fourth item goes to the
      defended analyst only, the cross-finding test runs one item per category
      with the defences on, and the gold set one run, with thinking off and four
      calls in flight. `--full` runs both sets on and off, three gold runs and
@@ -818,6 +818,38 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      and timings are kept. Held by
      `test_attacks_in_the_history_are_found_and_timed` and
      `test_attacks_go_to_real_devices_after_learning_and_apart`.
+118. **An answer weighs both sides after it gives the cause.** Beside the
+     cause and the step, the model says which way the records lean (harmless,
+     threat or unclear), lists up to two harmless and two malicious
+     explanations, up to three checks in order, and up to four fields it
+     relied on; the schema caps each list, which keeps answers short enough
+     for a plain `vedette eval` to stay under ten minutes.
+     The new fields come after the original ones: asked for the harmless
+     explanations first, qwen3:8b leaned harmless on all ten self-vouching
+     device names of the live test and took two of them as the cause. The
+     undefended arm of the evaluation keeps the shorter answer, so its rates
+     stay comparable. Held by
+     `test_the_cause_and_step_come_before_the_leaning_and_the_lists` and
+     `test_the_shorter_schema_keeps_the_fields_asked_for_before_the_lists`.
+119. **A domain the model was not given is taken out of its answer**, not
+     the answer thrown away: the rest is usually right, and the finding's
+     page says what was removed. A parent of a given name counts as given;
+     a name below one does not. Held by
+     `test_a_domain_the_model_was_not_given_is_taken_out_and_recorded` and
+     `test_names_in_the_data_and_their_parent_domains_are_not_flagged`.
+120. **A harmless leaning must cite a record.** Names and identifiers are what
+     an attacker chooses; the records (the domain's rank and age, how many
+     devices used it and since when, what was looked up around it, earlier
+     triage) are what can show activity is harmless. Without one the leaning
+     is stored as unclear. Held by
+     `test_a_harmless_leaning_that_cites_no_record_becomes_unclear`.
+121. **Confidence is shown as a band.** The model's number is not calibrated,
+     so the dashboard and the CLI show low (under 0.5), medium (under 0.8) or
+     high. The evaluation measures how often each band leans the right way on
+     the gold set, and the Evaluation page compares leanings with the owner's
+     triage once 20 findings the model leaned on are marked benign or
+     acknowledged. Held by `test_confidence_is_shown_as_a_band_not_a_number`
+     and `test_leanings_are_compared_with_decisions_in_each_band`.
 
 ## Verified facts the design relies on
 

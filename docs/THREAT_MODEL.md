@@ -84,8 +84,19 @@ Mitigations:
   positive, verified, trusted, ignore) is discarded and the template stored
   instead (`llm/guards.py` `echoed_vouching`). The prompt says so too, but a
   small model still repeats such claims, so the check is in code.
-- **Safe output.** Model text has HTML, markdown and links stripped, domains
-  defanged, and length capped (`llm/guards.py` `sanitize_model_text`). Every
+- **Only names it was given.** Any domain an answer names that is not in
+  what the model was given for that finding is taken out of the text and
+  recorded, and the finding's page lists it (`llm/guards.py`
+  `unsupported_names`). A name another finding of the same request carries
+  counts as not given, so a crafted name cannot be repeated into its
+  neighbours' explanations.
+- **A harmless leaning needs a record.** An answer that leans harmless while
+  citing only names and identifiers (the device name, the queried name, the
+  client address) is stored as unclear (`llm/guards.py` `grounded_leaning`),
+  and only fields the finding really has count as cited (`cited_keys`).
+- **Safe output.** Model text, its lists included, has HTML, markdown and
+  links stripped, domains defanged, and length capped (`llm/guards.py`
+  `sanitize_model_text`, `sanitize_list`). Every
   domain in alerts, digests, the CLI and the dashboard is defanged and never a
   link.
 - **Truncation at the edge.** Over-long names and strings from NextDNS are cut
@@ -106,7 +117,12 @@ Residual risk:
   gives how often they steer the model.
 - The model can still write misleading prose. For example it can call an
   attack routine, even though it cannot change the priority. The evaluation
-  counts such "echoes" with a heuristic and lists every case.
+  counts such "echoes" with a heuristic and lists every case. A device name
+  that vouches for its device in words the pre-filter does not know ("owner
+  has already checked this") is still often taken at its word in the likely
+  cause; the live test `test_a_device_name_does_not_talk_the_model_out_of_a_new_device`
+  shows it. The leaning guard keeps such an answer from leaning harmless,
+  but not its prose.
 - The pre-filter is a word list. Words it does not know, other languages and
   look-alike spellings pass it. That costs only the severity raise; the other
   defences still apply.

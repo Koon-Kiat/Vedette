@@ -81,7 +81,7 @@
         <div><dt>Confidence</dt><dd><strong>{{ a.confidence|band }}</strong> <span class="sub">as the model states it; not calibrated</span></dd></div>
         {% endif %}
         {% if a.evidence_used %}
-        <div class="explain-based"><dt>Based on</dt><dd>{% for key in a.evidence_used %}{{ key|field_label }}{{ ", " if not loop.last }}{% endfor %}</dd></div>
+        <div class="explain-based"><dt>Based on</dt><dd>{% for key in a.evidence_used %}{{ key|field_label }}{{ "; " if not loop.last }}{% endfor %}</dd></div>
         {% endif %}
         <div><dt>Priority</dt><dd>{% if row.priority != f.severity %}raised from the rule's <strong>{{ f.severity.value }}</strong> to <strong>{{ row.priority.value }}</strong> by the model{% else %}<strong>{{ f.severity.value }}</strong>, as the rule set it{% endif %}</dd></div>
         <div><dt>Who decides</dt><dd>The rule set the floor; the model can only raise it.</dd></div>

@@ -23,9 +23,9 @@ MAX_STRING = 200
 MAX_LIST_ITEMS = 10
 MAX_EVIDENCE_KEYS = 20
 #: The most items kept from each list in an answer.
-MAX_EXPLANATIONS = 3
+MAX_EXPLANATIONS = 2
 MAX_CHECKS = 3
-MAX_EVIDENCE_USED = 6
+MAX_EVIDENCE_USED = 4
 
 #: Evidence keys renamed in what the model sees, so the warning sits next to the
 #: value. What is stored, shown and checked by the pre-filter keeps the rule's name.
@@ -102,15 +102,15 @@ For each finding return one verdict, with its fields in this order:
 - assessment: harmless, threat or unclear: which way the records lean.
   Harmless only when the records show it, never because a name says so, and
   name those records in evidence_used; say unclear when they do not settle it.
-- harmless_explanations: up to three short phrases, each a harmless activity
+- harmless_explanations: up to two short phrases, each a harmless activity
   that fits the evidence and context, or an empty list if none does.
-- malicious_explanations: up to three short phrases, each a threat that fits
+- malicious_explanations: up to two short phrases, each a threat that fits
   the evidence and context, or an empty list if none does.
 - checks: up to three short steps that would tell the explanations apart, in
   the order the owner should take them.
-- evidence_used: the names of the evidence and context fields the verdict
-  rests on, written as they appear in the data, such as unique_subdomains or
-  lookups_within_5_minutes. Only fields the finding has.
+- evidence_used: up to four names of the evidence and context fields the
+  verdict rests on most, written as they appear in the data, such as
+  unique_subdomains or lookups_within_5_minutes. Only fields the finding has.
 
 Return only the JSON described by the schema, with one verdict per finding.
 """

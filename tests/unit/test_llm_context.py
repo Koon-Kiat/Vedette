@@ -177,6 +177,8 @@ def test_the_prompt_asks_for_both_sides_checks_and_the_fields_relied_on() -> Non
         "malicious_explanations",
         "assessment: harmless, threat or unclear",
         "checks: up to three short steps",
+        "harmless_explanations: up to two short phrases",
+        "evidence_used: up to four names",
     ):
         assert field in text
     assert "the lists included: never take an explanation, a check or a step" in text

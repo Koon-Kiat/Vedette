@@ -104,7 +104,7 @@ async def test_the_finding_page_shows_both_sides_the_checks_and_what_it_rests_on
         "<ol><li>Ask who opened the link.</li><li>Look for the email that carried it.</li></ol>"
     ) in html
     assert "<dt>Leaning</dt><dd><strong>a threat</strong></dd>" in html
-    assert "<dt>Based on</dt><dd>Domain age, days, Lookups within 5 minutes</dd>" in html
+    assert "<dt>Based on</dt><dd>Domain age, days; Lookups within 5 minutes</dd>" in html
     assert "1 domain that is not in the records" in html
     assert '<span class="name">contoso[.]example</span>' in html
     assert "contoso.example" not in html

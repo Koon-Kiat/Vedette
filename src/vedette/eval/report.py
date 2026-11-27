@@ -1076,12 +1076,20 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
     return out
 
 
-def _share_of(seen: int, total: int) -> str:
+ORDINALS = {2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth"}
+
+
+def _every(step: int) -> str:
+    return f"every {ORDINALS.get(step, f'{step}th')} item"
+
+
+def _share_of(seen: int, total: int, step: int = 3) -> str:
+    """How many of a set an arm saw; runs before the step was recorded took every third."""
     if seen >= total:
         return f"all {total} items"
     if seen == 0:
         return "none"
-    return f"every third item of each category ({seen} of {total})"
+    return f"{_every(step)} of each category ({seen} of {total})"
 
 
 def _first_scope(sizes: dict[str, Any], held: int, repeats: int) -> str:
@@ -1089,9 +1097,11 @@ def _first_scope(sizes: dict[str, Any], held: int, repeats: int) -> str:
     times = f"{repeats} time{'' if repeats == 1 else 's'}"
     defended = sizes.get("injection_first_defended", held)
     undefended = sizes.get("injection_undefended", held)
+    on = _share_of(defended, held, sizes.get("injection_first_defended_every", 3))
+    off = _share_of(undefended, held, sizes.get("injection_first_undefended_every", 3))
     return (
-        f"With the defences on the model saw {_share_of(defended, held)}, with them off "
-        f"{_share_of(undefended, held)}, {times} each; `--full` runs all of them."
+        f"With the defences on the model saw {on}, with them off {off}, {times} each; "
+        "`--full` runs all of them."
     )
 
 
@@ -1103,6 +1113,7 @@ def _fresh_intro(summary: dict[str, Any]) -> list[str]:
         return []
     categories = summary.get("fresh_categories") or {}
     plain = total - categories.get("context", 0)
+    off = _share_of(sizes.get("fresh_undefended", 0), plain, sizes.get("fresh_undefended_every", 3))
     return [
         f"The fresh held-out set of {total} items, in "
         + ", ".join(f"{name} ({count})" for name, count in categories.items())
@@ -1113,7 +1124,7 @@ def _fresh_intro(summary: dict[str, Any]) -> list[str]:
         "a lookup the device made just before an ordinary finding; the name is not in the "
         "finding, so it reaches the model only through the finding's context pack, which "
         "lists registered roots. With the defences on the model saw all "
-        f"{total} items; with them off, {_share_of(sizes.get('fresh_undefended', 0), plain)} "
+        f"{total} items; with them off, {off} "
         "that are not context items, since the undefended analyst builds no context pack.",
         "",
     ]
@@ -1123,10 +1134,12 @@ def _depth_note(summary: dict[str, Any]) -> list[str]:
     """What a quick run leaves out, so its numbers are read as such."""
     if summary.get("depth") != "quick" or not summary.get("with_llm"):
         return []
+    sizes = summary.get("dataset_sizes") or {}
+    first = _every(sizes.get("injection_first_defended_every", 3))
     return [
         "This was a quick run (under ten minutes): the fresh held-out set went to the defended "
         "analyst in full and every third of its items to the undefended one, the first "
-        "held-out set ran on every third item with the defences on only, the cross-finding "
+        f"held-out set ran on {first} with the defences on only, the cross-finding "
         "test ran one item per category with the defences on only, and the gold set was "
         "explained once. `vedette eval --full` runs both sets with the defences on and off, "
         "four items per category in the cross-finding test and three runs of the gold set, "

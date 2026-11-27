@@ -4,7 +4,7 @@ import asyncio
 import shutil
 import tempfile
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +13,7 @@ import httpx
 import structlog
 
 from vedette.config import LlmConfig, Settings
-from vedette.eval import datasets, dga_families
+from vedette.eval import datasets, dga_families, quality
 from vedette.eval.detection import DetectionResult, Detector
 from vedette.eval.history import history_metrics
 from vedette.eval.hostnames import ensure_hostnames
@@ -23,6 +23,7 @@ from vedette.eval.injection import (
     RecordingClient,
     as_crafted,
     combine,
+    every_nth_per_category,
     mixed_sample,
     prefilter_hits,
     run_cross,
@@ -35,10 +36,62 @@ from vedette.llm.ollama import OllamaUnavailable
 from vedette.rules.model import RuleSpec
 from vedette.storage.migrate import run_migrations
 from vedette.storage.reference import ReferenceStore
-from vedette.storage.store import Store
+from vedette.storage.store import Store, StoredFinding
 from vedette.storage.triage import TriageStore
 
 log = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class Depth:
+    """How much of the model tests a run does.
+
+    The quick depth finishes in under ten minutes on one local GPU. The fresh
+    held-out set, the measure that matters now, goes to the defended analyst in
+    full and every third of its items to the undefended one; the first
+    held-out set, which shaped earlier defences, is a regression check on every
+    third item with the defences on. The cross-finding test runs one item per
+    category with the defences on only, and the gold set is explained once.
+    The full depth runs both sets with the defences on and off, three runs of
+    the gold set, and the cross-finding test on four items per category with
+    the defences on, in about 18 minutes. That test's undefended arm is
+    left out of both: it costs as much as the defended one and only shows a
+    naive analyst being steered, which the injection test already shows. A
+    depth of ``0`` skips that arm.
+    """
+
+    first_defended_every: int
+    first_undefended_every: int
+    fresh_undefended_every: int
+    cross_per_category: int
+    cross_arms: tuple[bool, ...]
+    quality_runs: int
+
+
+QUICK = Depth(
+    first_defended_every=3,
+    first_undefended_every=0,
+    fresh_undefended_every=3,
+    cross_per_category=1,
+    cross_arms=(True,),
+    quality_runs=1,
+)
+FULL = Depth(
+    first_defended_every=1,
+    first_undefended_every=1,
+    fresh_undefended_every=1,
+    cross_per_category=4,
+    cross_arms=(True,),
+    quality_runs=3,
+)
+
+#: The held-out sets, as results name them.
+FIRST, FRESH = "held-out", "fresh"
+
+
+def _sampled(items: Sequence[datasets.Crafted], every: int) -> list[datasets.Crafted]:
+    return every_nth_per_category(items, every) if every else []
+
 
 #: Flagged names kept per public set, so each false alert can be checked.
 EXAMPLES = 20
@@ -172,6 +225,12 @@ def _injection(result: InjectionResult) -> dict[str, Any]:
     }
 
 
+def _quality(result: quality.QualityResult) -> dict[str, Any]:
+    data = asdict(result)
+    data.pop("durations_ms")
+    return {**data, "mean_ms": result.mean_ms}
+
+
 def _cross(result: CrossResult) -> dict[str, Any]:
     data = asdict(result)
     data.pop("durations_ms")
@@ -182,6 +241,15 @@ def _cross(result: CrossResult) -> dict[str, Any]:
     }
 
 
+@dataclass(slots=True)
+class _ModelRuns:
+    """Everything one model and thinking setting was asked."""
+
+    injection: list[InjectionResult]
+    cross: list[CrossResult]
+    quality: quality.QualityResult | None
+
+
 async def _ask_model(
     settings: Settings,
     specs: Sequence[RuleSpec],
@@ -189,16 +257,21 @@ async def _ask_model(
     model: str,
     think: bool,
     *,
-    held_out: Sequence[datasets.Crafted],
+    arms: Sequence[tuple[str, bool, Sequence[datasets.Crafted]]],
     sample: Sequence[datasets.Crafted],
+    gold: Sequence[quality.GoldItem],
+    gold_findings: Sequence[StoredFinding],
+    depth: Depth,
     repeats: int,
     parallel: int,
     now: datetime,
-) -> tuple[list[InjectionResult], list[CrossResult]]:
-    """Every injection run for one model and thinking setting.
+) -> _ModelRuns:
+    """Every injection run and the explanation-quality run for one model and thinking setting.
 
     All runs are started together and share one limit of ``parallel`` calls in
-    flight, so the model server is kept busy without queueing.
+    flight, so the model server is kept busy without queueing. ``arms`` are
+    the injection runs as (set, defences on, items); an arm with no items is
+    skipped, and with no gold items the quality test is.
 
     Raises:
         OllamaUnavailable: The model could not be used.
@@ -206,19 +279,29 @@ async def _ask_model(
     llm = settings.llm
     limit = asyncio.Semaphore(parallel)
 
-    async def injection(repeat: int, defended: bool) -> InjectionResult:
-        log.info("eval_injection_round", model=model, think=think, defences=defended, repeat=repeat)
+    async def injection(
+        repeat: int, dataset: str, defended: bool, items: Sequence[datasets.Crafted]
+    ) -> InjectionResult:
+        log.info(
+            "eval_injection_round",
+            model=model,
+            think=think,
+            dataset=dataset,
+            defences=defended,
+            repeat=repeat,
+        )
         recording = _client(llm, model, think, limit)
         try:
             if defended:
                 result = await run_defended(
-                    recording, held_out, specs, scratch.engine, think=think, now=now
+                    recording, items, specs, scratch.engine, think=think, now=now
                 )
             else:
-                result = await run_undefended(recording, held_out, think=think, now=now)
+                result = await run_undefended(recording, items, think=think, now=now)
         finally:
             await recording.aclose()
         result.repeat = repeat
+        result.dataset = dataset
         return result
 
     async def cross(defended: bool) -> CrossResult:
@@ -231,18 +314,45 @@ async def _ask_model(
         finally:
             await recording.aclose()
 
-    rounds = [(repeat, defended) for repeat in range(1, repeats + 1) for defended in (True, False)]
+    async def explain_once(run: int) -> quality.QualityResult:
+        log.info("eval_quality_round", model=model, think=think, run=run)
+        recording = _client(llm, model, think, limit)
+        try:
+            analyst = quality.production_analyst(
+                recording, specs, scratch.engine, context_tokens=recording.num_ctx
+            )
+            return await quality.model_quality(recording, analyst, gold, gold_findings, think=think)
+        finally:
+            await recording.aclose()
+
+    async def explain() -> list[quality.QualityResult]:
+        if not gold:
+            return []
+        runs = range(1, depth.quality_runs + 1)
+        first, *others = await settle(explain_once(run) for run in runs)
+        for other in others:
+            first.merge(other)
+        return [first]
+
+    rounds = [
+        (repeat, dataset, defended, items)
+        for repeat in range(1, repeats + 1)
+        for dataset, defended, items in arms
+        if items
+    ]
     crossed = asyncio.ensure_future(
-        settle([cross(defended) for defended in (True, False) if sample])
+        settle([cross(defended) for defended in depth.cross_arms if sample])
     )
     done = asyncio.ensure_future(settle([injection(*key) for key in rounds]))
-    # Both finish before a failure is raised, so no call is cut off half-way.
-    await asyncio.wait([crossed, done])
-    # Read both failures, so neither is reported as never retrieved.
-    for failure in [done.exception(), crossed.exception()]:
+    explained = asyncio.ensure_future(explain())
+    # Every run finishes before a failure is raised, so no call is cut off half-way.
+    await asyncio.wait([crossed, done, explained])
+    # Read every failure, so none is reported as never retrieved.
+    for failure in [done.exception(), crossed.exception(), explained.exception()]:
         if failure is not None:
             raise failure
-    return done.result(), crossed.result()
+    scored = explained.result()
+    return _ModelRuns(done.result(), crossed.result(), scored[0] if scored else None)
 
 
 def _client(llm: LlmConfig, model: str, think: bool, limit: asyncio.Semaphore) -> RecordingClient:
@@ -264,9 +374,11 @@ async def run_suite(
     models: Sequence[str],
     thinks: Sequence[bool],
     with_llm: bool = True,
+    injection_test: bool = True,
     repeats: int = 1,
     cross: bool = True,
-    cross_per_category: int = 8,
+    cross_per_category: int | None = None,
+    full: bool = False,
     parallel: int = 1,
     offline: bool = False,
     http_client: httpx.AsyncClient | None = None,
@@ -277,12 +389,16 @@ async def run_suite(
     The popular-hostname list is the one thing downloaded, at most once per
     ``evaluation.refresh_days``; with ``offline`` the stored copy is used or
     those sets are skipped. ``http_client`` downloads it (one is opened if not given).
-    The held-out injection set goes to each model ``repeats`` times per thinking
-    and defence setting. With ``cross``, the first ``cross_per_category`` items
-    of each category are also put among ordinary findings, on the first model
-    only, to see whether they change what it says about the others. Up to
+    ``full`` runs every model test in full (:data:`FULL`); otherwise a quick
+    depth (:data:`QUICK`) keeps the run to minutes. The held-out injection set
+    goes to each model ``repeats`` times per thinking and defence setting. With
+    ``cross``, the first ``cross_per_category`` items of each category (the
+    depth's number unless given) are also put among ordinary findings, on the
+    first model only, to see whether they change what it says about the others. Up to
     ``parallel`` model calls are in flight at once; set the model server to
-    answer as many together (``OLLAMA_NUM_PARALLEL``).
+    answer as many together (``OLLAMA_NUM_PARALLEL``). Every model also explains
+    the gold set of findings, scored against the template; ``injection_test`` off
+    skips the injection and cross-finding tests and runs only that.
     """
     now = now or datetime.now(UTC)
     profile_ids = [profile.id for profile in settings.enabled_profiles] or [
@@ -315,12 +431,31 @@ async def run_suite(
         bursts_random, bursts_words = datasets.dga_bursts()
         young, old = datasets.dated_domains()
         families = datasets.family_names()
+        gold = quality.load_gold(specs)
+        gold_findings = await quality.seed(scratch.engine, gold, specs, now)
+        template_quality = quality.template_quality(gold, gold_findings, specs)
         injection = datasets.injection_names()
         held_out = datasets.held_out_injection()
-        sample = mixed_sample(held_out, cross_per_category) if cross else []
+        fresh = datasets.fresh_injection()
+        depth = FULL if full else QUICK
+        per_category = cross_per_category or depth.cross_per_category
+        sample = mixed_sample(held_out, per_category) if cross else []
+        first_defended = _sampled(held_out, depth.first_defended_every)
+        undefended = _sampled(held_out, depth.first_undefended_every)
+        # A planted lookup reaches only the context pack, which the undefended
+        # analyst never builds, so context items go to the defended one only.
+        plain_fresh = [item for item in fresh if item.carrier != "context"]
+        fresh_undefended = _sampled(plain_fresh, depth.fresh_undefended_every)
+        arms = [
+            (FRESH, True, fresh),
+            (FRESH, False, fresh_undefended),
+            (FIRST, True, first_defended),
+            (FIRST, False, undefended),
+        ]
         prefilter = {
             "development": prefilter_hits(as_crafted(injection), now),
             "held_out": prefilter_hits(held_out, now),
+            "fresh": prefilter_hits(fresh, now),
         }
 
         async with Detector(store.engine, scratch.engine, specs, now) as detector:
@@ -421,18 +556,22 @@ async def run_suite(
 
         results: list[InjectionResult] = []
         crosses: list[CrossResult] = []
+        explained: list[quality.QualityResult] = []
         if with_llm:
             for number, model in enumerate(models):
                 for think in thinks:
                     try:
-                        done, crossed = await _ask_model(
+                        runs = await _ask_model(
                             settings,
                             specs,
                             scratch,
                             model,
                             think,
-                            held_out=held_out,
-                            sample=sample if number == 0 else [],
+                            arms=arms if injection_test else [],
+                            depth=depth,
+                            sample=sample if number == 0 and injection_test else [],
+                            gold=gold,
+                            gold_findings=gold_findings,
                             repeats=repeats,
                             parallel=parallel,
                             now=now,
@@ -440,8 +579,10 @@ async def run_suite(
                     except OllamaUnavailable as exc:
                         errors.append(f"{model}: the local model could not be used ({exc}).")
                         break
-                    results += done
-                    crosses += crossed
+                    results += runs.injection
+                    crosses += runs.cross
+                    if runs.quality is not None:
+                        explained.append(runs.quality)
     finally:
         if http_client is None:
             await http.aclose()
@@ -455,6 +596,9 @@ async def run_suite(
         "models": list(models),
         "thinking": [("on" if think else "off") for think in thinks],
         "with_llm": with_llm,
+        "injection_run": with_llm and injection_test,
+        "depth": "full" if full else "quick",
+        "quality_runs": depth.quality_runs,
         "repeats": repeats,
         "parallel": parallel,
         "dataset_sizes": {
@@ -478,9 +622,16 @@ async def run_suite(
             "injection": len(injection),
             "injection_held_out": len(held_out),
             "cross_sample": len(sample),
+            "injection_undefended": len(undefended),
+            "injection_first_defended": len(first_defended),
+            "injection_fresh": len(fresh),
+            "fresh_undefended": len(fresh_undefended),
         },
         "held_out_categories": {
             category: counts[0] for category, counts in prefilter["held_out"].items()
+        },
+        "fresh_categories": {
+            category: counts[0] for category, counts in prefilter["fresh"].items()
         },
         "prefilter": prefilter,
         "detection": [_detection(result) for result in detection],
@@ -507,6 +658,12 @@ async def run_suite(
         "injection": [_injection(result) for result in results],
         "injection_combined": combine(results),
         "cross_finding": [_cross(result) for result in crosses],
+        "quality": {
+            "items": len(gold),
+            "kinds": {kind: sum(item.kind == kind for item in gold) for kind in quality.KINDS},
+            "template": _quality(template_quality),
+            "models": [_quality(result) for result in explained],
+        },
         "injection_names": [name.fqdn for name in injection],
         "hostname_list": {
             "source": settings.evaluation.hostnames_url,

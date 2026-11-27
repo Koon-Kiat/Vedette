@@ -1,6 +1,8 @@
 # Detection rules. Each rule has an id, a plain name the dashboard shows, a
-# severity floor, a description of why it matters, thresholds (params) and the
-# evidence fields it records.
+# severity floor, a description of why it matters, thresholds (params), the
+# evidence fields it records, and notes for the local model: harmless
+# look-alikes to rule out and checks worth suggesting, sent with the rule's
+# findings as trusted text.
 #
 # The detector for each id is code; everything tunable is here. To change a
 # value without editing this file, point `rules.file` in config.yaml at a YAML
@@ -62,6 +64,22 @@ rules:
       device on the network may be a guest, a new purchase, or an intruder.
     params: {}
     evidence: [device_id, device_name, client_ip, attribution]
+    analyst_notes:
+      look_alikes:
+        - >-
+          A phone, tablet or laptop that changed its private Wi-Fi address, or
+          rejoined after a reset, shows up as new. Many such findings marked
+          benign before point to this.
+        - >-
+          A guest's device, or a new purchase being set up. Its first lookups
+          go to its maker's cloud and app stores.
+      checks:
+        - >-
+          Ask who added a device at that time. The names it looked up first
+          usually show its maker or kind.
+        - >-
+          If nobody recognises it, remove it from the network and change the
+          Wi-Fi password.
 
   - id: young-domain
     name: Newly registered domain
@@ -74,6 +92,19 @@ rules:
     params:
       max_age_days: 30
     evidence: [fqdn, root, status, domain_age_days, popularity_rank]
+    analyst_notes:
+      look_alikes:
+        - >-
+          A shop, service or tool that launched recently, reached the usual way
+          (a search, a link from a known site, a work app).
+        - A new advertising or tracking domain loaded by a page among other ad networks.
+      checks:
+        - >-
+          Look at what was open just before. A link in an email or a message
+          leading to a sign-in or download page is the usual phishing path.
+        - >-
+          Never enter a password on such a page; if something was downloaded,
+          scan the device for malware.
 
   - id: threat-intel-allowed
     name: Threat-feed domain allowed
@@ -86,6 +117,18 @@ rules:
     params:
       trusted_rank: 1000      # a feed entry for a top site this popular is distrusted
     evidence: [fqdn, root, status, threat_feeds, threat_match, popularity_rank]
+    analyst_notes:
+      look_alikes:
+        - >-
+          A feed can list a whole shared host, or keep an entry after it was
+          cleaned. Many devices using the domain for a long time suggest this.
+      checks:
+        - >-
+          Find what led there: a link in an email, an advert redirect, a
+          mistyped address.
+        - >-
+          Scan the device for malware, change any password typed there, and
+          block the domain in NextDNS.
 
   - id: dga-like
     name: Random-looking domain name
@@ -106,6 +149,22 @@ rules:
       min_label_length: 8
       assigned_name_platforms: *assigned_name_platforms
     evidence: [fqdn, root, status, label, label_length, randomness, digit_ratio]
+    analyst_notes:
+      look_alikes:
+        - >-
+          Ad, tracking and email-link services sometimes use random-looking
+          names. A web page or webmail loads them, next to other ad or mail
+          services.
+        - >-
+          Smart home devices may talk to their maker's cloud under a
+          random-looking name every day for months.
+      checks:
+        - >-
+          Next to other random names or a burst of new domains, scan the device
+          for malware.
+        - >-
+          If one device has used it daily for a long time, check the device's
+          maker before treating it as malware.
 
   - id: tunnel-like
     name: Possible DNS tunnelling
@@ -121,6 +180,24 @@ rules:
       min_subdomain_length: 30    # characters in front of the root
       ignore_rank_below: 10000    # skip roots this popular (large CDNs); null disables
     evidence: [root, unique_subdomains, window_minutes, sample_fqdn]
+    analyst_notes:
+      look_alikes:
+        - >-
+          Antivirus and endpoint security look up file hashes and addresses as
+          long subdomains of the vendor's domain; the vendor's other domains
+          are looked up around them.
+        - >-
+          Mail servers check senders against spam blocklists (DNSBL) by looking
+          up reversed addresses as subdomains.
+        - Monitoring tools and smart TVs send metrics or viewing data encoded in subdomains.
+      checks:
+        - >-
+          Name the program behind the lookups: the domains looked up around
+          them usually show it. For security software or a mail filter, no
+          action is needed.
+        - >-
+          If nothing explains it, above all with a new domain, disconnect the
+          device and scan it for malware.
 
   - id: tunnel-slow
     name: Slow DNS tunnelling
@@ -136,6 +213,24 @@ rules:
       min_subdomain_length: 30    # characters in front of the root
       ignore_rank_below: 10000    # skip roots this popular (large CDNs); null disables
     evidence: [root, unique_subdomains, window_minutes, sample_fqdn]
+    analyst_notes:
+      look_alikes:
+        - >-
+          Antivirus and endpoint security look up file hashes and addresses as
+          long subdomains of the vendor's domain; the vendor's other domains
+          are looked up around them.
+        - >-
+          Mail servers check senders against spam blocklists (DNSBL) by looking
+          up reversed addresses as subdomains.
+        - Monitoring tools and smart TVs send metrics or viewing data encoded in subdomains.
+      checks:
+        - >-
+          Name the program behind the lookups: the domains looked up around
+          them usually show it. For security software or a mail filter, no
+          action is needed.
+        - >-
+          If nothing explains it, above all with a new domain, disconnect the
+          device and scan it for malware.
 
   - id: dga-burst
     name: Burst of new unknown domains
@@ -151,6 +246,20 @@ rules:
       window_minutes: 10
       assigned_name_platforms: *assigned_name_platforms
     evidence: [new_roots_in_window, window_minutes, sample_roots]
+    analyst_notes:
+      look_alikes:
+        - Busy web pages load dozens of ad, tracking and content domains in minutes.
+        - >-
+          A device being set up, or a script that crawls or checks links, looks
+          up many new domains at once.
+      checks:
+        - >-
+          Every name in a burst is new to the device and on no top-sites list,
+          so how the names read proves nothing either way. Judge by the
+          records: a device first seen that day, a server running scripts, or
+          a busy site looked up just before.
+        - >-
+          If no record explains the burst, scan the device for malware.
 
   - id: volume-spike
     name: Query volume spike
@@ -166,6 +275,19 @@ rules:
       min_baseline_hours: 24  # hours with data needed before judging
       min_queries: 200        # ignore spikes smaller than this
     evidence: [queries_this_hour, baseline_per_hour, factor]
+    analyst_notes:
+      look_alikes:
+        - >-
+          Operating system and game updates, cloud backups and photo syncs make
+          many lookups for an hour.
+        - An app full of advertising and analytics libraries.
+      checks:
+        - >-
+          The names looked up in that hour usually show the cause, such as an
+          update or backup service; then no action is needed.
+        - >-
+          Hundreds of lookups of mail servers or random names point to a spam
+          bot or malware: disconnect the device and scan it.
 
   - id: blocked-burst
     name: Burst of blocked queries
@@ -179,6 +301,17 @@ rules:
       min_blocked_profile_mode: 200 # whole profile, when devices are not reported
       window_minutes: 10
     evidence: [blocked_in_window, window_minutes, sample_fqdn]
+    analyst_notes:
+      look_alikes:
+        - Smart TVs and apps retry blocked telemetry and analytics hosts many times a minute.
+        - Parental controls blocking games or social sites a child keeps trying.
+      checks:
+        - >-
+          If the blocked names are trackers or adverts, no action is needed; if
+          they are random names, scan the device for malware.
+        - >-
+          If a browser keeps reaching ad networks, look for an adware extension
+          and remove it.
 
   - id: new-destination-category
     name: New category or blocklist
@@ -190,3 +323,14 @@ rules:
       in what the device is doing.
     params: {}
     evidence: [category, category_name, fqdn]
+    analyst_notes:
+      look_alikes:
+        - Ad and tracker blocklists match on new devices and new apps all the time.
+      checks:
+        - >-
+          Say what was reached from the category name. For gambling or adult
+          sites on a family device, talk to its user or adjust parental
+          controls.
+        - >-
+          For a threat or newly registered domain category, find which link led
+          there and scan the device.

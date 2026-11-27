@@ -68,6 +68,16 @@ def test_a_rule_can_be_disabled_in_the_override_file(tmp_path: Path) -> None:
             "'min_randomness' is missing or not a number",
         ),
         (
+            "rules:\n  - id: dga-like\n    analyst_notes:\n      look_alikes: []\n"
+            "      checks: [Scan it.]\n",
+            "dga-like: analyst_notes.look_alikes",
+        ),
+        (
+            "rules:\n  - id: dga-like\n    analyst_notes:\n      look_alikes: [A.]\n"
+            "      checks: [B.]\n      examples: [C.]\n",
+            "dga-like: analyst_notes.examples",
+        ),
+        (
             "rules:\n  - id: dga-like\n    params:\n      min_entropy: 3.2\n",
             "'min_entropy' is no longer used; it was replaced by min_randomness",
         ),

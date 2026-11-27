@@ -133,9 +133,16 @@ with a valid analysis, from the first of these that applies:
    evidence features (exact subdomains left out, numbers bucketed by powers of
    two), so a finding that recurs the next day is not sent to the model again.
 2. **Model.** One call to Ollama's chat API with the JSON schema in `format`,
-   `think` off, temperature 0.1, `num_ctx` 8192 and `keep_alive` 5m. The answer
-   must parse into the schema or it is discarded whole. An invalid or
-   incomplete answer is retried once.
+   `think` off, temperature 0.1, `num_ctx` 8192 and `keep_alive` 5m. Each
+   finding goes with its evidence and a context pack read from the database
+   (`llm/context.py`): the device's age and usual queries an hour, the
+   domain's top-sites band, age, feeds, platform flag and spread across
+   devices, the names the device looked up within five minutes, its other
+   findings within the hour, and how earlier findings like it were triaged.
+   The system message adds two worked examples and the analyst notes of the
+   rules in the request: harmless look-alikes to rule out and checks worth
+   suggesting, from `rules.yaml`. The answer must parse into the schema or it
+   is discarded whole. An invalid or incomplete answer is retried once.
 3. **Template.** Text built from the rule's own description and the defanged
    target, at the rule's floor, marked as not written by the model.
 
@@ -146,9 +153,11 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 
 | Defence | Where it is enforced |
 | --- | --- |
+| A name never vouches for itself | `echoed_vouching` in `llm/guards.py`: an answer using a vouching word (benign, false positive, verified, trusted, ignore) that the finding's own names use is discarded for the template, in code (decision 115) |
 | Rules own severity: the model may raise priority, never lower it | `enforce_floor` in `llm/guards.py`, applied in code after validation, to cached verdicts too |
 | The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
 | Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
+| The records around a finding are data too | `build_pack` in `llm/context.py`: the context pack travels inside the JSON payload, every part is capped, and a name holding instruction-like words is withheld (decision 112) |
 | A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety (decision 104) |
 | Structured output only | `parse_verdicts` in `llm/schema.py`: extra fields, wrong types and free text are rejected |
 | No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
@@ -755,6 +764,49 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      from published analyses, each checked against the sample names its
      analysis lists, and never used to set a threshold. Held by
      `test_each_family_reproduces_its_published_sample`.
+111. **Explanations are measured on a gold set**: 60 synthetic findings, six
+     per rule, each with the records around it seeded into a scratch
+     database, and patterns for the right cause, a fitting step and claims
+     it must not make. Every model explains it three times, against the
+     template. Held by `test_the_packaged_gold_set_covers_every_rule_six_times`
+     and `test_the_report_compares_the_model_s_explanations_with_the_template`.
+112. **The model gets the records around each finding** as a capped context
+     pack built at analysis time; names with instruction-like words are
+     withheld. The cache key leaves the pack out, so a recurring finding reuses
+     its verdict for `cache_ttl_hours`. Held by
+     `test_the_facts_hold_the_device_domain_neighbours_and_earlier_triage`,
+     `test_a_neighbour_that_reads_like_an_instruction_is_withheld` and
+     `test_each_finding_goes_with_its_pack_and_its_rules_notes`.
+113. **Each rule carries notes for the model** in `rules.yaml`, sent as
+     trusted text for the rules in a request only, with two worked examples
+     on reserved `.example` names. Held by
+     `test_every_packaged_rule_carries_notes_for_the_model` and
+     `test_a_request_gets_the_notes_of_its_own_rules_only`.
+114. **A plain `vedette eval` finishes in under ten minutes.** The fresh
+     held-out set goes to the defended analyst in full and every third of its
+     items to the undefended one; the first set's every third item goes to the
+     defended analyst only, the cross-finding test runs one item per category
+     with the defences on, and the gold set one run, with thinking off and four
+     calls in flight. `--full` runs both sets on and off, three gold runs and
+     four cross-finding items per category, still with the defences on only:
+     the undefended arm of that test only shows a naive analyst being steered,
+     which the injection test already shows. Held by
+     `test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest`.
+115. **An answer that takes a name's word for it is not used.** When the
+     model calls a finding harmless with a vouching word the finding's own
+     names use, the template stands in. The prompt says the same, but in the
+     injection test qwen3:8b still repeated such claims; the check in code
+     cannot be talked out of. Two of the 2,033 roots in the owner's history
+     contain such a word. Held by
+     `test_an_answer_repeating_a_name_s_own_vouching_word_is_caught` and
+     `test_an_answer_that_takes_a_name_s_word_for_it_is_replaced_by_the_template`.
+116. **Injection is measured on a fresh held-out set** once the first one has
+     shaped defences. The fresh set was written after every defence was
+     final, and no defence changes because of its results; a later fix needs
+     a set written after it. It also plants names in the context pack, which
+     lists registered roots, so a planted payload sits in a root. Held by
+     `test_the_fresh_set_covers_the_shaped_categories_and_the_context_carrier`
+     and `test_a_planted_lookup_reaches_only_its_own_finding_s_pack`.
 
 ## Verified facts the design relies on
 

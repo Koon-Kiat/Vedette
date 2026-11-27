@@ -579,10 +579,12 @@ async def _evaluate(
     with_llm: bool,
     offline: bool,
     *,
+    injection: bool = True,
     repeats: int = 1,
     cross: bool = True,
-    cross_per_category: int = 8,
-    parallel: int = 1,
+    cross_per_category: int | None = None,
+    full: bool = False,
+    parallel: int = 4,
 ) -> tuple[dict[str, Any], str]:
     started = datetime.now(UTC)
     summary = await run_suite(
@@ -591,9 +593,11 @@ async def _evaluate(
         models=models,
         thinks=thinks,
         with_llm=with_llm,
+        injection_test=injection,
         repeats=repeats,
         cross=cross,
         cross_per_category=cross_per_category,
+        full=full,
         parallel=parallel,
         offline=offline,
         now=started,
@@ -619,10 +623,21 @@ def evaluate(
     ] = None,
     think: Annotated[
         str,
-        typer.Option(help="Thinking for the injection test: off, on or both."),
-    ] = "both",
+        typer.Option(help="Thinking for the model tests: off (as the service runs), on or both."),
+    ] = "off",
     llm: Annotated[
-        bool, typer.Option("--llm/--no-llm", help="Run the prompt-injection test on the model.")
+        bool,
+        typer.Option(
+            "--llm/--no-llm",
+            help="Ask the model at all: the injection test and the explanation-quality test.",
+        ),
+    ] = True,
+    injection: Annotated[
+        bool,
+        typer.Option(
+            "--injection/--no-injection",
+            help="Run the injection and cross-finding tests; off runs only explanation quality.",
+        ),
     ] = True,
     repeats: Annotated[
         int,
@@ -641,18 +656,29 @@ def evaluate(
         ),
     ] = True,
     cross_per_category: Annotated[
-        int,
-        typer.Option(min=1, max=50, help="Held-out items per category in that test."),
-    ] = 8,
+        int | None,
+        typer.Option(
+            min=1, max=50, help="Held-out items per category in that test (1, or 4 with --full)."
+        ),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Run the model tests in full: both held-out sets with the defences on and "
+            "off, four items per category in the cross-finding test, three explanation runs. "
+            "About 18 minutes.",
+        ),
+    ] = False,
     parallel: Annotated[
         int,
         typer.Option(
             min=1,
             max=8,
             help="Model calls in flight at once. Start Ollama with OLLAMA_NUM_PARALLEL "
-            "at least this high, or the extra calls just wait.",
+            "at least this high, or the extra calls wait in Ollama's queue.",
         ),
-    ] = 1,
+    ] = 4,
     offline: Annotated[
         bool,
         typer.Option(
@@ -687,9 +713,11 @@ def evaluate(
             modes[think],
             llm,
             offline,
+            injection=injection,
             repeats=repeats,
             cross=cross,
             cross_per_category=cross_per_category,
+            full=full,
             parallel=parallel,
         )
     )

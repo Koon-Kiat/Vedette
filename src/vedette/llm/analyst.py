@@ -13,19 +13,20 @@ exists; rules did that before it ran.
 """
 
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from itertools import batched
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from pydantic import ValidationError
 
 from vedette.llm.cache import cache_key
+from vedette.llm.context import ContextSource
 from vedette.llm.fallback import template_analysis
-from vedette.llm.guards import enforce_floor, sanitize_model_text, slug
+from vedette.llm.guards import echoed_vouching, enforce_floor, sanitize_model_text, slug
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
-from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
+from vedette.llm.prompts import build_payload, system_prompt
 from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules.model import RuleSpec
 from vedette.shared.models import Analysis, Verdict
@@ -61,6 +62,7 @@ class Analyst:
         max_batch: int,
         cache_ttl: timedelta,
         context_tokens: int | None = None,
+        context: ContextSource | None = None,
         clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         """Create an analyst.
@@ -74,6 +76,8 @@ class Analyst:
             context_tokens: The model's context window (``num_ctx``). Calls are
                 then also sized so the prompt and the answers fit in it; with
                 None, only ``max_batch`` limits a call.
+            context: Builds the records around each finding sent to the model;
+                without it, findings go with their evidence only.
             clock: Returns the current time (UTC).
         """
         self._client = client
@@ -82,9 +86,12 @@ class Analyst:
         self._max_batch = max_batch
         self._cache_ttl = cache_ttl
         self._context_tokens = context_tokens
+        self._context = context
         self._clock = clock
 
-    def _batches(self, pending: Sequence[StoredFinding]) -> Iterator[list[StoredFinding]]:
+    def _batches(
+        self, pending: Sequence[StoredFinding], contexts: Mapping[int, dict[str, Any]]
+    ) -> Iterator[list[StoredFinding]]:
         """Split findings into calls of at most ``max_batch`` that fit the context window.
 
         A finding's share is its serialised length in tokens plus room for its
@@ -94,11 +101,13 @@ class Analyst:
         if self._context_tokens is None:
             yield from (list(batch) for batch in batched(pending, self._max_batch, strict=False))
             return
-        budget = self._context_tokens * CONTEXT_USE - len(SYSTEM_PROMPT) / CHARS_PER_TOKEN
+        longest = system_prompt(self._specs, self._specs)
+        budget = self._context_tokens * CONTEXT_USE - len(longest) / CHARS_PER_TOKEN
         batch: list[StoredFinding] = []
         used = 0.0
         for finding in pending:
-            cost = len(build_payload([finding], self._specs)) / CHARS_PER_TOKEN + ANSWER_TOKENS
+            payload = build_payload([finding], self._specs, contexts)
+            cost = len(payload) / CHARS_PER_TOKEN + ANSWER_TOKENS
             if batch and (len(batch) >= self._max_batch or used + cost > budget):
                 yield batch
                 batch, used = [], 0.0
@@ -110,7 +119,19 @@ class Analyst:
     def _finish(
         self, finding: StoredFinding, verdict: Verdict, source: Literal["llm", "cache"]
     ) -> Analysis | None:
-        """Apply the guards to a verdict; ``None`` if nothing usable is left."""
+        """Apply the guards to a verdict; ``None`` if nothing usable is left.
+
+        An answer that repeats a vouching word the finding's own names use
+        (benign, false positive, verified) is not used: the name has steered it.
+        """
+        echoed = echoed_vouching(
+            (verdict.summary, verdict.likely_cause, verdict.recommended_action),
+            finding.target,
+            finding.evidence,
+        )
+        if echoed:
+            log.warning("analysis_echoed_name", finding_id=finding.id, words=echoed)
+            return None
         try:
             return Analysis(
                 finding_id=finding.id,
@@ -126,19 +147,22 @@ class Analyst:
         except ValidationError:
             return None
 
-    async def _ask(self, batch: Sequence[StoredFinding]) -> dict[int, Verdict]:
+    async def _ask(
+        self, batch: Sequence[StoredFinding], contexts: Mapping[int, dict[str, Any]]
+    ) -> dict[int, Verdict]:
         """Ask the model about a batch; return the valid verdicts it gave.
 
         Retries once when the answer is invalid or incomplete.
         """
         wanted = {finding.id for finding in batch}
-        payload = build_payload(batch, self._specs)
+        payload = build_payload(batch, self._specs, contexts)
+        system = system_prompt(self._specs, (finding.rule_id for finding in batch))
         got: dict[int, Verdict] = {}
         for _ in range(MAX_ATTEMPTS):
             started_at = self._clock()
             started = time.monotonic()
             try:
-                content = await self._client.chat_json(SYSTEM_PROMPT, payload, RESPONSE_SCHEMA)
+                content = await self._client.chat_json(system, payload, RESPONSE_SCHEMA)
             except OllamaUnavailable:
                 await self._record(started_at, started, len(batch), "unavailable")
                 raise
@@ -197,8 +221,9 @@ class Analyst:
             else:
                 pending.append(finding)
 
-        for batch in self._batches(pending):
-            verdicts = await self._ask(batch)
+        contexts = await self._context.packs(pending) if self._context and pending else {}
+        for batch in self._batches(pending, contexts):
+            verdicts = await self._ask(batch, contexts)
             for finding in batch:
                 verdict = verdicts.get(finding.id)
                 analysis = self._finish(finding, verdict, "llm") if verdict is not None else None

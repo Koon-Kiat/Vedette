@@ -253,6 +253,14 @@ about, the profile and device, how many events triggered it, the local model's
 summary, likely cause and recommended action, and the evidence. A finding the
 model has not reached yet says "not analysed yet"; one the model could not
 explain gets a standard explanation and says so.
+
+The model reads more than the rule that fired. Each finding goes with the
+records around it: when the device was first seen and how busy it usually is,
+the domain's popularity, age and feeds, what else the device looked up in the
+same few minutes, its other findings that hour, and how you handled earlier
+findings like it. Each rule also carries notes in `rules.yaml` on the harmless
+activity that trips it and the checks worth suggesting; change them in your
+rules override file like any other rule field.
 Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs
 are attacker-controlled, so they are never shown in a form a terminal or chat
 client would turn into a link. `--json` prints them raw for scripts.
@@ -459,9 +467,15 @@ domains, names from 13 real malware families' domain generation algorithms,
 bare, behind a `www.` and on hosting platforms, synthetic DGA names and
 bursts, fast, slow and sustained tunnels, and domains with given registration
 dates) and a
-held-out set of 315 crafted prompt-injection items (names, device names and
-lists of roots, written without reading the defences) through the real rules
-and the local model, with the defences on and off. A sample of those items is
+two held-out sets of crafted prompt-injection items (names, device names,
+lists of roots and names planted in the records around a finding): 315
+written without reading the defences, and 124 written once they were final.
+Both go through the real rules and the local model, with the defences on and
+off. The model also explains a
+gold set of 60 synthetic findings, each with the records around it, three
+times; the answers are scored for the right cause, a fitting step and
+invented facts, against the standard explanation. `--no-injection` runs only
+that part. A sample of those items is
 also put among ordinary findings, to see whether one crafted finding changes
 what the model says about the others. It also replays all of your stored history
 through the rules as they are now, which shows how often each rule would fire
@@ -478,23 +492,31 @@ talks only to the local model.
 docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md
 ```
 
-(bash: `-v "$PWD/docs:/out"`.) It takes a while: every injection round asks
-the model about all 315 items, with thinking off and on, and the mixed
-batches on the first model add about 70 calls per setting. `--think off`
-halves that, `--no-cross` skips the mixed batches (`--cross-per-category`
-sizes them), `--no-llm` skips the model entirely, `--model` (repeatable) tests
-another downloaded model, and `--repeats N` runs the set N times per setting
-for tighter confidence intervals.
+(bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
+it takes under ten minutes on a 12 GB card, with thinking off as the service
+runs. The model sees the fresh held-out set of 124 items with the defences on,
+every third of its items with them off, every third item of the first
+held-out set with the defences on, one mixed batch per category, and the gold
+set once. The fresh set was written after the defences were final and is the
+one to read; 32 of its items plant a crafted name in the records around an
+ordinary finding, where it reaches the model only through the context pack.
+`--full` runs both sets with the defences on and off, four items per
+category in the cross-finding test and three runs of the gold set, in about
+18 minutes.
+`--think both` adds thinking on, `--no-cross` skips the mixed batches,
+`--no-injection` runs only the explanation test, `--no-llm` skips the model
+entirely, `--model` (repeatable) tests another downloaded model, and
+`--repeats N` runs the injection set N times per setting for tighter intervals.
 
-To finish several times sooner, let Ollama answer four calls at once and send
-four at a time, then put Ollama back as it was:
+The run sends four calls at a time (`--parallel`). Let Ollama answer four at
+once, then put it back as it was:
 
 ```powershell
 $env:OLLAMA_NUM_PARALLEL=4; $env:OLLAMA_FLASH_ATTENTION=1; $env:OLLAMA_KV_CACHE_TYPE="q8_0"; docker compose up -d ollama
 ```
 
 ```powershell
-docker compose run --rm -v "${PWD}/docs:/out" vedette eval --parallel 4 --think off --output /out/EVALUATION.md
+docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md
 ```
 
 ```powershell

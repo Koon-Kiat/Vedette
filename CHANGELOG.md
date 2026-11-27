@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Explanations
+
+- The local model now gets the records around each finding: when the device
+  was first seen and its usual queries an hour, the domain's top-sites band,
+  age, feeds and spread across your devices, the names the device looked up
+  within five minutes, its other findings that hour, and how earlier findings
+  like it were triaged. Names that read like instructions are withheld.
+- Each rule in `rules.yaml` carries `analyst_notes`: harmless look-alikes to
+  rule out and checks to suggest, sent with that rule's findings. The prompt
+  adds two worked examples and asks for a cause grounded in the data and a
+  step that fits it. The prompt version is now 3, so cached explanations are
+  not reused.
+- On a gold set of 60 findings, qwen3:8b gets the cause, a fitting step and
+  no invented fact right in 36 to 40 per run over six runs, against 15 to
+  16 with the earlier prompt and 16 for the standard explanation. For
+  harmless look-alikes it is right in 36 to 40 of 90 answers over three
+  runs, against none before.
+- An answer that calls a finding harmless with a vouching word the
+  finding's own names use ("benign", "false positive", "verified",
+  "trusted", "ignore") is discarded, and the standard explanation stands in.
+  The richer prompt had let crafted names that vouch for themselves steer
+  the model in five of 315 injection items, against one before. With this
+  check, the burst note corrected and a prompt line to the same effect, one,
+  four and one of the 315 steered it in three runs, read by eye, and none of
+  the 124 items of a fresh set written after these fixes did, in three
+  runs.
+
 ### Detection
 
 - `dga-like` now judges the registered label, the one left of the public
@@ -25,6 +52,31 @@
 
 ### Evaluation
 
+- A fresh held-out injection set of 124 items, written after every defence
+  was final: the first set shaped five defences after its results were read,
+  so its downplay, spoof, device and sample-roots rows no longer measure
+  unseen attacks. 32 of the new items plant a crafted name as a lookup made
+  just before an ordinary finding, so it reaches the model only through the
+  context pack; 27 of them reach the model as written and 5 are withheld.
+  The report names the set on every row and takes the target from the fresh
+  one.
+- A plain `vedette eval` now finishes in under ten minutes instead of more
+  than half an hour: thinking off by default (as the service runs), four calls
+  in flight, and the comparison tests trimmed. The fresh set goes to the
+  defended analyst in full and every third of its items to the undefended
+  one; the first set's every third item goes to the defended analyst only;
+  the cross-finding test runs one item per category with the defences on, and
+  the gold set one run. `--full` runs both sets with the defences on and off,
+  four items per category in the cross-finding test with the defences on, and
+  three runs of the gold set, in about 18 minutes; the report says which
+  depth ran.
+- New explanation-quality test: a gold set of 60 synthetic findings, six per
+  rule, with the records around each and patterns for the right cause, a
+  fitting step and claims to avoid. Each model explains it three times; the
+  report scores it per rule and kind of finding against the standard
+  explanation, lists every miss and invented fact, and the Evaluation page
+  shows the totals. `vedette eval --no-injection` runs it without the
+  injection tests.
 - `dga-like` is tested on 13 real malware families' domain generation
   algorithms, re-implemented from published analyses and checked against
   their sample names: bare, behind `www.` and similar, and as customer names

@@ -39,13 +39,11 @@ TEXT_SUFFIXES = {"", ".css", ".html", ".js", ".md", ".py", ".toml", ".txt", ".ya
 OLD_NAME = re.compile(r"(?<![a-z0-9])sentinel(?![a-z0-9])", re.IGNORECASE)
 RENAME_RECORDS = {
     ROOT / "CHANGELOG.md",
-    ROOT / "docs" / "ARCHITECTURE.md",
     Path(__file__).resolve(),
 }
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
 REPO_PATH = re.compile(r"`((?:src|tests|tools|docs|[.]github|[.]githooks|[.]impeccable)/[^`]+)`")
 TEST_NAME = re.compile(r"`(test_[a-z0-9_]+)`")
-DECISION_REF = re.compile(r"[Dd]ecisions? ([0-9]+)")
 MARKUP = {".html", ".js", ".css"}
 MILESTONE_EXAMPLES = {ROOT / "tests" / "unit" / "test_conventions.py"}
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -117,7 +115,7 @@ def test_the_old_project_name_is_only_in_the_rename_records() -> None:
                 found.append(f"{path.relative_to(ROOT).as_posix()}:{number}")
     assert found == [], (
         "The project is Vedette; 'Sentinel' was its old name and appears only in the "
-        f"CHANGELOG and decision 85. Rename it at {found}. A placeholder value in code "
+        f"CHANGELOG. Rename it at {found}. A placeholder value in code "
         "can be called _MISSING."
     )
 
@@ -129,15 +127,13 @@ def test_web_facing_dependencies_are_pinned_exactly() -> None:
         for name in ("fastapi", "jinja2", "python-multipart", "uvicorn")
         if not dependencies[name].startswith("==")
     }
-    assert loose == {}, (
-        f"Pin {sorted(loose)} with '==' to a release at least two weeks old (decision 57)."
-    )
+    assert loose == {}, f"Pin {sorted(loose)} with '==' to a release at least two weeks old."
 
 
 def test_time_zone_data_and_yaml_are_direct_dependencies() -> None:
     assert {"tzdata", "pyyaml"} <= set(_dependencies()), (
         "python:3.14-slim has no time zone database and the config loader parses YAML "
-        "itself, so tzdata and pyyaml stay direct dependencies (decision 4)."
+        "itself, so tzdata and pyyaml stay direct dependencies."
     )
 
 
@@ -151,7 +147,7 @@ def test_actions_are_pinned_to_a_commit(path: Path) -> None:
     loose = [ref for ref in used if ref and not ref.startswith("./") and not COMMIT.match(ref)]
     assert loose == [], (
         f"Pin {loose} to the release's full commit, with the release in a comment, as in "
-        "'actions/checkout@<40-hex commit> # v7.0.1' (decision 88)."
+        "'actions/checkout@<40-hex commit> # v7.0.1'."
     )
 
 
@@ -167,7 +163,7 @@ def test_every_image_is_pinned_to_a_digest() -> None:
     for path in [*WORKFLOWS, ROOT / ".githooks" / "pre-commit"]:
         images += REGISTRY_IMAGE.findall(path.read_text(encoding="utf-8"))
     loose = [image for image in images if image not in stages and not DIGEST.search(image)]
-    assert loose == [], f"Name the tag and the @sha256 digest of {loose} (decision 93)."
+    assert loose == [], f"Name the tag and the @sha256 digest of {loose}."
 
 
 def test_every_copy_of_the_gitleaks_image_is_the_same() -> None:
@@ -181,8 +177,8 @@ def test_every_copy_of_the_gitleaks_image_is_the_same() -> None:
     tags = {match.group(1) for match in copies.values() if match}
     assert len(set(images.values())) == 1 and tags == {hook_rev}, (
         "Dependabot does not read these, so bump the gitleaks image in ci.yml and "
-        ".githooks/pre-commit, and the rev in .pre-commit-config.yaml, together "
-        f"(decision 93): {images}, rev {hook_rev}."
+        ".githooks/pre-commit, and the rev in .pre-commit-config.yaml, together: "
+        f"{images}, rev {hook_rev}."
     )
 
 
@@ -193,13 +189,13 @@ def test_dependabot_waits_two_weeks_for_every_ecosystem() -> None:
         for update in updates
         if update.get("cooldown", {}).get("default-days", 0) < 14
     }
-    assert short == {}, f"Give {short} a cooldown of at least 14 days (decision 90)."
+    assert short == {}, f"Give {short} a cooldown of at least 14 days."
 
 
 def test_design_and_agent_working_files_stay_local() -> None:
     ignored = set((ROOT / ".gitignore").read_text(encoding="utf-8").splitlines())
     missing = {"/PRODUCT.md", "/DESIGN.md", "/docs/superpowers/"} - ignored
-    assert missing == set(), f"Keep {sorted(missing)} in .gitignore (decision 87)."
+    assert missing == set(), f"Keep {sorted(missing)} in .gitignore."
 
 
 def _compose() -> dict[str, Any]:
@@ -212,16 +208,16 @@ def test_ollama_has_no_route_to_the_internet() -> None:
     internal = {name for name, net in compose["networks"].items() if (net or {}).get("internal")}
     ollama = compose["services"]["ollama"]
     assert set(ollama["networks"]) <= internal and "ports" not in ollama, (
-        "Ollama joins only internal networks and publishes no port (decision 9)."
+        "Ollama joins only internal networks and publishes no port."
     )
-    assert ollama["environment"]["OLLAMA_NO_CLOUD"] == "1", "Keep OLLAMA_NO_CLOUD set (decision 9)."
+    assert ollama["environment"]["OLLAMA_NO_CLOUD"] == "1", "Keep OLLAMA_NO_CLOUD set."
     assert compose["services"]["ollama-volume-owner"]["network_mode"] == "none"
 
 
 def test_the_dev_container_can_reach_the_model() -> None:
     compose = _compose()
     assert "llm" in compose["services"]["dev"]["networks"], (
-        "The dev container joins the llm network so pytest --live reaches Ollama (decision 38)."
+        "The dev container joins the llm network so pytest --live reaches Ollama."
     )
 
 
@@ -234,7 +230,7 @@ def test_every_published_port_is_on_loopback() -> None:
     exposed = [(name, port) for name, port in published if not port.startswith("127.0.0.1:")]
     assert published and exposed == [], (
         f"Publish {exposed} on 127.0.0.1 only; the dashboard listens on every interface "
-        "inside the container (decision 55)."
+        "inside the container."
     )
 
 
@@ -246,7 +242,7 @@ def test_ollama_runs_unprivileged_with_a_read_only_root() -> None:
         assert services[name]["cap_drop"] == ["ALL"], name
     owner = services["ollama-volume-owner"]
     assert sorted(owner["cap_add"]) == ["CHOWN", "DAC_READ_SEARCH"], (
-        "Only the one-shot volume owner runs as root, with CHOWN and DAC_READ_SEARCH (decision 64)."
+        "Only the one-shot volume owner runs as root, with CHOWN and DAC_READ_SEARCH."
     )
 
 
@@ -256,31 +252,17 @@ def test_the_gpu_kernel_cache_lives_in_the_model_volume() -> None:
     cache = ollama["environment"]["CUDA_CACHE_PATH"]
     assert any(cache.startswith(mount + "/") for mount in mounts), (
         f"CUDA_CACHE_PATH {cache} must sit in a mounted volume, or the read-only root "
-        "makes the GPU kernels compile on every load (decision 80)."
+        "makes the GPU kernels compile on every load."
     )
 
 
 def test_ci_runs_weekly_and_builds_the_image() -> None:
     workflow = _load_yaml(ROOT / ".github" / "workflows" / "ci.yml")
     triggers = workflow.get("on", workflow.get(True))
-    assert triggers.get("schedule"), "CI runs on a weekly schedule (decision 89)."
+    assert triggers.get("schedule"), "CI runs on a weekly schedule."
     steps = [step.get("uses", "") for step in workflow["jobs"]["image"]["steps"]]
     assert any(uses.startswith("docker/build-push-action@") for uses in steps), (
-        "CI builds the image on every run (decision 89)."
-    )
-
-
-def _decision_numbers() -> list[int]:
-    text = ARCHITECTURE.read_text(encoding="utf-8")
-    section = text[text.index("## Decisions") : text.index("## Verified facts")]
-    return [int(number) for number in re.findall(r"^([0-9]+)[.] ", section, re.MULTILINE)]
-
-
-def test_decisions_keep_their_numbers() -> None:
-    numbers = _decision_numbers()
-    assert numbers == list(range(1, len(numbers) + 1)), (
-        "Decisions are numbered from 1 with no gaps, since other files cite them by "
-        "number; replace a decision with a one-line pointer instead of removing it."
+        "CI builds the image on every run."
     )
 
 
@@ -308,19 +290,8 @@ def test_the_architecture_names_only_files_and_tests_that_exist() -> None:
     missing_tests = sorted(set(TEST_NAME.findall(text)) - tests)
     assert (missing_files, missing_tests) == ([], []), (
         f"docs/ARCHITECTURE.md names files {missing_files} and tests {missing_tests} that "
-        "do not exist; point each decision at the check that holds it now."
+        "do not exist; point each at the check that holds it now."
     )
-
-
-def test_every_decision_cited_exists() -> None:
-    last = len(_decision_numbers())
-    cited = [
-        f"{path.relative_to(ROOT).as_posix()}: decision {number}"
-        for path in _text_files()
-        for number in DECISION_REF.findall(path.read_text(encoding="utf-8"))
-        if not 1 <= int(number) <= last
-    ]
-    assert cited == [], f"{cited} cite decisions that docs/ARCHITECTURE.md does not have."
 
 
 def test_every_commit_pushed_to_main_is_checked() -> None:
@@ -334,6 +305,5 @@ def test_every_commit_pushed_to_main_is_checked() -> None:
         for step in job["steps"]
     ]
     assert any("tools/conventions.py commits" in run for run in runs), (
-        "The Conventions workflow checks every commit pushed to main, squash merges "
-        "included (decision 106)."
+        "The Conventions workflow checks every commit pushed to main, squash merges included."
     )

@@ -36,6 +36,9 @@ coverage.xml
 /PRODUCT.md
 /DESIGN.md
 
+# The design decision log: kept locally, out of the architecture document
+/DECISIONS.md
+
 # Plans written by coding agents: working notes, not project documentation
 /docs/superpowers/
 

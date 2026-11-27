@@ -33,7 +33,7 @@ the prompt-injection defences hold up
 ([docs/EVALUATION.md](docs/EVALUATION.md),
 [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)). See
 [CHANGELOG.md](CHANGELOG.md) for progress and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and decisions.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
 ## Requirements
 
@@ -507,7 +507,7 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 ```
 
 (bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
-it takes under ten minutes on a 12 GB card, with thinking off as the service
+it takes about ten minutes on a 12 GB card, with thinking off as the service
 runs. The model sees the fresh held-out set of 124 items with the defences on,
 every third of its items with them off, every eighth item of the first
 held-out set with the defences on, one mixed batch per category, and the gold

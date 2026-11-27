@@ -43,7 +43,7 @@ NextDNS API (per profile)
 | Enrichment | `src/vedette/enrich/` | Done: first-seen, popularity, domain age (RDAP), threat feeds |
 | Rules | `src/vedette/rules/` | Done: ten declarative rules, allowlist, deterministic engine, instruction-word pre-filter |
 | Enricher and rule workers | `src/vedette/pipeline/processor.py` | Done |
-| Shared types and helpers | `src/vedette/shared/` | Findings, severities, verdicts, analyses, allowlist entries and outgoing messages; defanging; lexical features and feed-lookup candidates. Every package may import it; it imports none (decision 105) |
+| Shared types and helpers | `src/vedette/shared/` | Findings, severities, verdicts, analyses, allowlist entries and outgoing messages; defanging; lexical features and feed-lookup candidates. Every package may import it; it imports none |
 | LLM analyst | `src/vedette/llm/`, `src/vedette/pipeline/analyst.py` | Done: Ollama client, schema, guards, cache, template fallback |
 | Notifier | `src/vedette/notify/`, `src/vedette/pipeline/notifier.py` | Done: ntfy, Discord and e-mail; outbox; quiet hours; daily digest |
 | Health monitor | `src/vedette/health/` | Done: six kinds of check, alerts on change, `/healthz` |
@@ -153,20 +153,21 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 
 | Defence | Where it is enforced |
 | --- | --- |
-| A name never vouches for itself | `echoed_vouching` in `llm/guards.py`: an answer using a vouching word (benign, false positive, verified, trusted, ignore) that the finding's own names use is discarded for the template, in code (decision 115) |
+| A name never vouches for itself | `echoed_vouching` in `llm/guards.py`: an answer using a vouching word (benign, false positive, verified, trusted, ignore) that the finding's own names use is discarded for the template, in code |
 | Rules own severity: the model may raise priority, never lower it | `enforce_floor` in `llm/guards.py`, applied in code after validation, to cached verdicts too |
 | The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
 | Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
-| The records around a finding are data too | `build_pack` in `llm/context.py`: the context pack travels inside the JSON payload, every part is capped, and a name holding instruction-like words is withheld (decision 112) |
-| A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety (decision 104) |
+| The records around a finding are data too | `build_pack` in `llm/context.py`: the context pack travels inside the JSON payload, every part is capped, and a name holding instruction-like words is withheld |
+| A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety |
 | Structured output only | `parse_verdicts` in `llm/schema.py`: extra fields, wrong types and free text are rejected |
 | No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
 | Safe output | `sanitize_model_text`: HTML, markdown and links removed, names defanged, length capped; applied again on display |
+| Only domains it was given | `unsupported_names` in `llm/guards.py`: a domain an answer names that is not in what the model was given for that finding (a parent of a given name counts) is taken out of the text and recorded, so a crafted name cannot be carried into a neighbour's answer either |
+| A harmless leaning rests on a record | `grounded_leaning` and `cited_keys` in `llm/guards.py`: only fields the finding has count as cited, and a harmless leaning that cites no record (only a name, an id or an address) is stored as unclear |
 
 Before this stage, the rule engine's instruction-word pre-filter raises a
-finding whose name carries instruction words (decision 61). `vedette eval`
-measures how often crafted names steer the model, with these defences on and
-off (decision 66).
+finding whose name carries instruction words. `vedette eval` measures how
+often crafted names steer the model, with these defences on and off.
 
 ## How alerts, digests and health messages are sent
 
@@ -429,428 +430,6 @@ test checks each file's SHA-256, as for htmx.
 | `ollama-pull` | One-shot model download (`setup` profile) | `egress` | uid 10002, read-only root filesystem, all capabilities dropped, `no-new-privileges` |
 | `dev` | Lint, type-check, tests (`dev` profile) | `egress` | Development only, never deployed |
 
-## Decisions
-
-"The spec" below is the original project brief, which is not part of this
-repository; a decision that departs from it says so. Where a test or a CI step
-holds a decision, the decision names it, and that check is the source of truth.
-Numbers never change, so a replaced decision keeps a one-line pointer. What was
-tried and measured along the way is in git history and `docs/EVALUATION.md`.
-
-1. **The repository root is the spec's project root.**
-2. **Only dependencies in use are declared**, each added with the code that
-   needs it, so the audited set stays small.
-3. **`hatchling` builds the package**, to install the `vedette` command.
-4. **`tzdata` and `pyyaml` are direct dependencies.** `python:3.14-slim` has no
-   time zone database, and the config loader parses YAML itself so it can
-   refuse secrets. Held by `test_time_zone_data_and_yaml_are_direct_dependencies`.
-5. **Dependencies are locked with hashes.** Images and CI install with
-   `uv sync --locked`, which checks every hash, and `pip-audit` reads a hashed
-   export of the same lock (`.github/workflows/ci.yml`).
-6. **Secrets never come from `config.yaml`**, only from the environment or a
-   Docker secret. Held by `test_api_key_in_the_yaml_file_is_rejected` and
-   `test_api_key_is_read_from_a_docker_secret_file`.
-7. **Environment overrides use `VEDETTE_` and `__`** (`VEDETTE_LLM__MODEL`);
-   lists take JSON. Unknown keys in the YAML file are errors, so a typo stops
-   start-up. Held by `test_env_var_overrides_the_profile_list_with_json` and
-   `test_an_unknown_key_in_the_yaml_file_is_an_error`.
-8. Replaced by decision 40.
-9. **Ollama has no route to the internet.** It joins only the internal `llm`
-   network and publishes no port; the one-shot `ollama-pull` service fetches
-   models, and `OLLAMA_NO_CLOUD` stops calls to ollama.com. Held by
-   `test_ollama_has_no_route_to_the_internet`.
-10. Replaced by decision 64.
-11. **Secret scanning runs through Docker**: `.githooks/pre-commit` scans staged
-    changes with the pinned gitleaks image and CI scans the full history, so
-    nothing is installed on the host.
-12. **The queue is at-least-once.** A message counts towards depth until it is
-    acknowledged; restarts rely on the stored cursor and idempotent event ids.
-    Held by `test_depth_counts_messages_until_they_are_acknowledged`.
-13. Replaced by decision 93.
-14. **The events table is the hand-off from the collector.** The enricher reads
-    unprocessed events in time order from storage, so a large backfill never
-    sits in memory and the hand-off survives a restart. Held by
-    `test_unprocessed_events_come_back_oldest_first_up_to_the_limit`.
-15. **Alembic manages the schema** and migrates at start-up. Held by
-    `test_migrations_create_exactly_the_tables_the_models_describe`.
-16. **One transaction per stream event**, so the cursor is stored with each
-    event. Held by `test_kill_mid_stream_and_restart_leaves_no_gaps_and_no_duplicates`.
-17. **Timestamps are stored as naive UTC**, since SQLite has no time zone type,
-    and are aware everywhere in code. Held by
-    `test_timestamps_come_back_timezone_aware`.
-18. **Untrusted strings are truncated, not rejected**, so a long device name
-    cannot make an event disappear; entries missing a timestamp, domain or
-    status are skipped and counted. Held by
-    `test_overlong_untrusted_strings_are_truncated_not_dropped` and
-    `test_malformed_entries_in_a_page_are_skipped`.
-19. **The stream reconnects after 5 minutes of silence**, since NextDNS documents
-    no heartbeat. Held by
-    `test_a_silent_stream_is_reopened_after_five_minutes_by_default`.
-20. Replaced by decision 65.
-21. **External lookups are what enrichment needs, and each can be turned off.**
-    The spec asks that only the NextDNS API is called and also for a top-sites
-    list, feeds and RDAP. The list and feeds are bulk downloads matched
-    locally; RDAP reveals the root it asks about, so it is limited to allowed,
-    unranked, recent roots and has `enrich.rdap.enabled`. Held by
-    `test_with_rdap_disabled_nothing_is_looked_up`.
-22. **Threat feeds are Phishing Army and CERT Polska by default**: both download
-    without an account. Check a feed's terms before adding it. Held by
-    `test_enrichment_and_rule_defaults_match_the_documented_ones`.
-23. Replaced by decision 99, which keeps the parent-rank guess only until the
-    Public Suffix List is downloaded.
-24. **A feed limits the damage it can do.** An entry never taints its parent or
-    siblings, a match on a top-1,000 root is distrusted, and a failed or empty
-    download keeps the previous entries. Held by
-    `test_threat_feed_matches_listed_names_and_their_subdomains`,
-    `test_threat_intel_does_not_fire` and
-    `test_failed_or_empty_feed_refresh_keeps_the_previous_entries`.
-25. **Rule state is in memory and rebuilt from storage** at start-up, with no
-    state table to keep consistent. Held by
-    `test_processed_events_can_be_replayed_in_order_for_warm_up`.
-26. **An unexpected error in the rule worker stops the process**, because engine
-    state would no longer match storage; every other worker logs and retries
-    (`run_forever` in `src/vedette/retry.py`). Held by
-    `test_an_unexpected_error_in_the_rule_worker_ends_it`.
-27. Replaced by decision 56.
-28. Replaced by decision 61.
-29. **History can also come from a log export**; real-time alerts still need
-    the stream, and the file is never downloaded automatically. Held by
-    `tests/unit/test_cli_import.py` and `tests/unit/test_nextdns_export.py`.
-30. **Query type is part of the event id in raw mode only**, where one name's
-    A, AAAA and HTTPS lookups otherwise collide. Held by
-    `test_api_query_type_changes_the_id_only_in_raw_mode`.
-31. **The importer does not imitate NextDNS's undocumented removal of
-    repeats**, so it says every time that a file can hold more than the API
-    shows. Held by
-    `test_import_warns_that_a_file_holds_more_than_the_default_api_view`.
-32. **One verdict per finding, many findings per call**; a missing verdict
-    counts as an invalid answer for that finding only. Held by
-    `test_a_finding_the_model_skipped_gets_a_template_after_one_retry`.
-33. **Invalid twice means a template; unreachable means wait**, so a poison
-    finding cannot loop and an outage leaves no templates behind. Held by
-    `test_two_invalid_answers_fall_back_to_templates` and
-    `test_ollama_being_down_does_not_stop_findings_and_is_caught_up_later`.
-34. **Template fallbacks are never cached.** Held by
-    `test_template_fallbacks_are_not_cached`.
-35. **Model text is stored sanitised and defanged**, with only the dots inside
-    names bracketed. Held by `test_model_text_is_sanitised_before_it_is_returned`
-    and `tests/unit/test_properties.py`.
-36. **`vedette findings --min-severity` uses the effective priority.** Held by
-    `test_min_severity_uses_the_raised_priority`.
-37. **Every model call is recorded** for the health page and the evaluation.
-    Held by `test_model_calls_are_recorded_for_later_reporting`.
-38. **The dev container joins the internal `llm` network** so `pytest --live`
-    reaches the model. Held by `test_the_dev_container_can_reach_the_model`.
-39. **Every message goes through a durable outbox**, so alerts survive restarts,
-    every outcome is recorded, and a finding is never alerted twice. Held by
-    `test_pending_alerts_survive_a_restart` and
-    `test_a_fresh_critical_finding_is_queued_once`.
-40. **No channel means "kept, not sent"**, so choosing a channel later does not
-    flood you with old alerts. Held by
-    `test_without_a_channel_alerts_are_recorded_but_not_sent`.
-41. **Alerts are for fresh findings**, so a backfill or an import does not set
-    off a burst of old alerts; older ones go to the digest. Held by
-    `test_old_findings_go_to_the_digest_not_to_an_alert`.
-42. **A high or critical finding waits briefly for the model**, so the alert can
-    carry its explanation. Held by
-    `test_an_unexplained_high_finding_waits_briefly_for_the_model`.
-43. **The cooldown is for finding alerts only.** Health messages always report
-    a change, and two good checks in a row count as recovered. Held by
-    `test_a_problem_that_returns_after_a_recovery_is_reported_again` and
-    `test_a_single_good_check_in_a_bad_spell_is_not_a_recovery`.
-44. **Quiet hours hold messages, they do not drop them**; critical alerts and
-    digests are never held. Held by
-    `test_high_alerts_wait_for_quiet_hours_to_end_but_critical_ones_do_not`.
-45. **Notification secrets come only from the environment or Docker secrets**,
-    and a channel without its secret stops start-up. Held by
-    `test_notification_secrets_in_the_yaml_file_are_rejected` and
-    `test_discord_needs_a_real_webhook_url`.
-46. **Plain `http` for ntfy only on the local Docker network.** Held by
-    `test_ntfy_url_must_be_https_unless_the_server_is_local`.
-47. **`/healthz` is a minimal standard-library server** that answers only
-    `GET /healthz`. Held by `test_healthz_rejects_anything_else`.
-48. **Docker health means liveness**: `/healthz` stays 200 and says `degraded`
-    when a check fails, and the problem goes out by alert and digest. Held by
-    `test_healthz_reports_ok_or_degraded_with_every_check`.
-49. **An idle stream is not an error.** Held by
-    `test_the_source_reports_idleness_only_after_the_stream_opened`.
-50. **The digest is built from stored data only**, so `vedette digest` can
-    preview it. Held by `tests/integration/test_digest.py`.
-51. **Charts are drawn as SVG on the server**, so pages work without
-    JavaScript under the strict CSP; decision 73 adds the interactive charts
-    on top. Held by `tests/integration/test_web_charts.py`. (Departs from the
-    spec's vendored chart library.)
-52. **htmx 2.0.11 is vendored and locked down**: no `eval`, no script tags in
-    swapped content, this origin only, no history cache. Held by
-    `test_the_vendored_htmx_is_the_reviewed_file`.
-53. **One shared token and in-memory sessions**: the dashboard has one user,
-    and no session data reaches disk. Held by
-    `tests/integration/test_web_auth.py`.
-54. **The host name is checked, not just the address**, against DNS
-    rebinding. Held by `test_an_unexpected_host_name_is_refused`.
-55. **The dashboard listens on every interface inside the container**, and is
-    published on `127.0.0.1` only. Held by
-    `test_every_published_port_is_on_loopback`.
-56. **Mark benign on a domain rule allowlists the root for that profile**;
-    reopening removes the entry, and the rule worker reloads the allowlist
-    within 30 seconds. Held by
-    `test_marking_a_domain_finding_benign_allowlists_its_root`,
-    `test_reopening_undoes_the_allowlist_entry` and
-    `test_the_rule_worker_reloads_the_stored_allowlist`.
-57. **Web-facing dependencies are pinned exactly** (`fastapi`, `jinja2`,
-    `python-multipart`, `uvicorn`). Held by
-    `test_web_facing_dependencies_are_pinned_exactly`; decision 106 holds
-    their age.
-58. **Less on the wire and in the logs**: no API description pages, no
-    `Server` or `Date` header, no access log. Held by
-    `test_framework_api_pages_are_switched_off` and
-    `test_the_dashboard_serves_while_the_pipeline_runs`.
-59. **`/healthz` stays separate from the dashboard**, reachable without a login
-    and only on loopback. Held by `test_healthz_listens_on_loopback_only`.
-60. **The database pool serves every worker and the dashboard at once.** Held
-    by `test_the_pool_serves_every_worker_and_the_dashboard_at_once`.
-61. **The pre-filter raises one step and never creates a finding.**
-    Distinctive instruction words match anywhere in a label, common ones only
-    as whole words. Held by `tests/unit/test_prefilter.py` and
-    `test_a_distinctive_word_is_caught_anywhere_in_a_label`.
-62. **The retention purge removes processed events and old findings with what
-    hangs off them**, and keeps the first-seen index, the reference caches,
-    evaluation runs and allowlist entries. Held by
-    `test_the_purge_removes_only_what_is_past_retention` and
-    `test_an_allowlist_entry_outlives_the_finding_that_made_it`.
-63. **Owner-only files, by umask and by repair.** Held by
-    `test_the_database_is_made_owner_only`.
-64. **Ollama runs as uid 10002 with a read-only root filesystem**; only a
-    one-shot service with `CHOWN` and `DAC_READ_SEARCH` runs as root, to own
-    the model volume. Held by
-    `test_ollama_runs_unprivileged_with_a_read_only_root`.
-65. **`vedette backfill` adds history without moving the stream cursor**, and
-    never further back than the event retention. Held by
-    `test_backfill_leaves_the_stream_cursor_alone` and
-    `test_backfill_will_not_read_past_the_retention`.
-66. **The evaluation reuses the real enrichment and rules offline**, compares
-    defences on and off, and shows sampled names only as counts. Held by
-    `tests/integration/test_eval.py`.
-67. **The dashboard's look** is recorded in `docs/ux/decisions.md` and
-    `.impeccable/surfaces/src-vedette-web.md`.
-68. **Dark only, at the owner's request.**
-69. **Self-hosted fonts**, since the CSP allows no external ones. Held by
-    `test_the_vendored_fonts_are_the_reviewed_files`.
-70. **Server-sent events for the live feed**: one-way, reconnecting, and inside
-    `connect-src 'self'`. Held by `test_the_stream_sends_new_queries_and_counters`.
-71. **The live feed follows event time**, with an overlap window and the ids
-    already sent. Held by `test_a_second_poll_does_not_repeat_queries`.
-72. **Narrow findings tables fold**, by container query, so the decision
-    buttons stay in view (`docs/ux/adaptation-narrow-window.md`).
-73. **uPlot draws the interactive charts**: small, no dependencies, and no
-    `eval` or inline styles under the CSP. Held by
-    `test_the_vendored_uplot_is_the_reviewed_file`.
-74. **The server picks the bar size**, so zooming never sends raw events.
-    Held by `test_the_bar_size_follows_the_span`.
-75. **Live charts add queries in the browser and re-fetch the series** to
-    correct drift. This is browser code in `charts.js`, with no test.
-76. **The Overview chart spans the full width.**
-77. **Wide screens get more columns, not longer lines.**
-78. **Our static files are versioned by content** and revalidated on each
-    load. Held by `test_our_static_files_are_versioned_and_revalidated`.
-79. **The dashboard was evaluated against usability heuristics**; findings and
-    fixes are in `docs/ux/evaluation-dashboard.md`.
-80. **CUDA's kernel cache lives in the model volume**, because the read-only
-    root otherwise makes every model load recompile its GPU kernels. Held by
-    `test_the_gpu_kernel_cache_lives_in_the_model_volume`.
-81. **Calls to the model are sized to its context window.** Held by
-    `test_calls_are_sized_to_the_context_window`.
-82. **A missed first digest is made late** when the computer was off at the
-    digest time. Held by
-    `test_a_first_digest_missed_while_the_computer_was_off_comes_late`.
-83. **Silence is not judged while a profile catches up after start-up.** Held
-    by `test_silence_from_while_vedette_was_off_is_not_reported`.
-84. **One profile switch for the whole dashboard**, chosen by the owner and
-    recorded in `.impeccable/surfaces/src-vedette-web.md`.
-85. **The project is called Vedette.** It began as "NextDNS Sentinel"; the
-    owner renamed it before publishing, since the name belongs to NextDNS
-    Inc. NextDNS is still named where it describes the service. Held by
-    `test_the_old_project_name_is_only_in_the_rename_records`.
-86. **The default time zone is UTC**, so new users elsewhere do not get the
-    owner's. Held by `test_defaults_when_no_file_is_given`.
-87. **Design-tool briefs and agent plans stay local**: `PRODUCT.md`,
-    `DESIGN.md` and `docs/superpowers/` are git-ignored. Held by
-    `test_design_and_agent_working_files_stay_local`.
-88. **CI actions are pinned to a release's commit**, since a tag can move.
-    Held by `test_actions_are_pinned_to_a_commit`.
-89. **CI also runs weekly and builds the image**, so a new advisory or a broken
-    Dockerfile shows up without a push. Held by
-    `test_ci_runs_weekly_and_builds_the_image`.
-90. **Dependabot waits until a release is 14 days old**; security updates skip
-    the wait. Held by `test_dependabot_waits_two_weeks_for_every_ecosystem`.
-91. **Releases come from a version tag**, and only after every CI check passes
-    at that commit; the workflow refuses a tag that differs from the version
-    in `pyproject.toml` (`.github/workflows/release.yml`). Compose builds
-    locally unless `VEDETTE_IMAGE` names a release, which the settings ignore:
-    `test_the_compose_image_variable_is_not_a_setting`.
-92. **The public repository uses GitHub's own security checks**: private
-    vulnerability reporting, Dependabot alerts, secret scanning with push
-    protection, and CodeQL's default setup. These are repository settings,
-    not files.
-93. **Every image is pinned to a digest**; Dependabot cannot see the gitleaks
-    copies, which are bumped together by hand. Held by
-    `test_every_image_is_pinned_to_a_digest` and
-    `test_every_copy_of_the_gitleaks_image_is_the_same`.
-94. **A heartbeat for what no alert can report**: Vedette pings a dead man's
-    switch while its checks run and alerts get out. Held by
-    `test_the_pipeline_pings_the_heartbeat_once_checks_have_run` and
-    `test_the_heartbeat_is_withheld_while_alerts_cannot_get_out`.
-95. **The runtime image ships no pip and takes Debian's security fixes.** Held
-    by the CI steps "The runtime image has no pip" and the Trivy scan.
-96. **The dashboard's routes are modules** in `src/vedette/web/routes/`.
-97. **Device names go through the pre-filter**, checked only for words with no
-    business in a device name. Held by `test_everyday_device_names_are_left_alone`
-    and `test_a_device_name_with_instructions_is_found`.
-98. **An Allowlist page** lists stored and configured entries and removes
-    stored ones. Held by `tests/integration/test_web_allowlist.py`.
-99. **The Public Suffix List decides what is a platform customer name.** Held
-    by `tests/unit/test_public_suffix.py` and
-    `test_a_platform_suffix_is_a_private_rule_the_name_sits_under`.
-100. **Two rules for patterns over time**, `tunnel-slow` and `dga-burst`, both
-     starting at medium. Held by `tests/unit/test_rules_bursts.py`.
-101. **The evaluation measures false alerts on names the rules do not skip**,
-     and labels results that could not have come out otherwise. Held by
-     `test_ranks_off_shows_what_each_rule_does_on_its_own` and
-     `test_popular_hostnames_are_sampled_with_their_registered_roots`.
-102. **Prompt injection is measured on a held-out set**, with repeats,
-     intervals and mixed batches. Held by
-     `test_the_suite_repeats_the_held_out_set_and_reports_every_part` and
-     `test_a_crafted_finding_that_changes_its_neighbours_is_counted`.
-103. **The pre-filter reads the roots a burst finding lists.** Held by
-     `test_each_root_a_burst_lists_is_checked_as_a_domain_name`.
-104. **A device name reaches the model as a self-reported label that proves
-     nothing.** Held by
-     `test_the_model_sees_a_device_name_marked_as_self_reported` and
-     `test_the_system_prompt_says_a_device_name_proves_nothing`.
-105. **Packages import only the layers below them.** Held by the import-linter
-     contract in `pyproject.toml`, run in CI as `lint-imports`.
-106. **Corrections become checks.** `tools/conventions.py` checks commit
-     messages and pull requests, `tools/lock_age.py` holds releases added to
-     the lock to 14 days old, and `tests/unit/test_repository.py` holds the
-     repository's names and pins. Commit bodies are wrapped at 72 characters,
-     git's own convention, rather than written one line per paragraph; every
-     commit pushed to main is checked, squash merges included. Held by
-     `test_a_paragraph_written_on_one_long_line_is_refused` and
-     `test_every_commit_pushed_to_main_is_checked`.
-107. **`dga-like` judges the registered label**: the one left of the public
-     suffix, or a customer's name on a hosting platform. What stands in
-     front of it is left to the tunnel rules, so a `www.` neither hides a
-     generated domain nor makes a random subdomain of a word domain fire.
-     Held by `test_dga_like_judges_the_registered_label_behind_a_prefix` and
-     `test_what_stands_in_front_of_the_root_never_changes_the_label_judged`.
-108. **A label's randomness is weighed against real domain labels**, not
-     measured as entropy, which a short label cannot reach. A character
-     trigram model counted by `tools/label_model.py` from the registered
-     labels of Tranco list V354N gives the bits by which random characters
-     explain a label better than real labels do. The 20-bit threshold was
-     set on labels kept out of the counts and on random labels, before any
-     real DGA family was run. Held by
-     `test_the_packaged_model_names_the_list_it_was_built_from` and
-     `test_a_longer_random_label_gives_more_evidence_than_a_short_one`.
-109. **Customer names on hosting platforms are judged by the name rules**,
-     except under platforms that name each customer resource themselves
-     (`assigned_name_platforms` in `rules.yaml`: cloud storage, CDN and cloud
-     endpoints). `young-domain` still skips every platform name, which has no
-     registration date. Held by
-     `test_dga_like_fires_for_a_random_customer_name_on_a_platform`,
-     `test_dga_like_skips_platforms_that_name_their_customers_themselves` and
-     `test_new_customer_names_on_a_platform_count_towards_a_burst`.
-110. **The evaluation tests `dga-like` on real DGA families**, re-implemented
-     from published analyses, each checked against the sample names its
-     analysis lists, and never used to set a threshold. Held by
-     `test_each_family_reproduces_its_published_sample`.
-111. **Explanations are measured on a gold set**: 60 synthetic findings, six
-     per rule, each with the records around it seeded into a scratch
-     database, and patterns for the right cause, a fitting step and claims
-     it must not make. Every model explains it three times, against the
-     template. Held by `test_the_packaged_gold_set_covers_every_rule_six_times`
-     and `test_the_report_compares_the_model_s_explanations_with_the_template`.
-112. **The model gets the records around each finding** as a capped context
-     pack built at analysis time; names with instruction-like words are
-     withheld. The cache key leaves the pack out, so a recurring finding reuses
-     its verdict for `cache_ttl_hours`. Held by
-     `test_the_facts_hold_the_device_domain_neighbours_and_earlier_triage`,
-     `test_a_neighbour_that_reads_like_an_instruction_is_withheld` and
-     `test_each_finding_goes_with_its_pack_and_its_rules_notes`.
-113. **Each rule carries notes for the model** in `rules.yaml`, sent as
-     trusted text for the rules in a request only, with two worked examples
-     on reserved `.example` names. Held by
-     `test_every_packaged_rule_carries_notes_for_the_model` and
-     `test_a_request_gets_the_notes_of_its_own_rules_only`.
-114. **A plain `vedette eval` finishes in under ten minutes.** The fresh
-     held-out set goes to the defended analyst in full and every third of its
-     items to the undefended one; the first set's every eighth item goes to the
-     defended analyst only, the cross-finding test runs one item per category
-     with the defences on, and the gold set one run, with thinking off and four
-     calls in flight. `--full` runs both sets on and off, three gold runs and
-     four cross-finding items per category, still with the defences on only:
-     the undefended arm of that test only shows a naive analyst being steered,
-     which the injection test already shows. Held by
-     `test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest`.
-115. **An answer that takes a name's word for it is not used.** When the
-     model calls a finding harmless with a vouching word the finding's own
-     names use, the template stands in. The prompt says the same, but in the
-     injection test qwen3:8b still repeated such claims; the check in code
-     cannot be talked out of. Two of the 2,033 roots in the owner's history
-     contain such a word. Held by
-     `test_an_answer_repeating_a_name_s_own_vouching_word_is_caught` and
-     `test_an_answer_that_takes_a_name_s_word_for_it_is_replaced_by_the_template`.
-116. **Injection is measured on a fresh held-out set** once the first one has
-     shaped defences. The fresh set was written after every defence was
-     final, and no defence changes because of its results; a later fix needs
-     a set written after it. It also plants names in the context pack, which
-     lists registered roots, so a planted payload sits in a root. Held by
-     `test_the_fresh_set_covers_the_shaped_categories_and_the_context_carrier`
-     and `test_a_planted_lookup_reaches_only_its_own_finding_s_pack`.
-117. **Attacks are also measured inside the owner's traffic.** The detection
-     sets run each attack alone, on a device of its own with no learning
-     period. The evaluation also blends the same sessions into the stored
-     history, each just after one of a real device's lookups once the
-     learning period is over and at least an hour from any other attack on
-     that device, and replays the whole history once more. A finding on an
-     attack's own lookups detects it, and its delay is the time to detect;
-     the owner's own findings are compared with the plain replay. Only counts
-     and timings are kept. Held by
-     `test_attacks_in_the_history_are_found_and_timed` and
-     `test_attacks_go_to_real_devices_after_learning_and_apart`.
-118. **An answer weighs both sides after it gives the cause.** Beside the
-     cause and the step, the model says which way the records lean (harmless,
-     threat or unclear), lists up to two harmless and two malicious
-     explanations, up to three checks in order, and up to four fields it
-     relied on; the schema caps each list, which keeps answers short enough
-     for a plain `vedette eval` to stay under ten minutes.
-     The new fields come after the original ones: asked for the harmless
-     explanations first, qwen3:8b leaned harmless on all ten self-vouching
-     device names of the live test and took two of them as the cause. The
-     undefended arm of the evaluation keeps the shorter answer, so its rates
-     stay comparable. Held by
-     `test_the_cause_and_step_come_before_the_leaning_and_the_lists` and
-     `test_the_shorter_schema_keeps_the_fields_asked_for_before_the_lists`.
-119. **A domain the model was not given is taken out of its answer**, not
-     the answer thrown away: the rest is usually right, and the finding's
-     page says what was removed. A parent of a given name counts as given;
-     a name below one does not. Held by
-     `test_a_domain_the_model_was_not_given_is_taken_out_and_recorded` and
-     `test_names_in_the_data_and_their_parent_domains_are_not_flagged`.
-120. **A harmless leaning must cite a record.** Names and identifiers are what
-     an attacker chooses; the records (the domain's rank and age, how many
-     devices used it and since when, what was looked up around it, earlier
-     triage) are what can show activity is harmless. Without one the leaning
-     is stored as unclear. Held by
-     `test_a_harmless_leaning_that_cites_no_record_becomes_unclear`.
-121. **Confidence is shown as a band.** The model's number is not calibrated,
-     so the dashboard and the CLI show low (under 0.5), medium (under 0.8) or
-     high. The evaluation measures how often each band leans the right way on
-     the gold set, and the Evaluation page compares leanings with the owner's
-     triage once 20 findings the model leaned on are marked benign or
-     acknowledged. Held by `test_confidence_is_shown_as_a_band_not_a_number`
-     and `test_leanings_are_compared_with_decisions_in_each_band`.
-
 ## Verified facts the design relies on
 
 Checked against the official NextDNS API documentation on 2026-11-12:
@@ -922,7 +501,8 @@ Checked on 2026-11-12 for enrichment:
   replay was slowed by HTTP 429 `rateLimit` when two profiles reconnected at
   once; with a 1-minute window this raised a short "API failing" alert.
 - First run over the router profile's week (161,117 events): processed in about
-  90 seconds. Before decision 23, `dga-like` produced 287 findings, nearly all
+  90 seconds. Before customer names on platforms were told apart, `dga-like`
+  produced 287 findings, nearly all
   customer hostnames on cloud platforms, and 92 of 103 RDAP lookups were for
   such names. After it: 2 findings in total (one `young-domain`, one
   `volume-spike`) and 10 RDAP lookups.
@@ -971,8 +551,9 @@ no name from your history or the feeds appears in it.
 ## Open points raised with the owner
 
 - "Only the NextDNS API is called" conflicts with RDAP lookups, list downloads
-  and any notification channel. Enrichment follows decision 21; say if RDAP
-  should be off by default.
+  and any notification channel. The list and feeds are bulk downloads matched
+  locally, and RDAP is limited to allowed, unranked, recent roots and can be
+  turned off (`enrich.rdap.enabled`); say if RDAP should be off by default.
 - Rule thresholds are first guesses. They are to be judged by the evaluation
   suite, not tuned on the same week of data they were first run on.
 - The owner's install sends to Discord, where digests have been delivered;

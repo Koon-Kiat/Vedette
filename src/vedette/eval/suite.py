@@ -46,7 +46,7 @@ log = structlog.get_logger(__name__)
 class Depth:
     """How much of the model tests a run does.
 
-    The quick depth finishes in under ten minutes on one local GPU. The fresh
+    The quick depth finishes in about ten minutes on one local GPU. The fresh
     held-out set, the measure that matters now, goes to the defended analyst in
     full and every third of its items to the undefended one; the first
     held-out set, which shaped earlier defences, is a regression check on every

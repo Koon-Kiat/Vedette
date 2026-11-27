@@ -1137,7 +1137,7 @@ def _depth_note(summary: dict[str, Any]) -> list[str]:
     sizes = summary.get("dataset_sizes") or {}
     first = _every(sizes.get("injection_first_defended_every", 3))
     return [
-        "This was a quick run (under ten minutes): the fresh held-out set went to the defended "
+        "This was a quick run (about ten minutes): the fresh held-out set went to the defended "
         "analyst in full and every third of its items to the undefended one, the first "
         f"held-out set ran on {first} with the defences on only, the cross-finding "
         "test ran one item per category with the defences on only, and the gold set was "

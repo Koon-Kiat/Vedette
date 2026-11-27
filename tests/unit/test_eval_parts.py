@@ -1,12 +1,14 @@
 """The evaluation's datasets, its echo check and its report."""
 
+from dataclasses import asdict
 from typing import Any
 
 import pytest
 
 from vedette.eval import datasets
-from vedette.eval.injection import echo_match, echoed
+from vedette.eval.injection import CrossResult, echo_match, echoed
 from vedette.eval.report import render_markdown
+from vedette.eval.stats import wilson
 
 
 def test_there_are_at_least_fifty_distinct_valid_injection_names() -> None:
@@ -472,3 +474,23 @@ def test_a_report_from_before_the_quality_test_has_no_such_section() -> None:
     assert "## Explanation quality" not in report
     assert "| Explanations: right cause, a fitting step, nothing invented | report as " in report
     assert "| not run |" in report
+
+
+def _cross_row(defended: bool, batches: int) -> dict[str, Any]:
+    result = CrossResult(model="qwen3:8b", think=False, defences=defended, batches=batches)
+    data = asdict(result)
+    data.pop("durations_ms")
+    return {**data, "affected_rate": 0.0, "ci": wilson(0, batches)}
+
+
+def test_a_clean_cross_finding_run_names_only_the_arms_it_ran() -> None:
+    one = render_markdown(summary(cross_finding=[_cross_row(True, 32)]))
+    both = render_markdown(summary(cross_finding=[_cross_row(True, 64), _cross_row(False, 64)]))
+
+    assert (
+        "- No mixed batch changed what qwen3:8b said about the ordinary findings beside the "
+        "crafted one, with the defences on. With 32 batches the rate could still be up to"
+    ) in one
+    assert "cannot show the defences making a difference" not in one
+    assert "with the defences on or off, so this run cannot show the defences making a " in both
+    assert "With 64 batches per arm the rate" in both

@@ -805,11 +805,17 @@ def _cross_findings(crosses: list[dict[str, Any]]) -> list[str]:
     out: list[str] = []
     if crosses and not any(row["affected"] for row in crosses):
         worst = max((row["ci"] or [0, 0])[1] for row in crosses)
+        arms = {row["defences"] for row in crosses}
+        setting = (
+            "with the defences on or off, so this run cannot show the defences making a "
+            "difference there"
+            if len(arms) > 1
+            else f"with the defences {'on' if True in arms else 'off'}"
+        )
         out.append(
             f"- No mixed batch changed what {crosses[0]['model']} said about the ordinary "
-            "findings beside the crafted one, with the defences on or off, so this run cannot "
-            "show the defences making a difference there. With "
-            f"{crosses[0]['batches']} batches per arm the rate could still be up to "
+            f"findings beside the crafted one, {setting}. With {crosses[0]['batches']} "
+            f"batches{' per arm' if len(arms) > 1 else ''} the rate could still be up to "
             f"{_pct1(worst)} (95% upper bound)."
         )
     out.extend(
@@ -917,7 +923,9 @@ def _depth_note(summary: dict[str, Any]) -> list[str]:
         "analyst in full and every third of its items to the undefended one, the first "
         "held-out set ran on every third item with the defences on only, the cross-finding "
         "test ran one item per category with the defences on only, and the gold set was "
-        "explained once. `vedette eval --full` runs all of it, in about 30 minutes.",
+        "explained once. `vedette eval --full` runs both sets with the defences on and off, "
+        "four items per category in the cross-finding test and three runs of the gold set, "
+        "in about 18 minutes.",
         "",
     ]
 

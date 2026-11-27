@@ -787,7 +787,10 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      items to the undefended one; the first set's every third item goes to the
      defended analyst only, the cross-finding test runs one item per category
      with the defences on, and the gold set one run, with thinking off and four
-     calls in flight. `--full` runs everything. Held by
+     calls in flight. `--full` runs both sets on and off, three gold runs and
+     four cross-finding items per category, still with the defences on only:
+     the undefended arm of that test only shows a naive analyst being steered,
+     which the injection test already shows. Held by
      `test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest`.
 115. **An answer that takes a name's word for it is not used.** When the
      model calls a finding harmless with a vouching word the finding's own

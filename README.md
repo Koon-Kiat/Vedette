@@ -500,9 +500,9 @@ held-out set with the defences on, one mixed batch per category, and the gold
 set once. The fresh set was written after the defences were final and is the
 one to read; 32 of its items plant a crafted name in the records around an
 ordinary finding, where it reaches the model only through the context pack.
-`--full` runs every model test in full (both sets and both arms, both
-cross-finding arms with eight items per category, three runs of the gold set),
-in about 30 minutes.
+`--full` runs both sets with the defences on and off, four items per
+category in the cross-finding test and three runs of the gold set, in about
+18 minutes.
 `--think both` adds thinking on, `--no-cross` skips the mixed batches,
 `--no-injection` runs only the explanation test, `--no-llm` skips the model
 entirely, `--model` (repeatable) tests another downloaded model, and

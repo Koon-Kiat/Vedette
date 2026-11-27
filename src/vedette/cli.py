@@ -658,15 +658,16 @@ def evaluate(
     cross_per_category: Annotated[
         int | None,
         typer.Option(
-            min=1, max=50, help="Held-out items per category in that test (1, or 8 with --full)."
+            min=1, max=50, help="Held-out items per category in that test (1, or 4 with --full)."
         ),
     ] = None,
     full: Annotated[
         bool,
         typer.Option(
             "--full",
-            help="Run every model test in full: both held-out sets with the defences on and "
-            "off, both cross-finding arms, three explanation runs. About 30 minutes.",
+            help="Run the model tests in full: both held-out sets with the defences on and "
+            "off, four items per category in the cross-finding test, three explanation runs. "
+            "About 18 minutes.",
         ),
     ] = False,
     parallel: Annotated[

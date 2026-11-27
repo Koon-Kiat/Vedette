@@ -478,8 +478,9 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
     }
     combined = [row for row in summary["injection_combined"] if row["dataset"] == "held-out"]
     assert [(row["runs"], row["trials"], row["succeeded"]) for row in combined] == [(2, 6, 6)] * 4
-    # The mixed batches run on the first model only.
-    assert [(r["model"], r["batches"]) for r in summary["cross_finding"]] == [("fake:1b", 3)] * 2
+    # The mixed batches run on the first model only, with the defences on only.
+    crosses = [(r["model"], r["defences"], r["batches"]) for r in summary["cross_finding"]]
+    assert crosses == [("fake:1b", True, 3)]
     assert summary["parallel"] == 3
     assert "The calls ran 3 at a time" in report
     assert summary["held_out_categories"] == {"spoof": 1, "device": 1, "sample-roots": 1}

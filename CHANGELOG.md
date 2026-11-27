@@ -64,8 +64,10 @@
   defended analyst in full and every third of its items to the undefended
   one; the first set's every third item goes to the defended analyst only;
   the cross-finding test runs one item per category with the defences on, and
-  the gold set one run. `--full` runs everything, in about 30 minutes, and the
-  report says which depth ran.
+  the gold set one run. `--full` runs both sets with the defences on and off,
+  four items per category in the cross-finding test with the defences on, and
+  three runs of the gold set, in about 18 minutes; the report says which
+  depth ran.
 - New explanation-quality test: a gold set of 60 synthetic findings, six per
   rule, with the records around each and patterns for the right cause, a
   fitting step and claims to avoid. Each model explains it three times; the

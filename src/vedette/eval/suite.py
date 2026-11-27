@@ -52,8 +52,12 @@ class Depth:
     held-out set, which shaped earlier defences, is a regression check on every
     third item with the defences on. The cross-finding test runs one item per
     category with the defences on only, and the gold set is explained once.
-    The full depth runs everything, in about 30 minutes. A depth of ``0`` skips
-    that arm.
+    The full depth runs both sets with the defences on and off, three runs of
+    the gold set, and the cross-finding test on four items per category with
+    the defences on, in about 18 minutes. That test's undefended arm is
+    left out of both: it costs as much as the defended one and only shows a
+    naive analyst being steered, which the injection test already shows. A
+    depth of ``0`` skips that arm.
     """
 
     first_defended_every: int
@@ -76,8 +80,8 @@ FULL = Depth(
     first_defended_every=1,
     first_undefended_every=1,
     fresh_undefended_every=1,
-    cross_per_category=8,
-    cross_arms=(True, False),
+    cross_per_category=4,
+    cross_arms=(True,),
     quality_runs=3,
 )
 

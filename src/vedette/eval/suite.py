@@ -46,11 +46,11 @@ log = structlog.get_logger(__name__)
 class Depth:
     """How much of the model tests a run does.
 
-    The quick depth finishes in under ten minutes on one local GPU. The fresh
+    The quick depth finishes in about ten minutes on one local GPU. The fresh
     held-out set, the measure that matters now, goes to the defended analyst in
     full and every third of its items to the undefended one; the first
     held-out set, which shaped earlier defences, is a regression check on every
-    third item with the defences on. The cross-finding test runs one item per
+    eighth item with the defences on. The cross-finding test runs one item per
     category with the defences on only, and the gold set is explained once.
     The full depth runs both sets with the defences on and off, three runs of
     the gold set, and the cross-finding test on four items per category with
@@ -69,7 +69,7 @@ class Depth:
 
 
 QUICK = Depth(
-    first_defended_every=3,
+    first_defended_every=8,
     first_undefended_every=0,
     fresh_undefended_every=3,
     cross_per_category=1,
@@ -228,7 +228,8 @@ def _injection(result: InjectionResult) -> dict[str, Any]:
 def _quality(result: quality.QualityResult) -> dict[str, Any]:
     data = asdict(result)
     data.pop("durations_ms")
-    return {**data, "mean_ms": result.mean_ms}
+    right, scored = result.leaning_right
+    return {**data, "mean_ms": result.mean_ms, "leaning_right": right, "leaning_scored": scored}
 
 
 def _cross(result: CrossResult) -> dict[str, Any]:
@@ -633,6 +634,9 @@ async def run_suite(
             "cross_sample": len(sample),
             "injection_undefended": len(undefended),
             "injection_first_defended": len(first_defended),
+            "injection_first_defended_every": depth.first_defended_every,
+            "injection_first_undefended_every": depth.first_undefended_every,
+            "fresh_undefended_every": depth.fresh_undefended_every,
             "injection_fresh": len(fresh),
             "fresh_undefended": len(fresh_undefended),
         },

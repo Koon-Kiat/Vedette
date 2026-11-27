@@ -10,11 +10,30 @@ from pydantic import ValidationError
 
 from vedette.llm.cache import cache_key
 from vedette.llm.fallback import template_analysis
-from vedette.llm.guards import echoed_vouching, enforce_floor, sanitize_model_text, slug
-from vedette.llm.prompts import SYSTEM_PROMPT, build_payload
-from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
+from vedette.llm.guards import (
+    REMOVED_NAME,
+    cited_keys,
+    echoed_vouching,
+    enforce_floor,
+    grounded_leaning,
+    payload_keys,
+    remove_names,
+    sanitize_list,
+    sanitize_model_text,
+    slug,
+    unsupported_names,
+)
+from vedette.llm.prompts import (
+    MAX_CHECKS,
+    MAX_EVIDENCE_USED,
+    MAX_EXPLANATIONS,
+    SYSTEM_PROMPT,
+    build_payload,
+    payload_items,
+)
+from vedette.llm.schema import BASE_RESPONSE_SCHEMA, RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules.loader import load_rules
-from vedette.shared.models import Severity, Verdict
+from vedette.shared.models import Severity, Verdict, confidence_band
 from vedette.storage.store import StoredFinding
 
 WHEN = datetime(2026, 3, 15, 4, 30, tzinfo=UTC)
@@ -125,9 +144,142 @@ def test_extra_fields_from_the_model_are_rejected() -> None:
 def test_the_schema_sent_to_ollama_lists_every_field_and_the_priority_enum() -> None:
     item = RESPONSE_SCHEMA["properties"]["verdicts"]["items"]
 
-    assert set(item["required"]) == set(verdict())
+    assert item["required"] == list(item["properties"])
+    assert set(item["required"]) == set(Verdict.model_fields)
     assert item["properties"]["priority"]["enum"] == ["info", "low", "medium", "high", "critical"]
+    assert item["properties"]["assessment"]["enum"] == ["harmless", "threat", "unclear"]
     assert RESPONSE_SCHEMA["required"] == ["verdicts"]
+
+
+def test_the_cause_and_step_come_before_the_leaning_and_the_lists() -> None:
+    order = list(RESPONSE_SCHEMA["properties"]["verdicts"]["items"]["properties"])
+
+    assert order[:7] == list(BASE_RESPONSE_SCHEMA["properties"]["verdicts"]["items"]["required"])
+    assert order[7:] == [
+        "assessment",
+        "harmless_explanations",
+        "malicious_explanations",
+        "checks",
+        "evidence_used",
+    ]
+
+
+def test_the_schema_caps_each_list_where_the_code_does() -> None:
+    fields = RESPONSE_SCHEMA["properties"]["verdicts"]["items"]["properties"]
+
+    assert fields["harmless_explanations"]["maxItems"] == MAX_EXPLANATIONS
+    assert fields["malicious_explanations"]["maxItems"] == MAX_EXPLANATIONS
+    assert fields["checks"]["maxItems"] == MAX_CHECKS
+    assert fields["evidence_used"]["maxItems"] == MAX_EVIDENCE_USED
+
+
+def test_the_shorter_schema_keeps_the_fields_asked_for_before_the_lists() -> None:
+    item = BASE_RESPONSE_SCHEMA["properties"]["verdicts"]["items"]
+
+    assert set(item["required"]) == set(item["properties"]) == set(verdict())
+
+
+def test_an_answer_in_the_shorter_shape_still_parses_with_empty_lists() -> None:
+    (parsed,) = parse_verdicts(json.dumps({"verdicts": [verdict()]}))
+
+    assert parsed.assessment is None
+    assert parsed.harmless_explanations == parsed.checks == parsed.evidence_used == ()
+
+
+def test_an_unknown_leaning_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        parse_verdicts(json.dumps({"verdicts": [verdict(assessment="safe")]}))
+
+
+# --- names the model was not given ----------------------------------------------------
+
+GIVEN = json.dumps(
+    {
+        "target": "account-check.example",
+        "evidence": {"fqdn": "login.account-check.example"},
+        "context": {"lookups_within_5_minutes": ["webmail.example"]},
+    }
+)
+
+
+def test_a_domain_the_model_was_not_given_is_found() -> None:
+    texts = ["The domain belongs to Google (google.com).", "See reputation.example too."]
+
+    assert unsupported_names(texts, GIVEN) == ["google.com", "reputation.example"]
+
+
+def test_names_in_the_data_and_their_parent_domains_are_not_flagged() -> None:
+    texts = [
+        "It opened login.account-check.example right after webmail.example.",
+        "The root account-check.example is two days old; ACCOUNT-CHECK.EXAMPLE again.",
+    ]
+
+    assert unsupported_names(texts, GIVEN) == []
+
+
+def test_a_name_below_a_given_one_is_flagged() -> None:
+    assert unsupported_names(["Try www.webmail.example"], GIVEN) == ["www.webmail.example"]
+
+
+def test_defanged_names_are_found_and_file_names_are_not_domains() -> None:
+    texts = ["It ran svchost.exe and wrote config.json, then reached evil[.]example."]
+
+    assert unsupported_names(texts, GIVEN) == ["evil.example"]
+
+
+def test_each_invented_name_is_reported_once() -> None:
+    assert unsupported_names(["x.example and x.example", "X.example"], GIVEN) == ["x.example"]
+
+
+def test_removed_names_are_replaced_and_given_ones_kept() -> None:
+    text = "Unlike google.com, webmail.example is expected."
+
+    assert (
+        remove_names(text, ["google.com"]) == f"Unlike {REMOVED_NAME}, webmail.example is expected."
+    )
+    assert remove_names(text, []) == text
+
+
+def test_the_replacement_survives_sanitising() -> None:
+    cleaned = sanitize_model_text(
+        remove_names("Owned by evil.example.", ["evil.example"]), limit=400
+    )
+
+    assert cleaned == f"Owned by {REMOVED_NAME}."
+
+
+# --- cited evidence --------------------------------------------------------------------
+
+
+def test_only_fields_the_finding_has_are_kept_as_cited() -> None:
+    allowed = payload_keys(json.loads(GIVEN))
+    cited = ["fqdn", "context.lookups_within_5_minutes", "made_up", "fqdn", "domain_age_days"]
+
+    assert cited_keys(cited, allowed, limit=6) == ("fqdn", "lookups_within_5_minutes")
+    assert cited_keys(["fqdn", "target", "evidence"], allowed, limit=2) == ("fqdn", "target")
+
+
+def test_payload_keys_reach_into_lists_and_nested_objects() -> None:
+    item = {"a": {"b": [{"c": 1}]}, "d": []}
+
+    assert payload_keys(item) == frozenset({"a", "b", "c", "d"})
+
+
+def test_model_lists_are_sanitised_deduplicated_and_capped() -> None:
+    items = ["**One**", "", "One", "Two <b>bold</b>", "Three", "Four"]
+
+    assert sanitize_list(items, items_limit=3, limit=40) == ("One", "Two bold", "Three")
+
+
+# --- confidence bands ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("confidence", "band"),
+    [(0.0, "low"), (0.49, "low"), (0.5, "medium"), (0.79, "medium"), (0.8, "high"), (1.0, "high")],
+)
+def test_a_stated_confidence_falls_in_one_band(confidence: float, band: str) -> None:
+    assert confidence_band(confidence) == band
 
 
 # --- model text is sanitised --------------------------------------------------------
@@ -302,6 +454,23 @@ def test_every_rule_has_a_template_at_its_floor(spec: Any) -> None:
     assert "thing.example" not in analysis.summary, "names are defanged in generated text"
 
 
+@pytest.mark.parametrize("spec", load_rules(), ids=lambda spec: spec.id)
+def test_a_template_lists_the_rule_s_look_alikes_and_checks_but_no_leaning(spec: Any) -> None:
+    analysis = template_analysis(stored(rule=spec.id, severity=spec.severity.value), spec)
+
+    assert spec.analyst_notes is not None
+    assert analysis.harmless == tuple(spec.analyst_notes.look_alikes[:MAX_EXPLANATIONS])
+    assert analysis.checks == tuple(spec.analyst_notes.checks[:MAX_CHECKS])
+    assert analysis.assessment is None
+    assert analysis.malicious == analysis.evidence_used == analysis.removed_names == ()
+
+
+def test_the_payload_is_its_items_as_one_object() -> None:
+    found = [stored(), stored(rule="dga-like")]
+
+    assert build_payload(found, SPECS) == json.dumps({"findings": payload_items(found, SPECS)})
+
+
 # --- an answer that takes a name's word for it -------------------------------------------
 
 
@@ -339,3 +508,24 @@ def test_an_answer_repeating_a_name_s_own_vouching_word_is_caught(
 
 def test_the_target_counts_as_a_name_too() -> None:
     assert echoed_vouching(["It is trusted."], "trusted-updates.example", {}) == ["trusted"]
+
+
+# --- a harmless leaning rests on records ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("assessment", "cited", "kept"),
+    [
+        ("harmless", ("device_id", "device_name_self_reported", "client_ip"), "unclear"),
+        ("harmless", (), "unclear"),
+        ("harmless", ("fqdn", "devices_that_looked_it_up"), "harmless"),
+        ("harmless", ("lookups_within_5_minutes",), "harmless"),
+        ("threat", ("device_name_self_reported",), "threat"),
+        ("unclear", (), "unclear"),
+        (None, (), None),
+    ],
+)
+def test_a_harmless_leaning_that_cites_no_record_becomes_unclear(
+    assessment: Any, cited: tuple[str, ...], kept: str | None
+) -> None:
+    assert grounded_leaning(assessment, cited) == kept

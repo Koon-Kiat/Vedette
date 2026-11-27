@@ -180,6 +180,10 @@ finding_analysis = Table(
     Column("source", String(16), nullable=False),
     Column("model", String(128)),
     Column("created_at", UtcDateTime, nullable=False),
+    # harmless, threat or unclear; NULL for templates and analyses stored before it.
+    Column("assessment", String(16)),
+    # The answer's lists: harmless, malicious, checks, evidence_used, removed_names.
+    Column("details", JSON),
 )
 
 llm_cache = Table(

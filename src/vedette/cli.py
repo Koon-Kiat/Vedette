@@ -22,7 +22,7 @@ from vedette.notify.render import render_test
 from vedette.pipeline.runner import run_until_signalled
 from vedette.rules.loader import load_rules
 from vedette.shared.defang import clean_text, defang, defang_text
-from vedette.shared.models import Analysis, OutgoingMessage, Severity
+from vedette.shared.models import Analysis, OutgoingMessage, Severity, confidence_band
 from vedette.sources.base import DnsEvent, SourceError
 from vedette.sources.nextdns import NextDnsSource
 from vedette.sources.nextdns_export import ExportFormatError, read_export
@@ -195,13 +195,20 @@ def _explanation(item: StoredFinding, analysis: Analysis | None) -> list[str]:
         f"    likely cause: {text(analysis.likely_cause)}",
         f"    recommended action: {text(analysis.recommended_action)}",
     ]
+    if analysis.assessment is not None:
+        lines.append(f"    leaning: {analysis.assessment}")
+    lines += [f"    could be harmless: {text(item)}" for item in analysis.harmless]
+    lines += [f"    could be a threat: {text(item)}" for item in analysis.malicious]
+    lines += [
+        f"    check {number}: {text(item)}" for number, item in enumerate(analysis.checks, start=1)
+    ]
     if analysis.source == "template" or analysis.model is None:
         lines.append("    explained by: standard explanation (the local model was not used)")
     else:
         origin = "reused from an earlier identical finding" if analysis.source == "cache" else ""
         lines.append(
             f"    explained by: {clean_text(analysis.model, limit=64)}, "
-            f"confidence {analysis.confidence:.2f}" + (f", {origin}" if origin else "")
+            f"confidence {confidence_band(analysis.confidence)}" + (f", {origin}" if origin else "")
         )
     return lines
 

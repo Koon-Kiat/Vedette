@@ -2,6 +2,7 @@
 
 import json
 from collections import Counter
+from typing import Any
 
 import pytest
 
@@ -31,7 +32,7 @@ def gold(text: str = ITEM) -> list[quality.GoldItem]:
     return quality.load_gold(SPECS, text)
 
 
-def answer(summary: str, cause: str, action: str) -> Analysis:
+def answer(summary: str, cause: str, action: str, **extra: Any) -> Analysis:
     return Analysis(
         finding_id=1,
         summary=summary,
@@ -39,9 +40,10 @@ def answer(summary: str, cause: str, action: str) -> Analysis:
         recommended_action=action,
         priority=Severity.LOW,
         group_key="g",
-        confidence=0.5,
-        source="llm",
+        confidence=extra.pop("confidence", 0.5),
+        source=extra.pop("source", "llm"),
         model="m",
+        **extra,
     )
 
 
@@ -169,3 +171,79 @@ def test_scores_are_counted_per_rule_and_kind_and_every_miss_is_kept() -> None:
     assert result.by_kind == {"benign": [2, 1]}
     assert [case["missing"] for case in result.cases] == ["cause, action"]
     assert result.cases[0]["cause"] == "Malware."
+
+
+# --- the explanation's lists, its leaning and the name guard ------------------------------
+
+SUSPICIOUS = ITEM.replace("kind: benign", "kind: suspicious").replace("id: t-1", "id: t-2")
+EITHER = ITEM.replace("kind: benign", "kind: uncertain").replace("id: t-1", "id: t-3")
+
+
+def test_an_invented_fact_in_a_list_or_a_check_counts() -> None:
+    (item,) = gold()
+    analysis = answer(
+        "A spike.",
+        "An update.",
+        "No action.",
+        harmless=("Run by Microsoft, owned by Contoso",),
+        checks=("Look it up on VirusTotal: listed on VirusTotal",),
+    )
+
+    result = quality.score(item, analysis, known='{"nearby": ["swcdn.apple.com"]}')
+
+    assert {fact.kind for fact in result.invented} == {"owner", "source"}
+
+
+def test_leanings_are_counted_per_kind_and_scored_per_band() -> None:
+    items = [*gold(), *gold(SUSPICIOUS), *gold(EITHER)]
+    result = quality.QualityResult(source="m")
+    ok = quality.Score(True, True, ())
+
+    result.add(items[0], answer("s", "c", "a", assessment="harmless", confidence=0.9), ok)
+    result.add(items[0], answer("s", "c", "a", assessment="unclear", confidence=0.6), ok)
+    result.add(items[1], answer("s", "c", "a", assessment="threat", confidence=0.6), ok)
+    result.add(items[1], answer("s", "c", "a", assessment="harmless", confidence=0.3), ok)
+    result.add(items[2], answer("s", "c", "a", assessment="threat", confidence=0.9), ok)
+    result.add(items[0], answer("s", "c", "a", source="template", confidence=0.0), ok)
+
+    assert result.leanings == {
+        "benign": {"harmless": 1, "unclear": 1},
+        "suspicious": {"threat": 1, "harmless": 1},
+        "uncertain": {"threat": 1},
+    }
+    assert result.by_band == {"high": [1, 1], "medium": [2, 1], "low": [1, 0]}
+    assert result.leaning_right == (2, 4)
+
+
+def test_answers_the_name_guard_changed_are_counted_and_listed() -> None:
+    (item,) = gold()
+    result = quality.QualityResult(source="m")
+    changed = answer("A spike.", "An update.", "No action.", removed_names=("x[.]example",))
+
+    result.add(item, changed, quality.Score(True, True, ()))
+
+    assert (result.names_removed, result.correct) == (1, 1)
+    assert result.by_rule["volume-spike"].names_removed == 1
+    assert result.removals == [{"id": "t-1", "rule": "volume-spike", "names": "x[.]example"}]
+
+
+def test_leanings_bands_and_removals_add_up_over_runs() -> None:
+    (item,) = gold()
+    first, second = quality.QualityResult(source="m"), quality.QualityResult(source="m")
+    ok = quality.Score(True, True, ())
+    first.add(item, answer("s", "c", "a", assessment="harmless", confidence=0.9), ok)
+    second.add(
+        item,
+        answer("s", "c", "a", assessment="threat", confidence=0.9, removed_names=("y[.]example",)),
+        ok,
+    )
+
+    first.merge(second)
+
+    assert first.leanings == {"benign": {"harmless": 1, "threat": 1}}
+    assert first.by_band == {"high": [2, 1]}
+    assert first.names_removed == 1
+    assert first.by_rule["volume-spike"].names_removed == 1
+    assert first.removals == [
+        {"id": "t-1", "rule": "volume-spike", "names": "y[.]example", "run": "2"}
+    ]

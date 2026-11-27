@@ -2,10 +2,13 @@
 
 A finding always gets a usable explanation: if the model answers with
 something invalid twice, this text (built only from the trusted rule
-definition and the defanged target) is stored instead.
+definition and the defanged target) is stored instead. The rule's analyst
+notes, trusted text from the rules file, fill in the harmless look-alikes and
+the checks.
 """
 
 from vedette.llm.guards import slug
+from vedette.llm.prompts import MAX_CHECKS, MAX_EXPLANATIONS
 from vedette.rules.model import RuleSpec
 from vedette.shared.defang import clean_text, defang
 from vedette.shared.models import Analysis
@@ -58,6 +61,9 @@ def template_analysis(finding: StoredFinding, spec: RuleSpec | None) -> Analysis
     description = clean_text(spec.description if spec is not None else "", limit=260)
     target = defang(clean_text(finding.target, limit=100))
     summary = f"{description} Concerns: {target}.".strip()[:400]
+    notes = spec.analyst_notes if spec is not None else None
+    look_alikes = notes.look_alikes if notes is not None else []
+    checks = notes.checks if notes is not None else []
     return Analysis(
         finding_id=finding.id,
         summary=summary,
@@ -68,4 +74,6 @@ def template_analysis(finding: StoredFinding, spec: RuleSpec | None) -> Analysis
         confidence=0.0,
         source="template",
         model=None,
+        harmless=tuple(clean_text(text, limit=300) for text in look_alikes[:MAX_EXPLANATIONS]),
+        checks=tuple(clean_text(text, limit=300) for text in checks[:MAX_CHECKS]),
     )

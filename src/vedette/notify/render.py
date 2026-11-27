@@ -119,6 +119,10 @@ def render_alert(
             f"Likely cause: {prose(analysis.likely_cause, limit=300)}",
             f"Do: {prose(analysis.recommended_action, limit=300)}",
         ]
+        lines += [
+            f"Check {number}: {prose(text, limit=300)}"
+            for number, text in enumerate(analysis.checks, start=1)
+        ]
         if analysis.source == "template":
             lines.append("(standard explanation; the local model was not used)")
     else:

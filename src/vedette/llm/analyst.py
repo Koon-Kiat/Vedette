@@ -12,6 +12,7 @@ it, and all text is sanitised. The analyst never decides whether a finding
 exists; rules did that before it ran.
 """
 
+import json
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
@@ -24,11 +25,31 @@ from pydantic import ValidationError
 from vedette.llm.cache import cache_key
 from vedette.llm.context import ContextSource
 from vedette.llm.fallback import template_analysis
-from vedette.llm.guards import echoed_vouching, enforce_floor, sanitize_model_text, slug
+from vedette.llm.guards import (
+    cited_keys,
+    echoed_vouching,
+    enforce_floor,
+    grounded_leaning,
+    payload_keys,
+    remove_names,
+    sanitize_list,
+    sanitize_model_text,
+    slug,
+    unsupported_names,
+)
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
-from vedette.llm.prompts import build_payload, system_prompt
+from vedette.llm.prompts import (
+    MAX_CHECKS,
+    MAX_EVIDENCE_USED,
+    MAX_EXPLANATIONS,
+    build_payload,
+    payload_items,
+    serialise,
+    system_prompt,
+)
 from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
 from vedette.rules.model import RuleSpec
+from vedette.shared.defang import defang
 from vedette.shared.models import Analysis, Verdict
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.store import StoredFinding
@@ -38,16 +59,49 @@ log = structlog.get_logger(__name__)
 MAX_ATTEMPTS = 2  # the first try plus one retry
 
 # Sizing a call to the model's context window. Measured on qwen3:8b: the JSON
-# payload ran about 3 characters per token and each answer about 130 tokens.
+# payload ran about 3 characters per token, and each answer about 140 tokens
+# before the leaning, the lists and the checks were added and about 200 after.
 # The allowances below are looser (names that tokenise badly, longer answers),
 # and a tenth of the window stays free, so a call is never cut short.
 CHARS_PER_TOKEN = 2.5
-ANSWER_TOKENS = 200
+ANSWER_TOKENS = 300
 CONTEXT_USE = 0.9
+#: Longest item kept in an answer's lists.
+MAX_ITEM = 160
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _texts(verdict: Verdict) -> tuple[str, ...]:
+    """Every piece of text in a verdict that the owner reads."""
+    return (
+        verdict.summary,
+        verdict.likely_cause,
+        verdict.recommended_action,
+        *verdict.harmless_explanations,
+        *verdict.malicious_explanations,
+        *verdict.checks,
+    )
+
+
+def _without_names(verdict: Verdict, names: Sequence[str]) -> Verdict:
+    """The verdict with each of ``names`` taken out of its text."""
+    return verdict.model_copy(
+        update={
+            "summary": remove_names(verdict.summary, names),
+            "likely_cause": remove_names(verdict.likely_cause, names),
+            "recommended_action": remove_names(verdict.recommended_action, names),
+            "harmless_explanations": tuple(
+                remove_names(text, names) for text in verdict.harmless_explanations
+            ),
+            "malicious_explanations": tuple(
+                remove_names(text, names) for text in verdict.malicious_explanations
+            ),
+            "checks": tuple(remove_names(text, names) for text in verdict.checks),
+        }
+    )
 
 
 class Analyst:
@@ -117,21 +171,42 @@ class Analyst:
             yield batch
 
     def _finish(
-        self, finding: StoredFinding, verdict: Verdict, source: Literal["llm", "cache"]
+        self,
+        finding: StoredFinding,
+        verdict: Verdict,
+        source: Literal["llm", "cache"],
+        given: Mapping[str, Any] | None = None,
+        removed: tuple[str, ...] = (),
     ) -> Analysis | None:
         """Apply the guards to a verdict; ``None`` if nothing usable is left.
 
         An answer that repeats a vouching word the finding's own names use
         (benign, false positive, verified) is not used: the name has steered it.
+
+        ``given`` is the finding as the model was given it. Any domain name the
+        answer writes that is not in it is taken out of the text and recorded,
+        and only evidence fields the finding has are kept as cited. A cached
+        verdict went through both when it was stored, so it comes without
+        ``given`` and with the names taken out then in ``removed``. A harmless
+        leaning that cites no record becomes unclear.
         """
-        echoed = echoed_vouching(
-            (verdict.summary, verdict.likely_cause, verdict.recommended_action),
-            finding.target,
-            finding.evidence,
-        )
+        echoed = echoed_vouching(_texts(verdict), finding.target, finding.evidence)
         if echoed:
             log.warning("analysis_echoed_name", finding_id=finding.id, words=echoed)
             return None
+        cited = verdict.evidence_used[:MAX_EVIDENCE_USED]
+        if given is not None:
+            names = unsupported_names(_texts(verdict), json.dumps(given, ensure_ascii=True))
+            if names:
+                log.warning(
+                    "analysis_named_unknown_domains", finding_id=finding.id, names=len(names)
+                )
+                verdict = _without_names(verdict, names)
+            removed = tuple(defang(name) for name in names)
+            cited = cited_keys(verdict.evidence_used, payload_keys(given), limit=MAX_EVIDENCE_USED)
+        assessment = grounded_leaning(verdict.assessment, cited)
+        if assessment != verdict.assessment:
+            log.info("analysis_leaning_ungrounded", finding_id=finding.id)
         try:
             return Analysis(
                 finding_id=finding.id,
@@ -143,19 +218,30 @@ class Analyst:
                 confidence=verdict.confidence,
                 source=source,
                 model=self._client.model,
+                assessment=assessment,
+                harmless=sanitize_list(
+                    verdict.harmless_explanations, items_limit=MAX_EXPLANATIONS, limit=MAX_ITEM
+                ),
+                malicious=sanitize_list(
+                    verdict.malicious_explanations, items_limit=MAX_EXPLANATIONS, limit=MAX_ITEM
+                ),
+                checks=sanitize_list(verdict.checks, items_limit=MAX_CHECKS, limit=MAX_ITEM),
+                evidence_used=cited,
+                removed_names=removed,
             )
         except ValidationError:
             return None
 
     async def _ask(
-        self, batch: Sequence[StoredFinding], contexts: Mapping[int, dict[str, Any]]
+        self, batch: Sequence[StoredFinding], given: Mapping[int, dict[str, Any]]
     ) -> dict[int, Verdict]:
         """Ask the model about a batch; return the valid verdicts it gave.
 
-        Retries once when the answer is invalid or incomplete.
+        ``given`` holds each finding as the model is given it. Retries once
+        when the answer is invalid or incomplete.
         """
         wanted = {finding.id for finding in batch}
-        payload = build_payload(batch, self._specs, contexts)
+        payload = serialise([given[finding.id] for finding in batch])
         system = system_prompt(self._specs, (finding.rule_id for finding in batch))
         got: dict[int, Verdict] = {}
         for _ in range(MAX_ATTEMPTS):
@@ -208,12 +294,15 @@ class Analyst:
         results: dict[int, Analysis] = {}
         pending: list[StoredFinding] = []
         for finding in findings:
-            verdict = cached.get(keys[finding.id])
+            hit = cached.get(keys[finding.id])
             analysis = (
                 self._finish(
-                    finding, verdict.model_copy(update={"finding_id": finding.id}), "cache"
+                    finding,
+                    hit.verdict.model_copy(update={"finding_id": finding.id}),
+                    "cache",
+                    removed=hit.removed_names,
                 )
-                if verdict is not None
+                if hit is not None
                 else None
             )
             if analysis is not None:
@@ -223,10 +312,17 @@ class Analyst:
 
         contexts = await self._context.packs(pending) if self._context and pending else {}
         for batch in self._batches(pending, contexts):
-            verdicts = await self._ask(batch, contexts)
+            given = {
+                item["finding_id"]: item for item in payload_items(batch, self._specs, contexts)
+            }
+            verdicts = await self._ask(batch, given)
             for finding in batch:
                 verdict = verdicts.get(finding.id)
-                analysis = self._finish(finding, verdict, "llm") if verdict is not None else None
+                analysis = (
+                    self._finish(finding, verdict, "llm", given[finding.id])
+                    if verdict is not None
+                    else None
+                )
                 if analysis is None:
                     results[finding.id] = template_analysis(
                         finding, self._specs.get(finding.rule_id)

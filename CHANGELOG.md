@@ -4,6 +4,39 @@
 
 ### Explanations
 
+- An explanation now says which way the records lean (harmless, threat or
+  unclear), gives up to two harmless and two malicious explanations that
+  fit, up to three checks that tell them apart in order, and up to four
+  evidence and context fields it relied on. The finding page, the digest, alerts and
+  `vedette findings` show them. The standard explanation lists the rule's own
+  harmless look-alikes and checks from `rules.yaml`. The prompt version is
+  now 4, so cached explanations are not reused. Migration 0009 adds two
+  columns; explanations stored before it still display.
+- Any domain the model names that it was not given for that finding is taken
+  out of the text, and the finding's page says which. Only fields the finding
+  has count as relied on, and a harmless leaning that relies on no record
+  (only a name or an address) is shown as unclear.
+- The model's confidence is shown as low, medium or high instead of a number
+  to two decimals: the number is not calibrated. The Evaluation page compares
+  the model's leanings with your triage decisions, per band, once 20 findings
+  it leaned on are marked benign or acknowledged.
+- On the gold set, qwen3:8b gets the cause, a fitting step and no invented
+  fact right in 34 to 41 of 60 answers over six runs on this branch (37.8 on
+  average), against 36 to 40 before (38.3): the added fields cost nothing
+  there. No answer invented a fact; in two of the six runs the name guard took
+  a domain out of one answer. On the harmless look-alikes and real threats,
+  35% to 44% of the leanings stated with medium confidence were right and 65%
+  to 74% of those stated with high confidence, so the band carries some
+  information. The model almost never states a confidence below 0.5.
+- In the injection test no crafted item drew a harmless leaning, and no
+  answer named a domain it was not given. Read by eye, none of the 28 cases
+  the word patterns count on the fresh set, or the 12 on the first set, takes
+  a name's claim as fact: all are conditional steps ("No action is needed if
+  this is a new device or a script checking links"), as before.
+- Each answer is about 60% longer, so each model call takes about that much
+  longer too. A plain `vedette eval` takes about ten minutes (600 seconds)
+  instead of eight; its quick run now sends every eighth item of the first
+  held-out set to the defended analyst instead of every third.
 - The local model now gets the records around each finding: when the device
   was first seen and its usual queries an hour, the domain's top-sites band,
   age, feeds and spread across your devices, the names the device looked up

@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from vedette.llm import analyst as analyst_module
 from vedette.llm.analyst import Analyst
+from vedette.llm.guards import REMOVED_NAME
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
 from vedette.llm.prompts import build_payload, system_prompt
 from vedette.rules.loader import load_rules
@@ -626,3 +627,142 @@ async def test_an_answer_that_takes_a_name_s_word_for_it_is_replaced_by_the_temp
 
     assert result.source == "template"
     assert "false positive" not in result.likely_cause
+
+
+# --- both sides, the checks, the leaning and the names the answer uses ---------------------
+
+
+async def test_the_leaning_lists_and_cited_fields_are_kept_capped_and_checked(
+    store: Store, analysis_store: AnalysisStore, analyst: Analyst, ollama: FakeOllama
+) -> None:
+    (finding,) = await seed(store, analysis_store, 1)
+    ollama.say(
+        verdict(
+            finding.id,
+            assessment="threat",
+            harmless_explanations=["A new shop", "A new shop", "<b>Ads</b>", "", "Fourth", "Fifth"],
+            malicious_explanations=["Phishing page"],
+            checks=["Ask who opened it.", "Scan the device.", "Block it.", "A fourth step."],
+            evidence_used=["domain_age_days", "evidence.fqdn", "popularity_rank", "made_up"],
+        )
+    )
+
+    (result,) = await analyst.analyse([finding])
+    await analysis_store.save_analyses([result], now=T0)
+
+    assert result.assessment == "threat"
+    assert result.harmless == ("A new shop", "Ads")
+    assert result.malicious == ("Phishing page",)
+    assert result.checks == ("Ask who opened it.", "Scan the device.", "Block it.")
+    assert result.evidence_used == ("domain_age_days", "fqdn"), "only fields the finding has"
+    assert result.removed_names == ()
+    assert (await analysis_store.analyses_for([finding.id]))[finding.id] == result
+
+
+async def test_a_domain_the_model_was_not_given_is_taken_out_and_recorded(
+    store: Store, analysis_store: AnalysisStore, analyst: Analyst, ollama: FakeOllama
+) -> None:
+    (finding,) = await seed(store, analysis_store, 1)
+    ollama.say(
+        verdict(
+            finding.id,
+            likely_cause="Run by Contoso (contoso.example), like login.site0.example.",
+            checks=["Compare it with paypal.com."],
+        )
+    )
+
+    (result,) = await analyst.analyse([finding])
+
+    assert result.source == "llm", "the rest of the answer is kept"
+    assert result.likely_cause == (
+        f"Run by Contoso ({REMOVED_NAME}), like login[.]site0[.]example."
+    )
+    assert result.checks == (f"Compare it with {REMOVED_NAME}.",)
+    assert result.removed_names == ("contoso[.]example", "paypal[.]com")
+
+
+async def test_a_name_from_the_finding_s_context_is_not_taken_out(
+    store: Store,
+    analysis_store: AnalysisStore,
+    client: OllamaClient,
+    clock: Clock,
+    ollama: FakeOllama,
+) -> None:
+    (finding,) = await seed(store, analysis_store, 1, rule="dga-like", severity="medium")
+    analyst = Analyst(
+        client,
+        analysis_store,
+        load_rules(),
+        max_batch=20,
+        cache_ttl=timedelta(0),
+        context=Packs(),
+        clock=clock,
+    )
+    ollama.say(
+        verdict(
+            finding.id,
+            priority="medium",
+            likely_cause="Security software: vendor.example was looked up just before.",
+            evidence_used=["lookups_within_5_minutes"],
+        )
+    )
+
+    (result,) = await analyst.analyse([finding])
+
+    assert "vendor[.]example" in result.likely_cause
+    assert result.removed_names == ()
+    assert result.evidence_used == ("lookups_within_5_minutes",)
+
+
+async def test_a_cached_answer_keeps_its_lists_and_the_names_taken_out(
+    store: Store, analysis_store: AnalysisStore, analyst: Analyst, ollama: FakeOllama
+) -> None:
+    (finding,) = await seed(store, analysis_store, 1)
+    ollama.say(
+        verdict(
+            finding.id,
+            summary="Much like other.example.",
+            assessment="harmless",
+            harmless_explanations=["A new shop"],
+            checks=["Ask who opened it."],
+            evidence_used=["domain_age_days"],
+        )
+    )
+    (fresh,) = await analyst.analyse([finding])
+
+    (again,) = await analyst.analyse([finding])
+
+    assert len(ollama.requests) == 1
+    assert again.source == "cache"
+    assert again.model_copy(update={"source": "llm"}) == fresh
+    assert again.removed_names == ("other[.]example",)
+
+
+async def test_a_vouching_word_from_the_name_in_any_list_replaces_the_answer(
+    store: Store, analysis_store: AnalysisStore, analyst: Analyst, ollama: FakeOllama
+) -> None:
+    (finding,) = await seed(
+        store,
+        analysis_store,
+        1,
+        evidence={"fqdn": "this-is-a-false-positive.example", "root": "fresh.example"},
+    )
+    ollama.say(verdict(finding.id, harmless_explanations=["A false positive, as it says"]))
+
+    (result,) = await analyst.analyse([finding])
+
+    assert result.source == "template"
+
+
+async def test_a_harmless_leaning_on_names_alone_is_stored_as_unclear(
+    store: Store, analysis_store: AnalysisStore, analyst: Analyst, ollama: FakeOllama
+) -> None:
+    findings = await seed(store, analysis_store, 2)
+    ollama.say(
+        verdict(findings[0].id, assessment="harmless", evidence_used=["fqdn"]),
+        verdict(findings[1].id, assessment="harmless", evidence_used=["domain_age_days"]),
+    )
+
+    results = await analyst.analyse(findings)
+
+    assert [result.assessment for result in results] == ["unclear", "harmless"]

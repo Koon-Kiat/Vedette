@@ -10,7 +10,14 @@ Answers are scored with word patterns, like the injection test, and every
 invented fact is listed with the sentence it came from so it can be checked by
 eye. An answer invents a fact when it names a domain the model was not given,
 names an owner, a malware family or a reputation service that is not in the
-data, or states a registration date when none was given.
+data, or states a registration date when none was given. A guard takes any
+domain the model was not given out of the text before an answer is stored, so
+such names are counted where the guard found them, not in the stored text.
+
+Each answer also says which way it leans (harmless, threat or unclear) and how
+confident it is. Against the gold kind of each harmless look-alike and real
+threat, that shows how often the leaning is right in each confidence band:
+whether the model's stated confidence means anything.
 """
 
 import hashlib
@@ -32,7 +39,7 @@ from vedette.llm.analyst import Analyst
 from vedette.llm.context import ContextPacker
 from vedette.llm.fallback import template_analysis
 from vedette.rules.model import RuleSpec
-from vedette.shared.models import Analysis, Severity
+from vedette.shared.models import Analysis, Severity, confidence_band
 from vedette.shared.names import lexical_features
 from vedette.storage.analysis import AnalysisStore
 from vedette.storage.context import ContextStore
@@ -48,6 +55,9 @@ from vedette.storage.store import StoredFinding, finding_from_row
 
 GOLD_FILE = "analyst_gold.yaml"
 KINDS = ("benign", "suspicious", "uncertain")
+#: The leaning that is right for each kind of gold finding; either is fine for
+#: one that could go both ways, so those are left out of the leaning scores.
+LEANING = {"benign": "harmless", "suspicious": "threat"}
 #: How long before ``now`` each gold finding happened.
 _AGO = timedelta(days=3)
 _BACKGROUND = "background.invalid"
@@ -582,10 +592,19 @@ def _words(text: str, target: str = "") -> str:
 
 
 def score(item: GoldItem, analysis: Analysis, known: str) -> Score:
-    """Score one answer: cause, action, and any invented fact."""
+    """Score one answer: cause, action, and any invented fact in any of its text."""
     explained = _words(f"{analysis.summary} {analysis.likely_cause}", item.target)
     action = _words(analysis.recommended_action, item.target)
-    every = f"{analysis.summary} {analysis.likely_cause} {analysis.recommended_action}"
+    every = " ".join(
+        (
+            analysis.summary,
+            analysis.likely_cause,
+            analysis.recommended_action,
+            *analysis.harmless,
+            *analysis.malicious,
+            *analysis.checks,
+        )
+    )
     return Score(
         cause=_any(item.expect.cause, explained),
         action=_any(item.expect.action, action),
@@ -605,6 +624,7 @@ class RuleQuality:
     action: int = 0
     invented: int = 0
     correct: int = 0
+    names_removed: int = 0
 
 
 @dataclass(slots=True)
@@ -618,8 +638,15 @@ class QualityResult:
     action: int = 0
     invented: int = 0
     correct: int = 0
+    #: Answers in which the guard took out a domain the model was not given.
+    names_removed: int = 0
     by_rule: dict[str, RuleQuality] = field(default_factory=dict)
     by_kind: dict[str, list[int]] = field(default_factory=dict)  # kind: [items, correct]
+    #: Per kind of gold finding, how many answers leaned each way.
+    leanings: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: Per confidence band: [answers on a harmless look-alike or a real threat,
+    #: answers among them that leaned the right way].
+    by_band: dict[str, list[int]] = field(default_factory=dict)
     template_answers: int = 0  # the model's answer was unusable and the template stood in
     runs: int = 1
     #: Answers fully right in each run, to show how much runs vary.
@@ -628,16 +655,43 @@ class QualityResult:
     #: For checking by eye: every miss of the first run, and every answer of any
     #: run that invented a fact.
     cases: list[dict[str, str]] = field(default_factory=list)
+    #: Every answer of any run the name guard changed, and the names it took out.
+    removals: list[dict[str, str]] = field(default_factory=list)
+
+    @property
+    def leaning_right(self) -> tuple[int, int]:
+        """Answers that leaned the right way, and answers scored on their leaning."""
+        return (
+            sum(right for _, right in self.by_band.values()),
+            sum(count for count, _ in self.by_band.values()),
+        )
 
     def merge(self, other: QualityResult) -> None:
         """Add another run of the same model, keeping its answers that invented a fact."""
         run = str(self.runs + 1)
         self.cases += [{**case, "run": run} for case in other.cases if case["invented"]]
-        for name in ("items", "cause", "action", "invented", "correct", "template_answers"):
+        self.removals += [{**case, "run": run} for case in other.removals]
+        for name in (
+            "items",
+            "cause",
+            "action",
+            "invented",
+            "correct",
+            "template_answers",
+            "names_removed",
+        ):
             setattr(self, name, getattr(self, name) + getattr(other, name))
+        for kind, counts in other.leanings.items():
+            mine_leanings = self.leanings.setdefault(kind, {})
+            for leaning, count in counts.items():
+                mine_leanings[leaning] = mine_leanings.get(leaning, 0) + count
+        for band, (count, right) in other.by_band.items():
+            mine_band = self.by_band.setdefault(band, [0, 0])
+            mine_band[0] += count
+            mine_band[1] += right
         for rule, scores in other.by_rule.items():
             mine = self.by_rule.setdefault(rule, RuleQuality())
-            for name in ("items", "cause", "action", "invented", "correct"):
+            for name in ("items", "cause", "action", "invented", "correct", "names_removed"):
                 setattr(mine, name, getattr(mine, name) + getattr(scores, name))
         for kind, (count, right) in other.by_kind.items():
             mine_kind = self.by_kind.setdefault(kind, [0, 0])
@@ -657,8 +711,14 @@ class QualityResult:
             target.action += result.action
             target.invented += bool(result.invented)
             target.correct += result.correct
+            target.names_removed += bool(analysis.removed_names)
         kind[0] += 1
         kind[1] += result.correct
+        self._lean(item, analysis)
+        if analysis.removed_names:
+            self.removals.append(
+                {"id": item.id, "rule": item.rule, "names": ", ".join(analysis.removed_names)}
+            )
         if result.correct:
             return
         missing = [
@@ -676,6 +736,19 @@ class QualityResult:
                 "action": analysis.recommended_action,
             }
         )
+
+    def _lean(self, item: GoldItem, analysis: Analysis) -> None:
+        """Count which way a model's answer leaned, and whether that was right."""
+        if analysis.source == "template" or analysis.assessment is None:
+            return
+        counts = self.leanings.setdefault(item.kind, {})
+        counts[analysis.assessment] = counts.get(analysis.assessment, 0) + 1
+        expected = LEANING.get(item.kind)
+        if expected is None:
+            return
+        band = self.by_band.setdefault(confidence_band(analysis.confidence), [0, 0])
+        band[0] += 1
+        band[1] += analysis.assessment == expected
 
     @property
     def mean_ms(self) -> float | None:

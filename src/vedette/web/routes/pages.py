@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from starlette.exceptions import HTTPException
 
+from vedette.storage.analysis import CALIBRATION_MINIMUM, leaning_outcomes
 from vedette.storage.evaluation import EvalStore
 from vedette.web.dashboard import PERIODS, DashboardDep, SessionDep, ViewDep
 
@@ -94,7 +95,9 @@ async def health_page(
 async def evaluation_page(
     session: SessionDep, request: Request, dashboard: DashboardDep
 ) -> HTMLResponse:
-    """The latest results of `vedette eval`."""
+    """The latest results of `vedette eval`, and the model's leanings against your decisions."""
+    async with dashboard.ctx.engine.connect() as connection:
+        bands, decided = await leaning_outcomes(connection)
     return await dashboard.page(
         "evaluation.html",
         request,
@@ -102,4 +105,7 @@ async def evaluation_page(
         title="Evaluation",
         csrf=session.csrf,
         run=await EvalStore(dashboard.ctx.engine).latest(),
+        triaged_bands=bands,
+        triaged=decided,
+        triaged_needed=CALIBRATION_MINIMUM,
     )

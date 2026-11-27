@@ -243,15 +243,19 @@ async def test_without_a_suffix_list_roots_are_the_last_two_labels(
 class FakeModel:
     """Answers every chat with a verdict per finding: lowered priority, obedient text."""
 
-    def __init__(self, router: respx.MockRouter) -> None:
+    def __init__(self, router: respx.MockRouter, extra: dict[str, Any] | None = None) -> None:
         self.calls = 0
         self.users: list[str] = []
+        self.formats: list[dict[str, Any]] = []
+        self.extra = extra or {}
         router.post(f"{OLLAMA}/api/chat").mock(side_effect=self._chat)
 
     def _chat(self, request: httpx.Request) -> httpx.Response:
         self.calls += 1
-        user = json.loads(request.content)["messages"][1]["content"]
+        body = json.loads(request.content)
+        user = body["messages"][1]["content"]
         self.users.append(user)
+        self.formats.append(body["format"])
         ids = sorted(
             {
                 int(n)
@@ -269,6 +273,7 @@ class FakeModel:
                 "priority": "info",
                 "group_key": "eval",
                 "confidence": 0.9,
+                **self.extra,
             }
             for finding_id in ids
         ]
@@ -310,6 +315,42 @@ async def test_the_guards_stop_lowering_but_obedient_text_is_still_counted(
     assert naive.succeeded == len(names)
     assert defended.schema_failures == naive.schema_failures == 0
     assert model.calls == 2 * -(-len(names) // 10)
+
+
+async def test_harmless_leanings_and_domains_taken_out_are_counted_apart(
+    router: respx.MockRouter, tmp_path: Path
+) -> None:
+    model = FakeModel(
+        router,
+        extra={
+            "assessment": "harmless",
+            "harmless_explanations": ["An update check."],
+            "checks": ["Compare it with paypal.com."],
+            "evidence_used": ["lookups_within_5_minutes"],  # a record, so the leaning stands
+        },
+    )
+    names = as_crafted(datasets.injection_names())
+    scratch = await scratch_store(tmp_path)
+    defended_client, naive_client = client(), client()
+    try:
+        defended = await run_defended(
+            defended_client, names, load_rules(), scratch.engine, think=False, now=NOW
+        )
+        naive = await run_undefended(naive_client, names, think=False, now=NOW)
+    finally:
+        await defended_client.aclose()
+        await naive_client.aclose()
+        await scratch.close()
+
+    assert defended.leaned_harmless == defended.names_removed == len(names)
+    assert naive.leaned_harmless == naive.names_removed == 0
+    assert all("leaned harmless, not counted" in case["how"] for case in defended.examples)
+    asked = [
+        "assessment" in shape["properties"]["verdicts"]["items"]["properties"]
+        for shape in model.formats
+    ]
+    half = len(asked) // 2
+    assert asked == [True] * half + [False] * half, "the undefended arm keeps the short answer"
 
 
 class CrossModel:
@@ -728,9 +769,11 @@ async def test_the_evaluation_page_compares_model_and_template_explanations(stor
 
     assert '<h2 id="quality-title">Explanation quality</h2>' in page.text
     assert '<td>Template</td><td class="num">30</td>' in page.text
-    assert '<td class="num">0</td><td class="num">14 of 60</td>' in page.text
+    assert (
+        '<td class="num">0</td><td class="num">n/a</td><td class="num">14 of 60</td>' in page.text
+    )
     assert '<td>qwen3:8b, thinking off</td><td class="num">30</td>' in page.text
-    assert '<td class="num">2</td><td class="num">21 of 60</td>' in page.text
+    assert '<td class="num">2</td><td class="num">0</td><td class="num">21 of 60</td>' in page.text
 
 
 def _minimal_summary() -> dict[str, Any]:
@@ -907,15 +950,15 @@ async def test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest(
 
     arms = {(row["dataset"], row["defences"]): row["items"] for row in summary["injection"]}
     # The fresh set in full with the defences on, every third non-context item
-    # with them off; the first set on every third item, with the defences on only.
-    assert arms == {("fresh", True): 5, ("fresh", False): 2, ("held-out", True): 6}
+    # with them off; the first set on every eighth item, with the defences on only.
+    assert arms == {("fresh", True): 5, ("fresh", False): 2, ("held-out", True): 2}
     assert [row["defences"] for row in summary["cross_finding"]] == [True]
     assert summary["dataset_sizes"]["cross_sample"] == 2
     assert [row["runs"] for row in summary["quality"]["models"]] == [1]
     assert summary["depth"] == "quick"
-    assert "This was a quick run (under ten minutes)" in report
+    assert "This was a quick run (about ten minutes)" in report
     assert (
-        "With the defences on the model saw every third item of each category (6 of 14), "
+        "With the defences on the model saw every eighth item of each category (2 of 14), "
         "with them off none, 1 time each"
     ) in report
     assert "The fresh held-out set of 5 items, in device (4), context (1)" in report

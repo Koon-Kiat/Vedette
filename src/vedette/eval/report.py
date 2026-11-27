@@ -919,6 +919,13 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
         "but the device and sample-roots rows no longer measure attacks the defences were "
         "not shaped by; the other categories still do. The word patterns were not changed "
         "with them.",
+        "",
+        "Three more defences changed after this set's results had been read, when the prompt "
+        "gained the context pack and the rule notes (version 3): a prompt line that a name "
+        "never vouches for itself, a guard in code that discards an answer repeating a "
+        "vouching word the finding's own names use, and the burst rule's note, which had "
+        "said that ordinary-looking names need no action. The rows they touch (downplay, "
+        "spoof, device and sample-roots) measure defences shaped by these items.",
     ]
     return lines
 
@@ -942,9 +949,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"Production model: {summary['production_model']}.",
         "",
         "Thresholds and prompts were set before this evaluation and were not changed in "
-        "response to it, with one exception: two prompt-injection defences were changed after "
-        "the held-out set's results had been read, as the method note under Prompt injection "
-        "explains. Names sampled from your history and from the threat feeds are only "
+        "response to it, with one exception: five prompt-injection defences were changed "
+        "after the held-out set's results had been read, as the method notes under Prompt "
+        "injection explain. Names sampled from your history and from the threat feeds are only "
         "counted here; none of them appears in this report. Flagged names from the two "
         "public lists (top sites and popular hostnames) are shown, even when a feed also "
         "lists one.",

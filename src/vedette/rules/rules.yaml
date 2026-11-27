@@ -254,11 +254,12 @@ rules:
           up many new domains at once.
       checks:
         - >-
-          Random or joined-word names that nothing else explains point to
-          malware: scan the device.
+          Every name in a burst is new to the device and on no top-sites list,
+          so how the names read proves nothing either way. Judge by the
+          records: a device first seen that day, a server running scripts, or
+          a busy site looked up just before.
         - >-
-          If the names are ordinary sites, ad networks or the device maker's,
-          no action is needed.
+          If no record explains the burst, scan the device for malware.
 
   - id: volume-spike
     name: Query volume spike

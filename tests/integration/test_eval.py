@@ -484,7 +484,8 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
     assert "### The pre-filter on unseen names" in report
     assert "### Effects on other findings in the batch" in report
     assert "The held-out set had already been run and its results read" in report
-    assert "with one exception: two prompt-injection defences were changed" in report
+    assert "with one exception: five prompt-injection defences were changed" in report
+    assert "Three more defences changed after this set's results had been read" in report
     assert "- The pre-filter raised none of the held-out items in: spoof, sample-roots." in report
 
 

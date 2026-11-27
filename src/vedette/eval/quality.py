@@ -47,8 +47,6 @@ from vedette.storage.models import (
 from vedette.storage.store import StoredFinding, finding_from_row
 
 GOLD_FILE = "analyst_gold.yaml"
-#: Times each model explains the gold set: one run varies by a few items.
-RUNS = 3
 KINDS = ("benign", "suspicious", "uncertain")
 #: How long before ``now`` each gold finding happened.
 _AGO = timedelta(days=3)

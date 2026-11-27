@@ -582,8 +582,9 @@ async def _evaluate(
     injection: bool = True,
     repeats: int = 1,
     cross: bool = True,
-    cross_per_category: int = 8,
-    parallel: int = 1,
+    cross_per_category: int | None = None,
+    full: bool = False,
+    parallel: int = 4,
 ) -> tuple[dict[str, Any], str]:
     started = datetime.now(UTC)
     summary = await run_suite(
@@ -596,6 +597,7 @@ async def _evaluate(
         repeats=repeats,
         cross=cross,
         cross_per_category=cross_per_category,
+        full=full,
         parallel=parallel,
         offline=offline,
         now=started,
@@ -621,8 +623,8 @@ def evaluate(
     ] = None,
     think: Annotated[
         str,
-        typer.Option(help="Thinking for the injection test: off, on or both."),
-    ] = "both",
+        typer.Option(help="Thinking for the model tests: off (as the service runs), on or both."),
+    ] = "off",
     llm: Annotated[
         bool,
         typer.Option(
@@ -654,18 +656,28 @@ def evaluate(
         ),
     ] = True,
     cross_per_category: Annotated[
-        int,
-        typer.Option(min=1, max=50, help="Held-out items per category in that test."),
-    ] = 8,
+        int | None,
+        typer.Option(
+            min=1, max=50, help="Held-out items per category in that test (1, or 8 with --full)."
+        ),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help="Run every model test in full: all held-out items with the defences off too, "
+            "both cross-finding arms, three explanation runs. About 25 minutes instead of 8.",
+        ),
+    ] = False,
     parallel: Annotated[
         int,
         typer.Option(
             min=1,
             max=8,
             help="Model calls in flight at once. Start Ollama with OLLAMA_NUM_PARALLEL "
-            "at least this high, or the extra calls just wait.",
+            "at least this high, or the extra calls wait in Ollama's queue.",
         ),
-    ] = 1,
+    ] = 4,
     offline: Annotated[
         bool,
         typer.Option(
@@ -704,6 +716,7 @@ def evaluate(
             repeats=repeats,
             cross=cross,
             cross_per_category=cross_per_category,
+            full=full,
             parallel=parallel,
         )
     )

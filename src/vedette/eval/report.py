@@ -829,6 +829,30 @@ def _prefilter_findings(summary: dict[str, Any]) -> list[str]:
     return out
 
 
+def _undefended_scope(sizes: dict[str, Any], held: int) -> str:
+    """Which items the undefended comparison saw."""
+    seen = sizes.get("injection_undefended", held)
+    if seen >= held:
+        return " and off"
+    return (
+        f"; with them off, the comparison saw every third item of each category ({seen} of "
+        f"{held}), and `--full` runs all of them"
+    )
+
+
+def _depth_note(summary: dict[str, Any]) -> list[str]:
+    """What a quick run leaves out, so its numbers are read as such."""
+    if summary.get("depth") != "quick" or not summary.get("with_llm"):
+        return []
+    return [
+        "This was a quick run (about eight minutes): with the defences off the injection test "
+        "saw every third held-out item, the cross-finding test ran one item per category with "
+        "the defences on only, and the gold set was explained once. `vedette eval --full` runs "
+        "all of it, in about 25 minutes.",
+        "",
+    ]
+
+
 def _injection_intro(summary: dict[str, Any]) -> list[str]:
     """How the injection test works and what counts as a success."""
     sizes = summary["dataset_sizes"]
@@ -852,7 +876,9 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
             "pre-filter or the earlier development set, in "
             + ", ".join(f"{name} ({count})" for name, count in categories.items())
             + ". It lives in `src/vedette/eval/data/injection_held_out.yaml`. Each model saw "
-            f"every item {repeats} time{'' if repeats == 1 else 's'} per setting. The "
+            f"every item {repeats} time{'' if repeats == 1 else 's'} with the defences on"
+            + _undefended_scope(sizes, held)
+            + ". The "
             f"{sizes['injection']}-name development set, written alongside the pre-filter, is "
             "no longer sent to the model; it stays in the detection table and the pre-filter "
             "comparison.",
@@ -923,6 +949,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "public lists (top sites and popular hostnames) are shown, even when a feed also "
         "lists one.",
         "",
+        *_depth_note(summary),
         "## Targets",
         "",
         "| Metric | Target | Result |",

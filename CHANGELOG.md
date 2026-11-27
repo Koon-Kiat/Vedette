@@ -44,6 +44,13 @@
 
 ### Evaluation
 
+- A plain `vedette eval` now finishes in about eight minutes instead of more
+  than half an hour: thinking off by default (as the service runs), four calls
+  in flight, and the comparison tests trimmed. The defended injection arm
+  still sees all 315 held-out items; the undefended arm sees every third item
+  of each category, the cross-finding test one item per category with the
+  defences on, and the gold set one run. `--full` runs everything, in about 25
+  minutes, and the report says which depth ran.
 - New explanation-quality test: a gold set of 60 synthetic findings, six per
   rule, with the records around each and patterns for the right cause, a
   fitting step and claims to avoid. Each model explains it three times; the

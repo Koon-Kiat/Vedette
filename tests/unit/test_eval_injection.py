@@ -11,6 +11,7 @@ from vedette.eval.injection import (
     as_crafted,
     combine,
     crafted_finding,
+    every_nth_per_category,
     floors,
     mixed_sample,
     ordinary_findings,
@@ -300,3 +301,16 @@ def test_repeats_are_combined_with_intervals_per_trial_and_per_item() -> None:
     assert row["run_rates"] == [0.5, 0.25, 0.0]
     assert row["by_category"] == {"split": [12, 3]}
     assert row["p50_ms"] == 2000.0
+
+
+def test_every_nth_item_of_each_category_is_taken_from_the_first() -> None:
+    items = [
+        Crafted(f"{category}-{n}", category, "t", "dismiss", device_name="d")
+        for category in ("a", "b")
+        for n in range(5)
+    ]
+
+    chosen = every_nth_per_category(items, 3)
+
+    assert [item.id for item in chosen] == ["a-0", "a-3", "b-0", "b-3"]
+    assert every_nth_per_category(items, 1) == items

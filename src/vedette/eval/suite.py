@@ -23,6 +23,7 @@ from vedette.eval.injection import (
     RecordingClient,
     as_crafted,
     combine,
+    every_nth_per_category,
     mixed_sample,
     prefilter_hits,
     run_cross,
@@ -39,6 +40,28 @@ from vedette.storage.store import Store, StoredFinding
 from vedette.storage.triage import TriageStore
 
 log = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class Depth:
+    """How much of the model tests a run does.
+
+    The quick depth finishes in about eight minutes on one local GPU: the
+    defended arm sees every held-out item, which is the measure that matters,
+    while the undefended comparison sees every third item of each category,
+    the cross-finding test runs one item per category with the defences on
+    only, and the gold set is explained once. The full depth runs everything,
+    in about 25 minutes.
+    """
+
+    undefended_every: int
+    cross_per_category: int
+    cross_arms: tuple[bool, ...]
+    quality_runs: int
+
+
+QUICK = Depth(undefended_every=3, cross_per_category=1, cross_arms=(True,), quality_runs=1)
+FULL = Depth(undefended_every=1, cross_per_category=8, cross_arms=(True, False), quality_runs=3)
 
 #: Flagged names kept per public set, so each false alert can be checked.
 EXAMPLES = 20
@@ -205,9 +228,11 @@ async def _ask_model(
     think: bool,
     *,
     held_out: Sequence[datasets.Crafted],
+    undefended: Sequence[datasets.Crafted],
     sample: Sequence[datasets.Crafted],
     gold: Sequence[quality.GoldItem],
     gold_findings: Sequence[StoredFinding],
+    depth: Depth,
     repeats: int,
     parallel: int,
     now: datetime,
@@ -234,7 +259,7 @@ async def _ask_model(
                     recording, held_out, specs, scratch.engine, think=think, now=now
                 )
             else:
-                result = await run_undefended(recording, held_out, think=think, now=now)
+                result = await run_undefended(recording, undefended, think=think, now=now)
         finally:
             await recording.aclose()
         result.repeat = repeat
@@ -264,7 +289,8 @@ async def _ask_model(
     async def explain() -> list[quality.QualityResult]:
         if not gold:
             return []
-        first, *others = await settle(explain_once(run) for run in range(1, quality.RUNS + 1))
+        runs = range(1, depth.quality_runs + 1)
+        first, *others = await settle(explain_once(run) for run in runs)
         for other in others:
             first.merge(other)
         return [first]
@@ -276,7 +302,7 @@ async def _ask_model(
         if held_out
     ]
     crossed = asyncio.ensure_future(
-        settle([cross(defended) for defended in (True, False) if sample])
+        settle([cross(defended) for defended in depth.cross_arms if sample])
     )
     done = asyncio.ensure_future(settle([injection(*key) for key in rounds]))
     explained = asyncio.ensure_future(explain())
@@ -312,7 +338,8 @@ async def run_suite(
     injection_test: bool = True,
     repeats: int = 1,
     cross: bool = True,
-    cross_per_category: int = 8,
+    cross_per_category: int | None = None,
+    full: bool = False,
     parallel: int = 1,
     offline: bool = False,
     http_client: httpx.AsyncClient | None = None,
@@ -323,10 +350,12 @@ async def run_suite(
     The popular-hostname list is the one thing downloaded, at most once per
     ``evaluation.refresh_days``; with ``offline`` the stored copy is used or
     those sets are skipped. ``http_client`` downloads it (one is opened if not given).
-    The held-out injection set goes to each model ``repeats`` times per thinking
-    and defence setting. With ``cross``, the first ``cross_per_category`` items
-    of each category are also put among ordinary findings, on the first model
-    only, to see whether they change what it says about the others. Up to
+    ``full`` runs every model test in full (:data:`FULL`); otherwise a quick
+    depth (:data:`QUICK`) keeps the run to minutes. The held-out injection set
+    goes to each model ``repeats`` times per thinking and defence setting. With
+    ``cross``, the first ``cross_per_category`` items of each category (the
+    depth's number unless given) are also put among ordinary findings, on the
+    first model only, to see whether they change what it says about the others. Up to
     ``parallel`` model calls are in flight at once; set the model server to
     answer as many together (``OLLAMA_NUM_PARALLEL``). Every model also explains
     the gold set of findings, scored against the template; ``injection_test`` off
@@ -368,7 +397,10 @@ async def run_suite(
         template_quality = quality.template_quality(gold, gold_findings, specs)
         injection = datasets.injection_names()
         held_out = datasets.held_out_injection()
-        sample = mixed_sample(held_out, cross_per_category) if cross else []
+        depth = FULL if full else QUICK
+        per_category = cross_per_category or depth.cross_per_category
+        sample = mixed_sample(held_out, per_category) if cross else []
+        undefended = every_nth_per_category(held_out, depth.undefended_every)
         prefilter = {
             "development": prefilter_hits(as_crafted(injection), now),
             "held_out": prefilter_hits(held_out, now),
@@ -484,6 +516,8 @@ async def run_suite(
                             model,
                             think,
                             held_out=held_out if injection_test else [],
+                            undefended=undefended if injection_test else [],
+                            depth=depth,
                             sample=sample if number == 0 and injection_test else [],
                             gold=gold,
                             gold_findings=gold_findings,
@@ -512,6 +546,8 @@ async def run_suite(
         "thinking": [("on" if think else "off") for think in thinks],
         "with_llm": with_llm,
         "injection_run": with_llm and injection_test,
+        "depth": "full" if full else "quick",
+        "quality_runs": depth.quality_runs,
         "repeats": repeats,
         "parallel": parallel,
         "dataset_sizes": {
@@ -535,6 +571,7 @@ async def run_suite(
             "injection": len(injection),
             "injection_held_out": len(held_out),
             "cross_sample": len(sample),
+            "injection_undefended": len(undefended),
         },
         "held_out_categories": {
             category: counts[0] for category, counts in prefilter["held_out"].items()

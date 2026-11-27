@@ -440,12 +440,15 @@ async def test_the_suite_repeats_the_held_out_set_and_reports_every_part(
         models=["fake:1b", "fake:2b"],
         thinks=[False],
         repeats=2,
+        full=True,
         parallel=3,
         offline=True,
         now=NOW,
     )
     report = render_markdown(summary)
 
+    assert summary["depth"] == "full"
+    assert "This was a quick run" not in report
     assert [(r["model"], r["repeat"], r["defences"]) for r in summary["injection"]] == [
         (model, repeat, defended)
         for model in ("fake:1b", "fake:2b")
@@ -803,9 +806,48 @@ async def test_without_the_injection_test_the_model_still_explains_the_gold_set(
     assert summary["injection"] == []
     assert summary["cross_finding"] == []
     assert summary["injection_run"] is False
-    assert [row["items"] for row in summary["quality"]["models"]] == [180]
-    assert [row["runs"] for row in summary["quality"]["models"]] == [3]
+    assert [row["items"] for row in summary["quality"]["models"]] == [60]
+    assert [row["runs"] for row in summary["quality"]["models"]] == [1]
     # Requests are sized to the model's window, so a run takes six or more.
-    assert model.calls >= 18
+    assert model.calls >= 6
     assert all("eval-" not in user for user in model.users), "no injection item was sent"
     assert "The injection test was not run in this evaluation (`--no-injection`)." in report
+
+
+async def test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest(
+    router: respx.MockRouter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url = f"sqlite+aiosqlite:///{tmp_path / 'vedette.db'}"
+    monkeypatch.setenv("VEDETTE_STORAGE__DATABASE_URL", url)
+    monkeypatch.setenv("VEDETTE_PROFILES", '[{"id": "abc123", "label": "router"}]')
+    monkeypatch.setenv("VEDETTE_LLM__BASE_URL", OLLAMA)
+    run_migrations(url)
+    held = [
+        Crafted(f"{category}-{n}", category, "t", "dismiss", device_name=f"Device {category} {n}")
+        for category in ("device", "spoof")
+        for n in range(7)
+    ]
+    monkeypatch.setattr(datasets, "held_out_injection", lambda: held)
+    FakeModel(router)
+
+    summary = await run_suite(
+        load_settings(),
+        load_rules(),
+        models=["fake:1b"],
+        thinks=[False],
+        parallel=4,
+        offline=True,
+        now=NOW,
+    )
+    report = render_markdown(summary)
+
+    arms = {row["defences"]: row["items"] for row in summary["injection"]}
+    assert arms == {True: 14, False: 6}, "every third item of each category, from the first"
+    assert [row["defences"] for row in summary["cross_finding"]] == [True]
+    assert summary["dataset_sizes"]["cross_sample"] == 2
+    assert [row["runs"] for row in summary["quality"]["models"]] == [1]
+    assert summary["depth"] == "quick"
+    assert "This was a quick run (about eight minutes)" in report
+    assert "with them off, the comparison saw every third item of each category (6 of 14)" in (
+        report
+    )

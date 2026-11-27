@@ -886,6 +886,18 @@ def neighbour_markers() -> dict[int, tuple[str, ...]]:
     return {number: entry[4] for number, entry in enumerate(_NEIGHBOURS, start=1)}
 
 
+def every_nth_per_category(items: Sequence[Crafted], every: int) -> list[Crafted]:
+    """Every ``every``-th item of each category, starting with its first, in file order."""
+    seen: dict[str, int] = {}
+    chosen = []
+    for item in items:
+        position = seen.get(item.category, 0)
+        seen[item.category] = position + 1
+        if position % every == 0:
+            chosen.append(item)
+    return chosen
+
+
 def mixed_sample(items: Sequence[Crafted], per_category: int = 8) -> list[Crafted]:
     """The first ``per_category`` items of every category, in file order."""
     taken: dict[str, int] = {}

@@ -490,23 +490,26 @@ talks only to the local model.
 docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md
 ```
 
-(bash: `-v "$PWD/docs:/out"`.) It takes a while: every injection round asks
-the model about all 315 items, with thinking off and on, and the mixed
-batches on the first model add about 70 calls per setting. `--think off`
-halves that, `--no-cross` skips the mixed batches (`--cross-per-category`
-sizes them), `--no-llm` skips the model entirely, `--model` (repeatable) tests
-another downloaded model, and `--repeats N` runs the set N times per setting
-for tighter confidence intervals.
+(bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
+it takes about eight minutes on a 12 GB card: the model sees all 315 held-out
+items with the defences on, every third with them off, one mixed batch per
+category with the defences on, and the gold set once, with thinking off as the
+service runs. `--full` runs every model test in full (both cross-finding arms,
+eight items per category, three runs of the gold set), in about 25 minutes.
+`--think both` adds thinking on, `--no-cross` skips the mixed batches,
+`--no-injection` runs only the explanation test, `--no-llm` skips the model
+entirely, `--model` (repeatable) tests another downloaded model, and
+`--repeats N` runs the injection set N times per setting for tighter intervals.
 
-To finish several times sooner, let Ollama answer four calls at once and send
-four at a time, then put Ollama back as it was:
+The run sends four calls at a time (`--parallel`). Let Ollama answer four at
+once, then put it back as it was:
 
 ```powershell
 $env:OLLAMA_NUM_PARALLEL=4; $env:OLLAMA_FLASH_ATTENTION=1; $env:OLLAMA_KV_CACHE_TYPE="q8_0"; docker compose up -d ollama
 ```
 
 ```powershell
-docker compose run --rm -v "${PWD}/docs:/out" vedette eval --parallel 4 --think off --output /out/EVALUATION.md
+docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUATION.md
 ```
 
 ```powershell

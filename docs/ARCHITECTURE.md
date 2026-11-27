@@ -781,6 +781,12 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      on reserved `.example` names. Held by
      `test_every_packaged_rule_carries_notes_for_the_model` and
      `test_a_request_gets_the_notes_of_its_own_rules_only`.
+114. **A plain `vedette eval` finishes in about eight minutes.** The defended
+     injection arm sees every held-out item; the undefended comparison every
+     third item of each category, the cross-finding test one item per category
+     with the defences on, and the gold set one run, with thinking off and four
+     calls in flight. `--full` runs everything. Held by
+     `test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest`.
 
 ## Verified facts the design relies on
 

@@ -845,7 +845,7 @@ def _depth_note(summary: dict[str, Any]) -> list[str]:
     if summary.get("depth") != "quick" or not summary.get("with_llm"):
         return []
     return [
-        "This was a quick run (about eight minutes): with the defences off the injection test "
+        "This was a quick run (about nine minutes): with the defences off the injection test "
         "saw every third held-out item, the cross-finding test ran one item per category with "
         "the defences on only, and the gold set was explained once. `vedette eval --full` runs "
         "all of it, in about 25 minutes.",

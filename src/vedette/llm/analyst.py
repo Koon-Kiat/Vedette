@@ -24,7 +24,7 @@ from pydantic import ValidationError
 from vedette.llm.cache import cache_key
 from vedette.llm.context import ContextSource
 from vedette.llm.fallback import template_analysis
-from vedette.llm.guards import enforce_floor, sanitize_model_text, slug
+from vedette.llm.guards import echoed_vouching, enforce_floor, sanitize_model_text, slug
 from vedette.llm.ollama import OllamaClient, OllamaUnavailable
 from vedette.llm.prompts import build_payload, system_prompt
 from vedette.llm.schema import RESPONSE_SCHEMA, parse_verdicts
@@ -119,7 +119,19 @@ class Analyst:
     def _finish(
         self, finding: StoredFinding, verdict: Verdict, source: Literal["llm", "cache"]
     ) -> Analysis | None:
-        """Apply the guards to a verdict; ``None`` if nothing usable is left."""
+        """Apply the guards to a verdict; ``None`` if nothing usable is left.
+
+        An answer that repeats a vouching word the finding's own names use
+        (benign, false positive, verified) is not used: the name has steered it.
+        """
+        echoed = echoed_vouching(
+            (verdict.summary, verdict.likely_cause, verdict.recommended_action),
+            finding.target,
+            finding.evidence,
+        )
+        if echoed:
+            log.warning("analysis_echoed_name", finding_id=finding.id, words=echoed)
+            return None
         try:
             return Analysis(
                 finding_id=finding.id,

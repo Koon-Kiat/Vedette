@@ -79,6 +79,11 @@ Mitigations:
   lists, or in a finding's device name, add the words to the evidence and
   raise the severity one step. A hit never removes or hides a domain
   (`rules/prefilter.py`).
+- **A name never vouches for itself.** An answer that calls a finding
+  harmless with a vouching word the finding's own names use (benign, false
+  positive, verified, trusted, ignore) is discarded and the template stored
+  instead (`llm/guards.py` `echoed_vouching`). The prompt says so too, but a
+  small model still repeats such claims, so the check is in code.
 - **Safe output.** Model text has HTML, markdown and links stripped, domains
   defanged, and length capped (`llm/guards.py` `sanitize_model_text`). Every
   domain in alerts, digests, the CLI and the dashboard is defanged and never a

@@ -153,6 +153,7 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 
 | Defence | Where it is enforced |
 | --- | --- |
+| A name never vouches for itself | `echoed_vouching` in `llm/guards.py`: an answer using a vouching word (benign, false positive, verified, trusted, ignore) that the finding's own names use is discarded for the template, in code (decision 115) |
 | Rules own severity: the model may raise priority, never lower it | `enforce_floor` in `llm/guards.py`, applied in code after validation, to cached verdicts too |
 | The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
 | Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
@@ -781,12 +782,20 @@ tried and measured along the way is in git history and `docs/EVALUATION.md`.
      on reserved `.example` names. Held by
      `test_every_packaged_rule_carries_notes_for_the_model` and
      `test_a_request_gets_the_notes_of_its_own_rules_only`.
-114. **A plain `vedette eval` finishes in about eight minutes.** The defended
+114. **A plain `vedette eval` finishes in about nine minutes.** The defended
      injection arm sees every held-out item; the undefended comparison every
      third item of each category, the cross-finding test one item per category
      with the defences on, and the gold set one run, with thinking off and four
      calls in flight. `--full` runs everything. Held by
      `test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest`.
+115. **An answer that takes a name's word for it is not used.** When the
+     model calls a finding harmless with a vouching word the finding's own
+     names use, the template stands in. The prompt says the same, but in the
+     injection test qwen3:8b still repeated such claims; the check in code
+     cannot be talked out of. Two of the 2,033 roots in the owner's history
+     contain such a word. Held by
+     `test_an_answer_repeating_a_name_s_own_vouching_word_is_caught` and
+     `test_an_answer_that_takes_a_name_s_word_for_it_is_replaced_by_the_template`.
 
 ## Verified facts the design relies on
 

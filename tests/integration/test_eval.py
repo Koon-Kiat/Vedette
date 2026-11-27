@@ -847,7 +847,7 @@ async def test_a_quick_run_keeps_the_defended_arm_whole_and_trims_the_rest(
     assert summary["dataset_sizes"]["cross_sample"] == 2
     assert [row["runs"] for row in summary["quality"]["models"]] == [1]
     assert summary["depth"] == "quick"
-    assert "This was a quick run (about eight minutes)" in report
+    assert "This was a quick run (about nine minutes)" in report
     assert "with them off, the comparison saw every third item of each category (6 of 14)" in (
         report
     )

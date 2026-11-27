@@ -18,8 +18,11 @@
   no invented fact right in 37 to 39 per run, against 15 to 16 with the
   earlier prompt and 16 for the standard explanation. For harmless
   look-alikes it is right in 34 of 90 answers, against none before.
-- The cost: with the defences on, five of 315 crafted items steered the
-  model by calling themselves benign or verified, against one before.
+- An answer that calls a finding harmless with a vouching word the
+  finding's own names use ("benign", "false positive", "verified",
+  "trusted", "ignore") is discarded, and the standard explanation stands in.
+  The richer prompt had let crafted names that vouch for themselves steer
+  the model in five of 315 injection items, against one before.
 
 ### Detection
 
@@ -44,7 +47,7 @@
 
 ### Evaluation
 
-- A plain `vedette eval` now finishes in about eight minutes instead of more
+- A plain `vedette eval` now finishes in about nine minutes instead of more
   than half an hour: thinking off by default (as the service runs), four calls
   in flight, and the comparison tests trimmed. The defended injection arm
   still sees all 315 held-out items; the undefended arm sees every third item

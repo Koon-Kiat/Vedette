@@ -46,7 +46,7 @@ log = structlog.get_logger(__name__)
 class Depth:
     """How much of the model tests a run does.
 
-    The quick depth finishes in about eight minutes on one local GPU: the
+    The quick depth finishes in about nine minutes on one local GPU: the
     defended arm sees every held-out item, which is the measure that matters,
     while the undefended comparison sees every third item of each category,
     the cross-finding test runs one item per category with the defences on

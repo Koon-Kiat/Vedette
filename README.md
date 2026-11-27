@@ -491,7 +491,7 @@ docker compose run --rm -v "${PWD}/docs:/out" vedette eval --output /out/EVALUAT
 ```
 
 (bash: `-v "$PWD/docs:/out"`.) With Ollama answering four calls at once (below)
-it takes about eight minutes on a 12 GB card: the model sees all 315 held-out
+it takes about nine minutes on a 12 GB card: the model sees all 315 held-out
 items with the defences on, every third with them off, one mixed batch per
 category with the defences on, and the gold set once, with thinking off as the
 service runs. `--full` runs every model test in full (both cross-finding arms,

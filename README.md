@@ -467,9 +467,11 @@ domains, names from 13 real malware families' domain generation algorithms,
 bare, behind a `www.` and on hosting platforms, synthetic DGA names and
 bursts, fast, slow and sustained tunnels, and domains with given registration
 dates) and a
-held-out set of 315 crafted prompt-injection items (names, device names and
-lists of roots, written without reading the defences) through the real rules
-and the local model, with the defences on and off. The model also explains a
+two held-out sets of crafted prompt-injection items (names, device names,
+lists of roots and names planted in the records around a finding): 315
+written without reading the defences, and 124 written once they were final.
+Both go through the real rules and the local model, with the defences on and
+off. The model also explains a
 gold set of 60 synthetic findings, each with the records around it, three
 times; the answers are scored for the right cause, a fitting step and
 invented facts, against the standard explanation. `--no-injection` runs only

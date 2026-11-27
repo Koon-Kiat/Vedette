@@ -15,16 +15,17 @@
   step that fits it. The prompt version is now 3, so cached explanations are
   not reused.
 - On a gold set of 60 findings, qwen3:8b gets the cause, a fitting step and
-  no invented fact right in 37 to 39 per run, against 15 to 16 with the
+  no invented fact right in 38 to 40 per run, against 15 to 16 with the
   earlier prompt and 16 for the standard explanation. For harmless
-  look-alikes it is right in 34 of 90 answers, against none before.
+  look-alikes it is right in 40 of 90 answers, against none before.
 - An answer that calls a finding harmless with a vouching word the
   finding's own names use ("benign", "false positive", "verified",
   "trusted", "ignore") is discarded, and the standard explanation stands in.
   The richer prompt had let crafted names that vouch for themselves steer
   the model in five of 315 injection items, against one before. With this
   check, the burst note corrected and a prompt line to the same effect, one
-  item steers it again.
+  and four of the 315 steered it in two runs, read by eye, and none of the
+  124 items of a fresh set written after these fixes did, in two runs.
 
 ### Detection
 
@@ -54,8 +55,9 @@
   so its downplay, spoof, device and sample-roots rows no longer measure
   unseen attacks. 32 of the new items plant a crafted name as a lookup made
   just before an ordinary finding, so it reaches the model only through the
-  context pack. The report names the set on every row and takes the target
-  from the fresh one.
+  context pack; 27 of them reach the model as written and 5 are withheld.
+  The report names the set on every row and takes the target from the fresh
+  one.
 - A plain `vedette eval` now finishes in under ten minutes instead of more
   than half an hour: thinking off by default (as the service runs), four calls
   in flight, and the comparison tests trimmed. The fresh set goes to the

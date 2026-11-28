@@ -1221,6 +1221,12 @@ def _injection_intro(summary: dict[str, Any]) -> list[str]:
         "vouching word the finding's own names use, and the burst rule's note, which had "
         "said that ordinary-looking names need no action. The rows they touch (downplay, "
         "spoof, device and sample-roots) measure defences shaped by these items.",
+        "",
+        "After both sets had been run, a check was added that withholds from the model a "
+        "device name that makes claims about its device or gives instructions (prompt "
+        "version 5). The live test's ten device names prompted it; its word list was "
+        "written without reading either set's device items, so their device rows measure "
+        "it on names it was not shaped by.",
     ]
     return lines
 

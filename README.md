@@ -269,7 +269,9 @@ Three checks in code keep the answer to what the records show. Any domain the
 model names that it was not given is taken out of the text, and the finding's
 page says which. Each answer lists the fields it relied on, and only fields
 the finding has are kept. A harmless leaning that cites none of the records
-(only a name or an address) is shown as unclear. The model's confidence is
+(only a name or an address) is shown as unclear. A device name that makes
+claims about its device ("already checked", "trusted", "close this alert") is
+not shown to the model at all. The model's confidence is
 shown as low, medium or high, since its number is not calibrated; the
 Evaluation page shows how often each band is right.
 Domains are printed defanged (`example[.]com`) on purpose: names in DNS logs

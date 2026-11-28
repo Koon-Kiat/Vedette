@@ -67,7 +67,12 @@ Mitigations:
 - **Device names prove nothing.** A device name is sent as
   `device_name_self_reported`, and the system prompt says a name never shows
   who owns a device, whether it was approved or seen before, or that it is
-  safe, and that the owner must confirm a new device (`llm/prompts.py`).
+  safe, and that the owner must confirm a new device (`llm/prompts.py`). A
+  name that speaks about its device (approved, trusted, already checked, seen
+  every evening, close this alert), asks for the filtering to change, or holds
+  a domain is withheld from the model altogether, in the finding's evidence and
+  in its context pack alike (`llm/context.py` `device_name_for_model`); the
+  dashboard still shows it to the owner.
 - **Structured output only.** Answers must match the schema (`llm/schema.py`),
   or they are retried once and then replaced by a template built from the
   trusted rule text (`llm/fallback.py`). Free text from the model is never
@@ -117,12 +122,10 @@ Residual risk:
   gives how often they steer the model.
 - The model can still write misleading prose. For example it can call an
   attack routine, even though it cannot change the priority. The evaluation
-  counts such "echoes" with a heuristic and lists every case. A device name
-  that vouches for its device in words the pre-filter does not know ("owner
-  has already checked this") is still often taken at its word in the likely
-  cause; the live test `test_a_device_name_does_not_talk_the_model_out_of_a_new_device`
-  shows it. The leaning guard keeps such an answer from leaning harmless,
-  but not its prose.
+  counts such "echoes" with a heuristic and lists every case.
+- Withholding device names that make claims is a word list too. A claim in
+  words it does not know, or in another language, still reaches the model as
+  part of the name, which the prompt and the leaning guard then have to hold.
 - The pre-filter is a word list. Words it does not know, other languages and
   look-alike spellings pass it. That costs only the severity raise; the other
   defences still apply.

@@ -4,6 +4,17 @@
 
 ### Explanations
 
+- A device name that makes claims about its device (approved, trusted,
+  already checked, seen every evening, close this alert), asks for the
+  filtering to change, or holds a domain is no longer shown to the local
+  model, in a finding's evidence or in its context pack; the model is told a
+  withheld name is a warning sign. Before, such names reached the model as
+  written, and qwen3:8b took claims like "owner has already checked this" as
+  the likely cause. The live test with ten such names now passes in three
+  runs out of three, where it failed on every run before. Product names
+  (Nintendo Switch, Tesla Model 3) and local host names keep their names;
+  none of your devices' names and none of the gold set's 58 are withheld. The
+  prompt version is now 5.
 - An explanation now says which way the records lean (harmless, threat or
   unclear), gives up to two harmless and two malicious explanations that
   fit, up to three checks that tell them apart in order, and up to four

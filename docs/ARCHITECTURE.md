@@ -158,7 +158,7 @@ backoff (5 seconds up to 5 minutes). Findings exist and are listed regardless.
 | The model cannot suppress a finding | Findings are stored before the analyst runs; it only adds an analysis |
 | Untrusted strings are data, not instructions | `build_payload` in `llm/prompts.py`: they appear only as length-capped values in a JSON payload; the system prompt is fixed |
 | The records around a finding are data too | `build_pack` in `llm/context.py`: the context pack travels inside the JSON payload, every part is capped, and a name holding instruction-like words is withheld |
-| A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety |
+| A device name proves nothing about its device | `MODEL_KEYS` and `SYSTEM_PROMPT` in `llm/prompts.py`: the name is sent as `device_name_self_reported`, and the prompt says it never shows ownership, history or safety. `device_name_for_model` in `llm/context.py` withholds a name that makes claims about its device, asks for the filtering to change or holds a domain, in the evidence and the context pack alike |
 | Structured output only | `parse_verdicts` in `llm/schema.py`: extra fields, wrong types and free text are rejected |
 | No tools | `llm/ollama.py` never sends a `tools` field; the Ollama container has no internet route |
 | Safe output | `sanitize_model_text`: HTML, markdown and links removed, names defanged, length capped; applied again on display |
